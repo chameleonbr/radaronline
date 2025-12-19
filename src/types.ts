@@ -143,6 +143,7 @@ export function createAction(
     progress: 0,
     raci: [],
     notes: '',
+    comments: [],
     ...overrides,
   };
 }

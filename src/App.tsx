@@ -8,6 +8,7 @@ import {
   Action, 
   GanttRange,
   ActionComment,
+  TeamMember,
   filterActionsByMicro,
   findActionByUid,
   createAction,
@@ -19,7 +20,7 @@ import { formatISODate, parseDateLocal } from './lib/date';
 import { clampProgress } from './lib/validation';
 
 // Data
-import { INITIAL_DATA, getTeamByMicrorregiao, getAllTeams } from './data/mockData';
+import { INITIAL_DATA } from './data/mockData';
 import { MICROREGIOES } from './data/microregioes';
 
 // Auth

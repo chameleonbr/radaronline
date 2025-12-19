@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { TeamMember } from '../../types';
 import { getMicroregiaoById } from '../../data/microregioes';
 import { ConfirmModal } from '../../components/common';

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
-import { Button } from '../../ui/Button';
 
 interface ConfirmModalProps {
   isOpen: boolean;

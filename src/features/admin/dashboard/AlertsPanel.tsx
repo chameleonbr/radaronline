@@ -55,7 +55,7 @@ export function AlertsPanel({ actions, users, onViewMicrorregiao }: AlertsPanelP
           date: action.plannedEndDate,
           priority: diasAtraso > 30 ? 'high' : diasAtraso > 7 ? 'medium' : 'low',
         });
-      } else if (prazo <= em7Dias && action.status !== 'Concluído') {
+      } else if (prazo <= em7Dias) {
         const diasRestantes = Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
         alertList.push({
           id: `vencendo-${action.uid}`,

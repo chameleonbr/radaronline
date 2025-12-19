@@ -47,7 +47,7 @@ export function getUserRaciRole(user: User, action: Action): RaciRole | null {
 /**
  * Verifica se usuário pode VISUALIZAR uma ação
  */
-export function canViewAction(user: User, action: Action, actionMicroregiaoId?: string): boolean {
+export function canViewAction(user: User, _action: Action, actionMicroregiaoId?: string): boolean {
   // Admin pode ver tudo
   if (user.role === 'admin') return true;
   

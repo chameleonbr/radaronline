@@ -225,10 +225,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
 
   const today = parseDateLocal(getTodayStr());
 
-  const isActionLate = (action: Action) => {
+  const isActionLate = (action: Action): boolean => {
     if (action.status === 'Concluído') return false;
     const endDate = parseDateLocal(action.plannedEndDate);
-    return endDate && today && endDate < today;
+    return Boolean(endDate && today && endDate < today);
   };
 
   const filteredActions = useMemo(() => {

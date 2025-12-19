@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { 
   Target, CheckCircle2, Clock, AlertTriangle, Users, Calendar,
-  TrendingUp, BarChart2, PieChart
+  BarChart2, PieChart
 } from 'lucide-react';
 import { Action, TeamMember, Objective, Activity } from '../../types';
 import { StatsCard } from '../../components/common/StatsCard';
@@ -147,7 +147,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             Distribuição por Status
           </h3>
           <div className="space-y-4">
-            {statusData.map((item, i) => (
+            {statusData.map((item, _i) => (
               <div key={i} className="flex items-center gap-4">
                 <div className="w-24 text-xs font-medium text-slate-600">{item.label}</div>
                 <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
@@ -174,7 +174,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           Progresso por Objetivo Estratégico
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {metrics.progressoPorObjetivo.map((obj, i) => (
+          {metrics.progressoPorObjetivo.map((obj, _i) => (
             <div 
               key={obj.id} 
               className="relative overflow-hidden rounded-lg border border-slate-200 p-4 hover:shadow-md transition-shadow"
@@ -249,7 +249,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </h3>
           <div className="flex items-center gap-4">
             <div className="flex -space-x-2">
-              {team.slice(0, 5).map((member, i) => (
+              {team.slice(0, 5).map((member, _i) => (
                 <div 
                   key={member.id}
                   className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 border-2 border-white flex items-center justify-center text-white text-xs font-bold shadow-sm"

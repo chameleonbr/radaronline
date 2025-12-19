@@ -6,7 +6,7 @@ import { OptimizedView } from '../../features/dashboard/OptimizedView';
 import { ActionTable } from '../../features/actions/ActionTable';
 import { ActivityTabs } from '../../features/actions/ActivityTabs';
 import { ExpandableDescription } from '../common/ExpandableDescription';
-import { Action, TeamMember, Objective, Activity } from '../../types';
+import { Action, TeamMember, Objective, Activity, GanttRange } from '../../types';
 
 interface MainViewProps {
   currentNav: 'strategy' | 'home' | 'settings';
@@ -26,8 +26,8 @@ interface MainViewProps {
   setResponsibleFilter: (responsible: string) => void;
   expandedActionUid: string | null;
   setExpandedActionUid: (uid: string | null) => void;
-  ganttRange: 'all' | '3months' | '6months' | '1year';
-  setGanttRange: (range: 'all' | '3months' | '6months' | '1year') => void;
+  ganttRange: GanttRange;
+  setGanttRange: (range: GanttRange) => void;
   containerWidth: number;
   ganttStatusFilter: 'Não Iniciado' | 'Em Andamento' | 'Concluído' | 'Atrasado' | 'all';
   setGanttStatusFilter: (status: 'Não Iniciado' | 'Em Andamento' | 'Concluído' | 'Atrasado' | 'all') => void;

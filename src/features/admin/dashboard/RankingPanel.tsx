@@ -4,13 +4,12 @@ import {
   TrendingUp, 
   TrendingDown,
   Medal,
-  ArrowUp,
   ArrowDown,
   Eye,
   ChevronDown
 } from 'lucide-react';
 import { Action } from '../../../types';
-import { MICROREGIOES, getMicroregiaoById } from '../../../data/microregioes';
+import { MICROREGIOES } from '../../../data/microregioes';
 
 interface RankingPanelProps {
   actions: Action[];

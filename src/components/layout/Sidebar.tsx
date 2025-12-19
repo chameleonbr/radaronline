@@ -1,10 +1,11 @@
 import React from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, ChevronRight, Home, Target, Settings, LogOut, Shield } from 'lucide-react';
 import { Objective, Activity } from '../../types';
 import { UserRole } from '../../types/auth.types';
 
 interface SidebarItemProps {
-  icon: React.FC<{ size?: number }>;
+  icon: LucideIcon;
   label: string;
   isActive: boolean;
   onClick: () => void;

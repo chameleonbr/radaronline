@@ -56,7 +56,10 @@ export async function listUsers(): Promise<User[]> {
       throw new Error(`Erro ao listar usuários: ${error.message}`);
     }
 
-    return (data || []).map(mapProfileToUser);
+    return (data || []).map((profile: any) => mapProfileToUser({
+      ...profile,
+      updated_at: profile.updated_at || profile.created_at || new Date().toISOString(),
+    }));
   } catch (error) {
     console.error('[authService] Erro inesperado ao listar usuários:', error);
     throw error;
@@ -241,10 +244,6 @@ export async function updateUser(
   userId: string,
   updates: Partial<User> & { senha?: string }
 ): Promise<User> {
-  // ✅ FASE 2: Salvar dados originais para rollback se necessário
-  let originalData: ProfileDTO | null = null;
-  let profileUpdateError: any = null;
-
   try {
     const { senha, ...userUpdates } = updates;
 

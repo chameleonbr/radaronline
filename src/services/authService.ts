@@ -1,0 +1,420 @@
+import { supabase } from '../lib/supabase';
+import type { User, ProfileDTO, UserRole } from '../types/auth.types';
+import { log, logError } from '../lib/logger';
+
+// =====================================
+// CONFIGURAÇÃO: Timeout para Edge Functions
+// =====================================
+const getEnvTimeout = (): number => {
+  try {
+    const envValue = (import.meta as any).env?.VITE_API_TIMEOUT;
+    return envValue ? Number(envValue) : 30000;
+  } catch {
+    return 30000;
+  }
+};
+const EDGE_FUNCTION_TIMEOUT_MS = getEnvTimeout();
+
+// =====================================
+// HELPER: Converte Banco -> App
+// =====================================
+
+function mapProfileToUser(profile: ProfileDTO): User {
+  return {
+    id: profile.id,
+    nome: profile.nome,
+    email: profile.email,
+    role: profile.role,
+    // Converte null/'all' para string sempre (compatibilidade com código existente)
+    // App sempre vê como string, DB armazena null para 'all'
+    microregiaoId: profile.microregiao_id || 'all',
+    ativo: profile.ativo,
+    lgpdConsentimento: profile.lgpd_consentimento,
+    lgpdConsentimentoData: profile.lgpd_consentimento_data || undefined,
+    createdBy: profile.created_by || undefined,
+    createdAt: profile.created_at,
+  };
+}
+
+// =====================================
+// ADMIN: Gerenciamento de Usuários
+// =====================================
+
+/**
+ * Lista todos os usuários (apenas admin)
+ */
+export async function listUsers(): Promise<User[]> {
+  try {
+    // ✅ FASE 1: Select específico - apenas campos necessários
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, created_by, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[authService] Erro ao listar usuários:', error);
+      throw new Error(`Erro ao listar usuários: ${error.message}`);
+    }
+
+    return (data || []).map(mapProfileToUser);
+  } catch (error) {
+    console.error('[authService] Erro inesperado ao listar usuários:', error);
+    throw error;
+  }
+}
+
+/**
+ * Cria novo usuário (apenas admin) via Edge Function
+ *
+ * IMPORTANTE: Usa Edge Function para criar usuários já confirmados,
+ * evitando problemas de confirmação de email.
+ *
+ * PADRÃO: App sempre envia/recebe 'all' como string, mas DB armazena como NULL.
+ */
+export async function createUser(userData: {
+  nome: string;
+  email: string;
+  senha: string;
+  role: UserRole;
+  microregiaoId?: string;
+  createdBy?: string;
+}): Promise<User> {
+  try {
+    // ✅ Validar campos obrigatórios
+    if (!userData.nome || !userData.email || !userData.senha) {
+      throw new Error('Nome, email e senha são obrigatórios');
+    }
+    // ✅ Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(userData.email)) {
+      throw new Error('Formato de email inválido');
+    }
+    // ✅ Validar senha
+    if (userData.senha.length < 6) {
+      throw new Error('Senha deve ter no mínimo 6 caracteres');
+    }
+    // ✅ Verificar se usuário atual é admin
+    const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
+    if (authError || !currentUser) {
+      throw new Error('Não autenticado. Faça login novamente.');
+    }
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', currentUser.id)
+      .single();
+    if (profileError) {
+      console.error('[authService] Erro ao verificar permissões:', profileError);
+      throw new Error(`Erro ao verificar permissões: ${profileError.message}`);
+    }
+    if (profile?.role !== 'admin') {
+      throw new Error('Apenas administradores podem criar usuários');
+    }
+    // ✅ Converter 'all' para null antes de enviar
+    const microregiao_id = userData.microregiaoId === 'all' ||
+                          (userData.role === 'admin' && !userData.microregiaoId)
+      ? null
+      : userData.microregiaoId || null;
+    // ✅ Log para debug
+    console.log('[authService] Criando usuário via Edge Function:', {
+      email: userData.email,
+      role: userData.role,
+      microregiao_id,
+    });
+    
+    // ✅ Chamar Edge Function com timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        console.warn('[authService] Timeout na Edge Function - verifique logs no Supabase Dashboard');
+        reject(new Error('Timeout: A requisição demorou mais de 30 segundos'));
+      }, EDGE_FUNCTION_TIMEOUT_MS);
+    });
+
+    const functionPromise = supabase.functions.invoke('create-user', {
+      body: {
+        email: userData.email.trim().toLowerCase(),
+        password: userData.senha,
+        nome: userData.nome.trim(),
+        role: userData.role,
+        microregiaoId: microregiao_id, // Já convertido para null se 'all'
+        createdBy: userData.createdBy || currentUser.id,
+      },
+    });
+
+    // ✅ Race entre a função e o timeout
+    let functionData: any;
+    let functionError: any;
+
+    try {
+      const result = await Promise.race([functionPromise, timeoutPromise]) as any;
+      functionData = result.data;
+      functionError = result.error;
+    } catch (error: any) {
+      // Se foi timeout ou outro erro
+      if (error.message?.includes('Timeout')) {
+        console.error('[authService] Timeout detectado - Edge Function pode estar lenta ou com problemas');
+        throw new Error('A requisição demorou muito. Verifique sua conexão ou tente novamente.');
+      }
+      throw error;
+    }
+    if (functionError) {
+      console.error('[authService] Erro na Edge Function:', functionError);
+      console.error('[authService] Detalhes do error:', { functionError });
+     
+      // ✅ Mensagens de erro mais específicas
+      if (functionError.message?.includes('already registered') ||
+          functionError.message?.includes('already exists') ||
+          functionError.message?.includes('já está cadastrado')) {
+        throw new Error('Este email já está cadastrado');
+      } else if (functionError.message?.includes('password') ||
+                 functionError.message?.includes('senha')) {
+        throw new Error('Senha muito fraca. Use pelo menos 6 caracteres');
+      } else if (functionError.message?.includes('Formato de email')) {
+        throw new Error('Formato de email inválido');
+      } else if (functionError.message?.includes('Role inválido')) {
+        throw new Error('Nível de acesso inválido');
+      } else if (functionError.message?.includes('Microrregião inválida')) {
+        throw new Error('Microrregião inválida');
+      } else {
+        throw new Error(`Erro ao criar usuário: ${functionError.message || 'Erro desconhecido'}`);
+      }
+    }
+    if (!functionData?.data?.user) {
+      throw new Error('Erro ao criar usuário: dados não retornados da Edge Function');
+    }
+    // ✅ Se a Edge Function já retornou o perfil, usar diretamente
+    if (functionData.data.profile) {
+      console.log('[authService] Perfil retornado pela Edge Function');
+      return mapProfileToUser(functionData.data.profile as ProfileDTO);
+    }
+    // ✅ FASE 1: Retry otimizado (2 tentativas com delay fixo de 500ms)
+    console.log('[authService] Buscando perfil criado...');
+    let newProfile: ProfileDTO | null = null;
+    let lastError: any = null;
+    for (let i = 0; i < 2; i++) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, created_by, created_at')
+        .eq('id', functionData.data.user.id)
+        .single();
+      if (data) {
+        newProfile = data as ProfileDTO;
+        break;
+      }
+      lastError = error;
+      if (error && i < 1) {
+        console.warn(`[authService] Retry ${i + 1}/2 ao buscar perfil:`, error.message);
+        // ✅ FASE 1: Delay fixo de 500ms (mais rápido que progressivo)
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    if (!newProfile) {
+      console.error('[authService] Perfil não encontrado. Último erro:', lastError);
+      throw new Error(
+        lastError?.message ||
+        'Perfil não foi criado pelo trigger. Verifique se o trigger está ativo no Supabase.'
+      );
+    }
+    return mapProfileToUser(newProfile);
+  } catch (error: any) {
+    console.error('[authService] Erro inesperado ao criar usuário:', error);
+    throw error;
+  }
+}
+
+/**
+ * Atualiza usuário (apenas admin)
+ * 
+ * NOTA: Para atualizar senha, você precisará criar uma Edge Function no Supabase
+ * que use o Admin API. Exemplo:
+ * 
+ * ```typescript
+ * // Em uma Edge Function
+ * const { data, error } = await supabase.auth.admin.updateUserById(userId, {
+ *   password: novaSenha
+ * });
+ * ```
+ * 
+ * PADRÃO: App envia 'all' como string, mas converte para null no DB.
+ */
+export async function updateUser(
+  userId: string,
+  updates: Partial<User> & { senha?: string }
+): Promise<User> {
+  // ✅ FASE 2: Salvar dados originais para rollback se necessário
+  let originalData: ProfileDTO | null = null;
+  let profileUpdateError: any = null;
+
+  try {
+    const { senha, ...userUpdates } = updates;
+
+    // ✅ FASE 2: Se senha foi fornecida, atualizar PRIMEIRO (mais crítico)
+    // Se falhar, não atualiza o profile = evita inconsistência
+    if (senha) {
+      // Validar senha
+      if (senha.length < 6) {
+        throw new Error('Senha deve ter no mínimo 6 caracteres');
+      }
+
+      console.log('[authService] Atualizando senha para userId:', userId);
+      log('[authService]', `Atualizando senha para usuário ${userId}`);
+      
+      // Chamar Edge Function com timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          console.warn('[authService] Timeout ao atualizar senha');
+          reject(new Error('Timeout: A requisição demorou mais de 30 segundos'));
+        }, EDGE_FUNCTION_TIMEOUT_MS);
+      });
+
+      const functionPromise = supabase.functions.invoke('update-user-password', {
+        body: {
+          userId: userId,
+          password: senha,
+        },
+      });
+
+      let passwordUpdateError: any;
+
+      try {
+        const result = await Promise.race([functionPromise, timeoutPromise]) as any;
+        passwordUpdateError = result.error;
+      } catch (error: any) {
+        // Se foi timeout ou outro erro
+        if (error.message?.includes('Timeout')) {
+          logError('[authService]', 'Timeout ao atualizar senha');
+          throw new Error('Atualização de senha demorou demais. Tente novamente ou verifique a função no Supabase.');
+        }
+        throw error;
+      }
+
+      if (passwordUpdateError) {
+        logError('[authService]', 'Erro ao atualizar senha:', passwordUpdateError);
+        throw new Error(`Erro ao atualizar senha: ${passwordUpdateError.message || 'Erro desconhecido'}`);
+      }
+
+      console.log('[authService] Senha atualizada com sucesso');
+      log('[authService]', 'Senha atualizada com sucesso');
+    }
+
+    // ✅ FASE 2: Buscar dados originais antes de atualizar (para rollback)
+    if (Object.keys(userUpdates).length > 0) {
+      const { data: original } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      originalData = original as ProfileDTO;
+    }
+
+    // Converter camelCase para snake_case
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (userUpdates.nome !== undefined) updateData.nome = userUpdates.nome;
+    if (userUpdates.email !== undefined) updateData.email = userUpdates.email;
+    if (userUpdates.role !== undefined) updateData.role = userUpdates.role;
+    
+    // ✅ JÁ ESTÁ OK: Converte 'all' para null (padrão consistente)
+    if (userUpdates.microregiaoId !== undefined) {
+      updateData.microregiao_id = userUpdates.microregiaoId === 'all' ? null : userUpdates.microregiaoId;
+    }
+    
+    if (userUpdates.ativo !== undefined) updateData.ativo = userUpdates.ativo;
+    if (userUpdates.lgpdConsentimento !== undefined) {
+      updateData.lgpd_consentimento = userUpdates.lgpdConsentimento;
+    }
+
+    // ✅ FASE 2: Atualizar profile apenas se houver campos para atualizar
+    if (Object.keys(updateData).length > 1) { // Mais que apenas updated_at
+      const { data, error } = await supabase
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId)
+        .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, created_by, created_at')
+        .single();
+
+      if (error) {
+        profileUpdateError = error;
+        console.error('[authService] Erro ao atualizar usuário:', error);
+        // ✅ FASE 2: Se senha foi atualizada mas profile falhou, não fazer rollback da senha
+        // (senha é mais crítico, profile pode ser corrigido depois)
+        throw new Error(`Erro ao atualizar usuário: ${error.message}`);
+      }
+
+      if (!data) {
+        throw new Error('Usuário não encontrado');
+      }
+
+      return mapProfileToUser(data as ProfileDTO);
+    }
+
+    // Se não há campos para atualizar além da senha, buscar perfil atual
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, created_by, created_at')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      throw new Error('Erro ao buscar usuário atualizado');
+    }
+
+    return mapProfileToUser(data as ProfileDTO);
+  } catch (error: any) {
+    console.error('[authService] Erro inesperado ao atualizar usuário:', error);
+    // ✅ FASE 2: Rollback não necessário - senha é atualizada primeiro, se falhar não atualiza profile
+    // Se profile falhar mas senha foi atualizada, é aceitável (senha é mais crítico)
+    throw error;
+  }
+}
+
+/**
+ * Desativa usuário (apenas admin)
+ */
+export async function deactivateUser(userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        ativo: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[authService] Erro ao desativar usuário:', error);
+      throw new Error(`Erro ao desativar usuário: ${error.message}`);
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error('[authService] Erro inesperado ao desativar usuário:', error);
+    throw error;
+  }
+}
+
+/**
+ * Atualiza consentimento LGPD
+ */
+export async function acceptLgpd(userId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        lgpd_consentimento: true,
+        lgpd_consentimento_data: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[authService] Erro ao aceitar LGPD:', error);
+      throw new Error(`Erro ao aceitar LGPD: ${error.message}`);
+    }
+  } catch (error: any) {
+    console.error('[authService] Erro inesperado ao aceitar LGPD:', error);
+    throw error;
+  }
+}

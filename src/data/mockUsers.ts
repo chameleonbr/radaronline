@@ -16,6 +16,7 @@ export const MOCK_USERS: User[] = [
     lgpdConsentimento: true,
     lgpdConsentimentoData: '2024-01-01T00:00:00Z',
     createdAt: '2024-01-01T00:00:00Z',
+    avatarId: 'p22',
   },
   {
     id: 'usr_002',
@@ -28,6 +29,7 @@ export const MOCK_USERS: User[] = [
     lgpdConsentimentoData: '2024-06-15T10:30:00Z',
     createdAt: '2024-06-15T10:30:00Z',
     createdBy: 'usr_001',
+    avatarId: 'p1',
   },
   {
     id: 'usr_003',
@@ -40,6 +42,7 @@ export const MOCK_USERS: User[] = [
     lgpdConsentimentoData: '2024-07-20T14:00:00Z',
     createdAt: '2024-07-20T14:00:00Z',
     createdBy: 'usr_001',
+    avatarId: 'p2',
   },
   {
     id: 'usr_004',
@@ -51,6 +54,7 @@ export const MOCK_USERS: User[] = [
     lgpdConsentimento: false, // Precisa aceitar LGPD
     createdAt: '2024-08-01T09:00:00Z',
     createdBy: 'usr_001',
+    avatarId: 'p3',
   },
   {
     id: 'usr_005',
@@ -63,6 +67,7 @@ export const MOCK_USERS: User[] = [
     lgpdConsentimentoData: '2024-09-10T11:00:00Z',
     createdAt: '2024-09-10T11:00:00Z',
     createdBy: 'usr_001',
+    avatarId: 'p4',
   },
   {
     id: 'usr_006',
@@ -75,6 +80,7 @@ export const MOCK_USERS: User[] = [
     lgpdConsentimentoData: '2024-05-01T08:00:00Z',
     createdAt: '2024-05-01T08:00:00Z',
     createdBy: 'usr_001',
+    avatarId: 'p5',
   },
 ];
 
@@ -109,22 +115,22 @@ export function findUserByEmail(email: string): User | undefined {
 // Helper: validar credenciais (mock)
 export function validateCredentials(email: string, senha: string): { success: boolean; user?: User; error?: string } {
   const user = findUserByEmail(email);
-  
+
   if (!user) {
     // Mensagem genérica por segurança
     return { success: false, error: 'Email ou senha incorretos' };
   }
-  
+
   const userPassword = USER_PASSWORDS[user.id] || MOCK_PASSWORD;
-  
+
   if (senha !== userPassword) {
     return { success: false, error: 'Email ou senha incorretos' };
   }
-  
+
   if (!user.ativo) {
     return { success: false, error: 'Conta desativada. Entre em contato com o administrador.' };
   }
-  
+
   return { success: true, user };
 }
 

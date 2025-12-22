@@ -15,25 +15,25 @@ export const INITIAL_DATA: {
 } = {
   macro: "Extremo Sul",
   micro: "Poços de Caldas",
-  
+
   // Objetivos são globais (iguais para todas as microrregiões)
   objectives: [
     { id: 1, title: "1. Infoestrutura e Governança", status: "on-track" },
     { id: 2, title: "2. Desenvolvimento de Negócios", status: "on-track" },
     { id: 3, title: "3. Experiência do Cliente", status: "delayed" }
   ],
-  
+
   // Atividades são globais (iguais para todas as microrregiões)
   activities: {
-    1: [ 
+    1: [
       { id: "1.1", title: "Diagnóstico e Mapeamento", description: "Implantar a estratégia de gestão de conhecimento." },
       { id: "1.2", title: "Gestão do Conhecimento e Qualificação", description: "Fortalecer a governança, a gestão do conhecimento." },
       { id: "1.3", title: "Governança e Fluxos de Trabalho", description: "Garantir a sustentabilidade e o aprimoramento da Infoestrutura." }
     ],
-    2: [ { id: "2.1", title: "Atração de Investimentos", description: "Fomento ao comércio local." } ],
-    3: [ { id: "3.1", title: "Digitalização de Serviços", description: "Portal do Cidadão." } ]
+    2: [{ id: "2.1", title: "Atração de Investimentos", description: "Fomento ao comércio local." }],
+    3: [{ id: "3.1", title: "Digitalização de Serviços", description: "Portal do Cidadão." }]
   },
-  
+
   // =====================================
   // EQUIPES POR MICRORREGIÃO
   // Cada microrregião tem sua própria equipe
@@ -61,120 +61,120 @@ export const INITIAL_DATA: {
       { id: 202, name: "Juliana Santos", role: "Gestora", email: "juliana@saude.mg.gov.br", municipio: "Varginha", microregiaoId: "MR010" }
     ]
   },
-  
+
   // =====================================
   // AÇÕES POR MICRORREGIÃO
   // Cada ação tem UID único: "MICRO::ID"
   // =====================================
   actions: [
     // --- POÇOS DE CALDAS (MR009) ---
-    { 
+    {
       uid: "MR009::1.1.1",
-      id: "1.1.1", 
-      activityId: "1.1", 
+      id: "1.1.1",
+      activityId: "1.1",
       microregiaoId: "MR009",
-      title: "Mapear o ambiente de informação (Atrasou 15 dias)", 
-      status: "Concluído", 
-      startDate: "2025-11-01", 
+      title: "Mapear o ambiente de informação (Atrasou 15 dias)",
+      status: "Concluído",
+      startDate: "2025-11-01",
       plannedEndDate: "2026-01-15",
       endDate: "2026-02-02",
-      progress: 100, 
-      raci: [{ name: "Lhays Rezende", role: "R" }], 
+      progress: 100,
+      raci: [{ name: "Lhays Rezende", role: "R" }],
       notes: "Houve atraso na entrega dos relatórios.",
       comments: [
-        { id: "c1", authorId: "usr_002", authorName: "Maria Silva", authorMunicipio: "Poços de Caldas", content: "Atraso foi devido a problemas no sistema.", createdAt: "2025-12-01T10:30:00Z" },
-        { id: "c2", authorId: "usr_001", authorName: "Admin Sistema", authorMunicipio: "BH", content: "Entendido. Vamos ajustar o cronograma.", createdAt: "2025-12-01T14:15:00Z" }
+        { id: "c1", authorId: "usr_002", authorName: "Maria Silva", authorMunicipio: "Poços de Caldas", authorAvatarId: "p1", content: "Atraso foi devido a problemas no sistema.", createdAt: "2025-12-01T10:30:00Z" },
+        { id: "c2", authorId: "usr_001", authorName: "Admin Sistema", authorMunicipio: "BH", authorAvatarId: "p22", content: "Entendido. Vamos ajustar o cronograma.", createdAt: "2025-12-01T14:15:00Z" }
       ]
     },
-    { 
+    {
       uid: "MR009::1.2.1",
-      id: "1.2.1", 
-      activityId: "1.2", 
+      id: "1.2.1",
+      activityId: "1.2",
       microregiaoId: "MR009",
-      title: "Criar e implementar estratégia (Adiantado)", 
-      status: "Concluído", 
-      startDate: "2026-05-25", 
-      plannedEndDate: "2026-09-04", 
+      title: "Criar e implementar estratégia (Adiantado)",
+      status: "Concluído",
+      startDate: "2026-05-25",
+      plannedEndDate: "2026-09-04",
       endDate: "2026-08-20",
-      progress: 100, 
-      raci: [{ name: "Grupo Poços", role: "A" }], 
+      progress: 100,
+      raci: [{ name: "Grupo Poços", role: "A" }],
       notes: "Equipe foi eficiente.",
       comments: []
     },
-    { 
+    {
       uid: "MR009::1.2.2",
-      id: "1.2.2", 
-      activityId: "1.2", 
+      id: "1.2.2",
+      activityId: "1.2",
       microregiaoId: "MR009",
-      title: "Realizar capacitação técnica (No Prazo)", 
-      status: "Não Iniciado", 
-      startDate: "2026-01-22", 
-      plannedEndDate: "2026-09-05", 
-      endDate: "2026-09-05", 
-      progress: 0, 
-      raci: [{ name: "APS", role: "R" }], 
+      title: "Realizar capacitação técnica (No Prazo)",
+      status: "Não Iniciado",
+      startDate: "2026-01-22",
+      plannedEndDate: "2026-09-05",
+      endDate: "2026-09-05",
+      progress: 0,
+      raci: [{ name: "APS", role: "R" }],
       notes: "Planejamento.",
       comments: []
     },
-    { 
+    {
       uid: "MR009::1.3.1",
-      id: "1.3.1", 
-      activityId: "1.3", 
+      id: "1.3.1",
+      activityId: "1.3",
       microregiaoId: "MR009",
-      title: "Definir fluxos de acompanhamento", 
-      status: "Não Iniciado", 
-      startDate: "2026-05-25", 
-      plannedEndDate: "2026-08-30", 
+      title: "Definir fluxos de acompanhamento",
+      status: "Não Iniciado",
+      startDate: "2026-05-25",
+      plannedEndDate: "2026-08-30",
       endDate: "",
-      progress: 0, 
-      raci: [{ name: "Blabla", role: "R" }], 
+      progress: 0,
+      raci: [{ name: "Blabla", role: "R" }],
       notes: "",
       comments: []
     },
-    { 
+    {
       uid: "MR009::1.3.2",
-      id: "1.3.2", 
-      activityId: "1.3", 
+      id: "1.3.2",
+      activityId: "1.3",
       microregiaoId: "MR009",
-      title: "Sistematizar fluxos de trabalho", 
-      status: "Em Andamento", 
-      startDate: "2026-05-25", 
-      plannedEndDate: "2026-08-31", 
+      title: "Sistematizar fluxos de trabalho",
+      status: "Em Andamento",
+      startDate: "2026-05-25",
+      plannedEndDate: "2026-08-31",
       endDate: "",
-      progress: 45, 
-      raci: [{ name: "Ciclano", role: "R" }], 
+      progress: 45,
+      raci: [{ name: "Ciclano", role: "R" }],
       notes: "",
       comments: []
     },
-    
+
     // --- BELO HORIZONTE (MR001) ---
-    { 
+    {
       uid: "MR001::1.1.1",
-      id: "1.1.1", 
-      activityId: "1.1", 
+      id: "1.1.1",
+      activityId: "1.1",
       microregiaoId: "MR001",
-      title: "Mapear o ambiente de informação", 
-      status: "Em Andamento", 
-      startDate: "2025-12-01", 
+      title: "Mapear o ambiente de informação",
+      status: "Em Andamento",
+      startDate: "2025-12-01",
       plannedEndDate: "2026-02-15",
       endDate: "",
-      progress: 35, 
-      raci: [{ name: "Carlos Pereira", role: "R" }], 
+      progress: 35,
+      raci: [{ name: "Carlos Pereira", role: "R" }],
       notes: "Em andamento conforme cronograma.",
       comments: []
     },
-    { 
+    {
       uid: "MR001::1.2.1",
-      id: "1.2.1", 
-      activityId: "1.2", 
+      id: "1.2.1",
+      activityId: "1.2",
       microregiaoId: "MR001",
-      title: "Criar e implementar estratégia", 
-      status: "Não Iniciado", 
-      startDate: "2026-02-01", 
+      title: "Criar e implementar estratégia",
+      status: "Não Iniciado",
+      startDate: "2026-02-01",
       plannedEndDate: "2026-05-30",
       endDate: "",
-      progress: 0, 
-      raci: [{ name: "Carlos Pereira", role: "A" }], 
+      progress: 0,
+      raci: [{ name: "Carlos Pereira", role: "A" }],
       notes: "",
       comments: []
     }

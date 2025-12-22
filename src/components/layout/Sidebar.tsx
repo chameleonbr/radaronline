@@ -218,52 +218,67 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* User profile section */}
           <div className="p-4 border-t border-white/10 bg-black/10">
-            <div className={`flex items-center gap-2 ${!isOpen ? 'justify-center' : ''}`}>
-              {/* Sino de notificações - apenas para admins */}
-              {isOpen && <NotificationBell />}
-              <button
-                onClick={() => onOpenSettings?.()}
-                className={`flex items-center gap-3 p-2 rounded-xl transition-colors hover:bg-white/10 cursor-pointer text-left flex-1 ${!isOpen ? 'justify-center' : ''}`}
-                title="Abrir configurações"
-              >
-                <div className="relative shrink-0">
-                  <img
-                    src={getAvatarUrl(userAvatarId || 'p22')}
-                    alt="User"
-                    className="w-9 h-9 rounded-full bg-white border-2 border-white/50 shadow-sm"
-                    loading="lazy"
-                  />
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-[#059669] rounded-full"></div>
-                </div>
-                {isOpen && (
+            {/* Layout quando sidebar está ABERTA */}
+            {isOpen && (
+              <div className="flex items-center gap-2">
+                {/* Sino de notificações */}
+                <NotificationBell />
+                <button
+                  onClick={() => onOpenSettings?.()}
+                  className="flex items-center gap-3 p-2 rounded-xl transition-colors hover:bg-white/10 cursor-pointer text-left flex-1"
+                  title="Abrir configurações"
+                >
+                  <div className="relative shrink-0">
+                    <img
+                      src={getAvatarUrl(userAvatarId || 'p22')}
+                      alt="User"
+                      className="w-9 h-9 rounded-full bg-white border-2 border-white/50 shadow-sm"
+                      loading="lazy"
+                    />
+                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-[#059669] rounded-full"></div>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold truncate text-white">{userName || 'Usuário'}</div>
                     <div className="text-[10px] opacity-80 truncate text-white/80">{getRoleLabel(userRole)}</div>
                   </div>
-                )}
-              </button>
-
-              {/* Logout button */}
-              {isOpen && onLogout && (
-                <button
-                  onClick={onLogout}
-                  className="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
-                  title="Sair"
-                >
-                  <LogOut size={18} />
                 </button>
-              )}
-            </div>
 
-            {/* Logout para sidebar colapsada */}
-            {!isOpen && onLogout && (
-              <button
-                onClick={onLogout}
-                className="w-full mt-2 p-2 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white flex justify-center"
-                title="Sair"
-              >
-                <LogOut size={18} />
-              </button>
+                {/* Logout button */}
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    className="p-2 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
+                    title="Sair"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Layout quando sidebar está MINIMIZADA - sininho em cima, avatar embaixo */}
+            {!isOpen && (
+              <div className="flex flex-col items-center gap-2">
+                {/* Sininho no topo */}
+                <NotificationBell />
+
+                {/* Avatar embaixo */}
+                <button
+                  onClick={() => onOpenSettings?.()}
+                  className="rounded-full transition-colors hover:bg-white/10 cursor-pointer"
+                  title="Abrir configurações"
+                >
+                  <div className="relative">
+                    <img
+                      src={getAvatarUrl(userAvatarId || 'p22')}
+                      alt="User"
+                      className="w-9 h-9 rounded-full bg-white border-2 border-white/50 shadow-sm"
+                      loading="lazy"
+                    />
+                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 border-2 border-[#059669] rounded-full"></div>
+                  </div>
+                </button>
+              </div>
             )}
           </div>
         </div>

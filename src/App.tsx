@@ -595,11 +595,14 @@ function AppContent() {
   // RENDERIZAÇÃO CONDICIONAL
   // =====================================
 
-  // ✅ CORREÇÃO: Usar isContextLoading para verificar loading do auth
-  if (isContextLoading) {
+  // ✅ CORREÇÃO FINAL: Mostrar loading APENAS quando o contexto ainda não está pronto
+  // Isso é diferente de "está carregando durante o login"
+  if (!authContext) {
     return <LoadingFallback />;
   }
 
+  // ✅ CORREÇÃO: Se não está autenticado, mostra login (independente de isLoading)
+  // O LoginPage tem seu próprio estado de loading interno
   if (!isAuthenticated) {
     return <LoginPage />;
   }

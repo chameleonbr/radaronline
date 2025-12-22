@@ -3,27 +3,36 @@ import { Eye, EyeOff, LogIn, AlertCircle, Shield } from 'lucide-react';
 import { useAuth } from '../../auth';
 
 export function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  // ✅ CORREÇÃO: Usar estado de loading LOCAL ao invés do contexto
+  // Isso evita re-renderizações que perdem o estado de erro
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
     if (!email || !senha) {
       setError('Preencha todos os campos');
+      setIsSubmitting(false);
       return;
     }
 
+    console.log('[LoginPage] Tentando login com:', email);
     const result = await login(email, senha);
-    
+    console.log('[LoginPage] Resultado do login:', result);
+
     if (!result.success) {
+      console.log('[LoginPage] Setando erro:', result.error);
       setError(result.error || 'Erro ao fazer login');
     }
+    setIsSubmitting(false);
     // Se sucesso, o App.tsx vai detectar isAuthenticated e mudar a tela
   };
 
@@ -86,7 +95,7 @@ export function LoginPage() {
                 placeholder="seu.email@gov.mg.br"
                 className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0891b2]/70 focus:border-transparent transition-all shadow-sm"
                 autoComplete="email"
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
 
@@ -104,7 +113,7 @@ export function LoginPage() {
                   placeholder="••••••••"
                   className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0891b2]/70 focus:border-transparent transition-all pr-12 shadow-sm"
                   autoComplete="current-password"
-                  disabled={isLoading}
+                  disabled={isSubmitting}
                 />
                 <button
                   type="button"
@@ -120,10 +129,10 @@ export function LoginPage() {
             {/* Botão Submit */}
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-[#0891b2] to-[#059669] hover:brightness-110 text-white font-semibold rounded-xl shadow-lg shadow-teal-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? (
+              {isSubmitting ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Entrando...</span>
@@ -139,7 +148,7 @@ export function LoginPage() {
 
           {/* Links auxiliares */}
           <div className="mt-6 text-center">
-            <button 
+            <button
               type="button"
               className="text-sm text-slate-500 hover:text-[#0891b2] transition-colors"
               onClick={() => alert('Contate o administrador do sistema')}

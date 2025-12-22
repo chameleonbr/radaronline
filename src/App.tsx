@@ -903,6 +903,7 @@ function AppContent() {
           onMenuClick={() => setIsSidebarOpen(true)}
           isMobile={isMobile}
           isAdmin={isAdmin}
+          userRole={user?.role}
           onAdminClick={() => setCurrentPage('admin')}
         />
 

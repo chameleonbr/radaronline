@@ -21,7 +21,7 @@ import {
 import { useAuth } from '../../auth';
 import { User } from '../../types/auth.types';
 import { Action, TeamMember } from '../../types';
-import { MICROREGIOES, getMicroregiaoById, getMacrorregioes } from '../../data/microregioes';
+import { MICROREGIOES, MACRORREGIOES, getMicroregiaoById, getMacrorregioes, getMicroregioesByMacro } from '../../data/microregioes';
 import * as authService from '../../services/authService';
 import { UserFormModal } from './UserFormModal';
 import {
@@ -31,6 +31,10 @@ import {
   RankingPanel,
   ActivityLog,
   ActivityCenter,
+  DashboardFilters,
+  ComparisonEngine,
+  defaultFiltersState,
+  DashboardFiltersState,
 } from './dashboard';
 import { ConfirmModal, StatsCard, useToast } from '../../components/common';
 import { log, logError } from '../../lib/logger';
@@ -61,6 +65,9 @@ export function AdminPanel(props: AdminPanelProps) {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [confirmToggle, setConfirmToggle] = useState<{ open: boolean; user?: User | null; nextStatus?: boolean }>({ open: false });
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; user?: User | null }>({ open: false });
+
+  // Dashboard filters state
+  const [dashboardFilters, setDashboardFilters] = useState<DashboardFiltersState>(defaultFiltersState);
 
   // Carrega usuários
   useEffect(() => {
@@ -315,82 +322,93 @@ export function AdminPanel(props: AdminPanelProps) {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {/* KPI cards coloridos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {/* Usuários - Indigo */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg hover:shadow-indigo-500/10 transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Users className="w-5 h-5 text-indigo-600" />
-              </div>
-              <span className="text-2xl font-bold text-indigo-600">{kpis.total}</span>
-            </div>
-            <p className="text-sm font-semibold text-slate-700">Usuários</p>
-            <p className="text-xs text-slate-400">Total cadastrado</p>
-          </div>
-
-          {/* Ativos - Emerald */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg hover:shadow-emerald-500/10 transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <UserCheck className="w-5 h-5 text-emerald-600" />
-              </div>
-              <span className="text-2xl font-bold text-emerald-600">{kpis.ativos}</span>
-            </div>
-            <p className="text-sm font-semibold text-slate-700">Ativos</p>
-            <p className="text-xs text-slate-400">{kpis.inativos} inativos</p>
-          </div>
-
-          {/* Admins - Purple */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg hover:shadow-purple-500/10 transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Shield className="w-5 h-5 text-purple-600" />
-              </div>
-              <span className="text-2xl font-bold text-purple-600">{kpis.admins}</span>
-            </div>
-            <p className="text-sm font-semibold text-slate-700">Admins</p>
-            <p className="text-xs text-slate-400">{kpis.gestores} gestores</p>
-          </div>
-
-          {/* Microrregiões - Amber */}
-          <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg hover:shadow-amber-500/10 transition-all group">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <MapPin className="w-5 h-5 text-amber-600" />
-              </div>
-              <span className="text-2xl font-bold text-amber-600">{MICROREGIOES.length}</span>
-            </div>
-            <p className="text-sm font-semibold text-slate-700">Microrregiões</p>
-            <p className="text-xs text-slate-400">Cobertura total</p>
-          </div>
-        </div>
 
         {/* Tab: Dashboard */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            {/* Overview com KPIs */}
-            <AdminOverview
-              actions={actions}
-              users={users}
-              teams={teams}
+            {/* Filters Bar */}
+            <DashboardFilters
+              filters={dashboardFilters}
+              onChange={setDashboardFilters}
             />
 
-            {/* Grid com Alertas e Activity Log */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <AlertsPanel
+            {/* Dynamic Filter Summary - Users & Micros count */}
+            {!dashboardFilters.isCompareMode && (
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-teal-50 border border-teal-200 rounded-full">
+                  <Users className="w-4 h-4 text-teal-600" />
+                  <span className="font-medium text-teal-700">
+                    {(() => {
+                      let filteredUsers = users;
+                      if (dashboardFilters.selectedMacroId) {
+                        const macro = MACRORREGIOES.find(m => m.id === dashboardFilters.selectedMacroId);
+                        if (macro) {
+                          const micros = getMicroregioesByMacro(macro.nome);
+                          const microIds = new Set(micros.map(m => m.id));
+                          filteredUsers = users.filter(u => microIds.has(u.microregiaoId));
+                        }
+                      }
+                      if (dashboardFilters.selectedMicroId) {
+                        filteredUsers = filteredUsers.filter(u => u.microregiaoId === dashboardFilters.selectedMicroId);
+                      }
+                      return filteredUsers.length;
+                    })()} usuários
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-full">
+                  <MapPin className="w-4 h-4 text-amber-600" />
+                  <span className="font-medium text-amber-700">
+                    {(() => {
+                      if (dashboardFilters.selectedMicroId) return 1;
+                      if (dashboardFilters.selectedMacroId) {
+                        const macro = MACRORREGIOES.find(m => m.id === dashboardFilters.selectedMacroId);
+                        if (macro) {
+                          return getMicroregioesByMacro(macro.nome).length;
+                        }
+                      }
+                      return MICROREGIOES.length;
+                    })()} microrregiões
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Show Comparison Engine or Normal Overview */}
+            {dashboardFilters.isCompareMode ? (
+              <ComparisonEngine
+                compareLevel={dashboardFilters.compareLevel}
+                entityA={dashboardFilters.entityA}
+                entityB={dashboardFilters.entityB}
                 actions={actions}
                 users={users}
-                onViewMicrorregiao={handleViewMicrorregiao}
               />
-              <ActivityLog maxItems={8} />
-            </div>
+            ) : (
+              <>
+                {/* Overview com KPIs */}
+                <AdminOverview
+                  actions={actions}
+                  users={users}
+                  teams={teams}
+                  filters={dashboardFilters}
+                />
 
-            {/* Mapa de Microrregiões */}
-            <MacroRegionMap
-              actions={actions}
-              onViewMicrorregiao={handleViewMicrorregiao}
-            />
+                {/* Grid com Alertas e Activity Log */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <AlertsPanel
+                    actions={actions}
+                    users={users}
+                    onViewMicrorregiao={handleViewMicrorregiao}
+                  />
+                  <ActivityLog maxItems={8} />
+                </div>
+
+                {/* Mapa de Microrregiões */}
+                <MacroRegionMap
+                  actions={actions}
+                  onViewMicrorregiao={handleViewMicrorregiao}
+                />
+              </>
+            )}
           </div>
         )}
 

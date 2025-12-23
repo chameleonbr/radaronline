@@ -73,6 +73,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         console.error('[AuthContext] Erro ao carregar perfil:', error);
+        console.error('[AuthContext] Error details:', {
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+          details: error.details,
+        });
         return null;
       }
 

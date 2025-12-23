@@ -229,3 +229,4 @@ serve(async (req: Request) => {
 - ✅ Admin API usado apenas na Edge Function (seguro)
 
 
+

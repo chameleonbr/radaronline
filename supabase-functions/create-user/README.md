@@ -80,3 +80,4 @@ O app espera `functionData.data.profile` e já está configurado corretamente.
 - **Senha mínima**: 6 caracteres
 - **Email**: Deve ser válido e único
 
+

@@ -25,12 +25,14 @@ import {
 } from 'recharts';
 import { Action, TeamMember } from '../../../types';
 import { User } from '../../../types/auth.types';
-import { MICROREGIOES } from '../../../data/microregioes';
+import { MICROREGIOES, getMicroregioesByMacro, MACRORREGIOES } from '../../../data/microregioes';
+import { DashboardFiltersState } from './DashboardFilters';
 
 interface AdminOverviewProps {
   actions: Action[];
   users: User[];
   teams: Record<string, TeamMember[]>;
+  filters?: DashboardFiltersState;
 }
 
 // Card Minimalista Profissional
@@ -86,53 +88,77 @@ const CleanTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export function AdminOverview({ actions, users, teams }: AdminOverviewProps) {
+export function AdminOverview({ actions, users, teams, filters }: AdminOverviewProps) {
+  // Filter actions and users based on selected filters
+  const filteredData = useMemo(() => {
+    let filteredActions = actions;
+    let filteredUsers = users;
+
+    if (filters?.selectedMacroId) {
+      const macro = MACRORREGIOES.find(m => m.id === filters.selectedMacroId);
+      if (macro) {
+        const micros = getMicroregioesByMacro(macro.nome);
+        const microIds = new Set(micros.map(m => m.id));
+        filteredActions = actions.filter(a => microIds.has(a.microregiaoId));
+        filteredUsers = users.filter(u => microIds.has(u.microregiaoId));
+      }
+    }
+
+    if (filters?.selectedMicroId) {
+      filteredActions = filteredActions.filter(a => a.microregiaoId === filters.selectedMicroId);
+      filteredUsers = filteredUsers.filter(u => u.microregiaoId === filters.selectedMicroId);
+    }
+
+    return { actions: filteredActions, users: filteredUsers };
+  }, [actions, users, filters]);
+
   // Calcular métricas
   const metrics = useMemo(() => {
+    const { actions: filteredActions, users: filteredUsers } = filteredData;
     const totalMicros = MICROREGIOES.length;
-    const microsComAcoes = new Set(actions.map(a => a.microregiaoId)).size;
+    const microsComAcoes = new Set(filteredActions.map(a => a.microregiaoId)).size;
     const taxaCobertura = Math.round((microsComAcoes / totalMicros) * 100);
 
-    const totalAcoes = actions.length;
-    const concluidas = actions.filter(a => a.status === 'Concluído').length;
-    const andamento = actions.filter(a => a.status === 'Em Andamento').length;
-    const naoIniciadas = actions.filter(a => a.status === 'Não Iniciado').length;
+    const totalAcoes = filteredActions.length;
+    const concluidas = filteredActions.filter(a => a.status === 'Concluído').length;
+    const andamento = filteredActions.filter(a => a.status === 'Em Andamento').length;
+    const naoIniciadas = filteredActions.filter(a => a.status === 'Não Iniciado').length;
 
     // Cálculo de Prazos (Deadline Horizon)
     const hoje = new Date();
     const em7Dias = new Date(hoje.getTime() + 7 * 24 * 60 * 60 * 1000);
     const em30Dias = new Date(hoje.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    const atrasadas = actions.filter(a => {
+    const atrasadas = filteredActions.filter(a => {
       if (a.status === 'Concluído') return false;
       return new Date(a.plannedEndDate) < hoje;
     }).length;
 
-    const vencendoHoje = actions.filter(a => {
+    const vencendoHoje = filteredActions.filter(a => {
       if (a.status === 'Concluído') return false;
       const prazo = new Date(a.plannedEndDate);
       return prazo >= hoje && prazo < new Date(hoje.getTime() + 24 * 60 * 60 * 1000);
     }).length;
 
-    const vencendo7Dias = actions.filter(a => {
+    const vencendo7Dias = filteredActions.filter(a => {
       if (a.status === 'Concluído') return false;
       const prazo = new Date(a.plannedEndDate);
       return prazo >= hoje && prazo <= em7Dias;
     }).length;
 
-    const vencendo30Dias = actions.filter(a => {
+    const vencendo30Dias = filteredActions.filter(a => {
       if (a.status === 'Concluído') return false;
       const prazo = new Date(a.plannedEndDate);
       return prazo > em7Dias && prazo <= em30Dias;
     }).length;
 
-    const futuro = actions.filter(a => {
+    const futuro = filteredActions.filter(a => {
       if (a.status === 'Concluído') return false;
       return new Date(a.plannedEndDate) > em30Dias;
     }).length;
 
     const taxaConclusao = totalAcoes > 0 ? Math.round((concluidas / totalAcoes) * 100) : 0;
-    const usuariosAtivos = users.filter(u => u.ativo).length;
+    const usuariosAtivos = filteredUsers.filter(u => u.ativo).length;
 
     return {
       totalAcoes,
@@ -151,7 +177,7 @@ export function AdminOverview({ actions, users, teams }: AdminOverviewProps) {
         { name: 'Futuro', value: futuro, color: '#94a3b8' }, // Slate 400
       ]
     };
-  }, [actions, users, teams]);
+  }, [filteredData]);
 
   // Cores sóbrias para status
   const statusData = [

@@ -34,14 +34,14 @@ export function LoginPage() {
     <div
       className="min-h-screen w-full relative flex items-center justify-center p-4"
       style={{
-        backgroundImage: 'url(/Fundo/fundo.png)',
+        backgroundImage: 'url(/login-bg-3.png)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
       }}
     >
       {/* Dark overlay base */}
-      <div className="absolute inset-0 bg-black/30" />
+      <div className="absolute inset-0 bg-black/60" />
 
 
 

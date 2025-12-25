@@ -10,6 +10,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,17 +32,20 @@ export function LoginPage() {
   };
 
   return (
-    <div
-      className="min-h-screen w-full relative flex items-center justify-center p-4"
-      style={{
-        backgroundImage: 'url(/login-bg-3.png)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-      }}
-    >
+    <div className="min-h-screen w-full relative flex items-center justify-center p-4">
+      {/* Background Image Fixed - Resolve problemas de zoom/redimensionamento no mobile */}
+      <div
+        className="fixed inset-0 z-0"
+        style={{
+          backgroundImage: 'url(/login-bg-3.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
+
       {/* Dark overlay base */}
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="fixed inset-0 z-0 bg-black/60" />
 
 
 
@@ -51,9 +55,9 @@ export function LoginPage() {
           background: 'transparent',
           backdropFilter: 'none',
           WebkitBackdropFilter: 'none',
-          borderColor: 'rgba(255, 255, 255, 0.2)', // Borda mais visível
+          borderColor: 'rgba(255, 255, 255, 0.2)',
           borderWidth: '1px',
-          boxShadow: '0 0 40px rgba(0,0,0,0.3)', // Sombra para destacar do fundo
+          boxShadow: '0 0 40px rgba(0,0,0,0.3)',
         }}
       >
         {/* Left Panel - The Glass Card Content */}
@@ -68,9 +72,9 @@ export function LoginPage() {
         >
           {/* Inner Logo */}
           <div className="absolute top-12 left-12">
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold text-blue-400">Radar</span>
-              <span className="text-xl text-white font-light tracking-wider">NSDIGI</span>
+            <div className="flex flex-col items-start -space-y-1">
+              <span className="text-5xl font-bold text-cyan-400 tracking-tight">Radar</span>
+              <span className="text-sm text-white font-light tracking-wider opacity-90">Núcleo de Saúde Digital | SES/GAB/ATI-NSDIGI</span>
             </div>
           </div>
 
@@ -93,8 +97,8 @@ export function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter Email"
-                  className="w-full px-0 py-4 bg-transparent border-b border-white/20 text-white placeholder-white/30 focus:outline-none focus:border-white/60 transition-colors text-base"
+                  placeholder="Seu e-mail institucional"
+                  className="w-full px-0 py-4 bg-transparent border-b border-white/20 text-white placeholder-white/30 focus:outline-none focus:border-cyan-400/60 transition-colors text-base"
                   disabled={isSubmitting}
                 />
 
@@ -103,8 +107,8 @@ export function LoginPage() {
                     type={showPassword ? 'text' : 'password'}
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
-                    placeholder="Enter Password"
-                    className="w-full px-0 py-4 bg-transparent border-b border-white/20 text-white placeholder-white/30 focus:outline-none focus:border-white/60 transition-colors text-base pr-10"
+                    placeholder="Senha"
+                    className="w-full px-0 py-4 bg-transparent border-b border-white/20 text-white placeholder-white/30 focus:outline-none focus:border-cyan-400/60 transition-colors text-base pr-10"
                     disabled={isSubmitting}
                   />
                   <button
@@ -132,17 +136,20 @@ export function LoginPage() {
           </div>
 
           <div className="absolute bottom-6 left-12">
-            <button onClick={() => alert('Contate o admin')} className="text-xs text-blue-400 hover:text-blue-300">
+            <button
+              onClick={() => setIsForgotModalOpen(true)}
+              className="text-xs text-blue-400 hover:text-blue-300 hover:underline transition-all"
+            >
               Esqueceu a senha?
             </button>
           </div>
         </div>
 
-        {/* Right Panel - Glass Reflection */}
-        <div className="flex-1 hidden md:block relative overflow-hidden pointer-events-none">
+        {/* Right Panel - Container Principal */}
+        <div className="flex-1 hidden md:flex relative overflow-hidden flex-col justify-end items-center p-12 pb-20">
           {/* Glass Reflection Gradient */}
           <div
-            className="absolute inset-0"
+            className="absolute inset-0 pointer-events-none"
             style={{
               background: 'linear-gradient(105deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0) 100%)',
               opacity: 0.8,
@@ -151,15 +158,67 @@ export function LoginPage() {
 
           {/* Subtle Shine/Sheen overlay */}
           <div
-            className="absolute top-0 right-0 w-full h-full"
+            className="absolute top-0 right-0 w-full h-full pointer-events-none"
             style={{
               background: 'linear-gradient(to bottom left, rgba(255,255,255,0.1) 0%, transparent 40%)',
             }}
           />
 
+          {/* Conteúdo de Texto (Posicionado na linha vermelha - com margem inferior grande) */}
+          <div className="relative z-10 flex flex-col items-center text-center max-w-lg mb-32">
+            <h3 className="text-3xl font-semibold text-white/60 mb-2 tracking-normal leading-tight">
+              Transformação Digital em Saúde
+            </h3>
 
+            <p className="text-white/40 text-lg font-normal">
+              Monitorando ações por um SUS mais forte em Minas.
+            </p>
+          </div>
+
+          {/* Logo (Posicionado na linha amarela - rodapé) */}
+          <div className="relative z-10">
+            <img
+              src="/logos-sidebar.png"
+              alt="Logos SUS Digital e SES"
+              className="w-56 h-auto object-contain opacity-40 hover:opacity-60 transition-opacity duration-500"
+              style={{ filter: 'brightness(0) invert(1)' }}
+            />
+          </div>
         </div>
       </div>
+
+      {/* Esqueci minha senha Modal */}
+      {isForgotModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsForgotModalOpen(false)}
+          />
+
+          {/* Modal Content */}
+          <div className="relative bg-zinc-900 border border-white/10 rounded-2xl p-8 max-w-sm w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center mb-2">
+                <AlertCircle className="w-6 h-6 text-cyan-400" />
+              </div>
+
+              <h3 className="text-xl font-bold text-white">Recuperação de Acesso</h3>
+
+              <p className="text-white/60 text-sm leading-relaxed">
+                Para redefinir sua senha, entre em contato diretamente com a gestão do sistema.
+              </p>
+
+              <button
+                onClick={() => setIsForgotModalOpen(false)}
+                className="w-full mt-4 py-3 bg-white text-black font-semibold rounded-lg hover:bg-white/90 transition-colors"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

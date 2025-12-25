@@ -32,20 +32,17 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full relative flex items-center justify-center p-4">
-      {/* Background Image Fixed - Resolve problemas de zoom/redimensionamento no mobile */}
-      <div
-        className="fixed inset-0 z-0"
-        style={{
-          backgroundImage: 'url(/login-bg-3.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-        }}
-      />
-
+    <div
+      className="min-h-screen w-full relative flex items-center justify-center p-4"
+      style={{
+        backgroundImage: 'url(/login-bg-3.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
       {/* Dark overlay base */}
-      <div className="fixed inset-0 z-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/60" />
 
 
 
@@ -146,7 +143,7 @@ export function LoginPage() {
         </div>
 
         {/* Right Panel - Container Principal */}
-        <div className="flex-1 hidden md:flex relative overflow-hidden flex-col justify-end items-center p-12 pb-20">
+        <div className="flex-1 hidden md:flex relative overflow-hidden flex-col justify-end items-center p-12">
           {/* Glass Reflection Gradient */}
           <div
             className="absolute inset-0 pointer-events-none"
@@ -165,7 +162,7 @@ export function LoginPage() {
           />
 
           {/* Conteúdo de Texto (Posicionado na linha vermelha - com margem inferior grande) */}
-          <div className="relative z-10 flex flex-col items-center text-center max-w-lg mb-32">
+          <div className="relative z-10 flex flex-col items-center text-center max-w-lg mb-24">
             <h3 className="text-3xl font-semibold text-white/60 mb-2 tracking-normal leading-tight">
               Transformação Digital em Saúde
             </h3>

@@ -619,7 +619,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
 
                 {/* 3. Notificações (Notifications) - Moves below Objectives */}
-                {showNotifications && (
+                {showNotifications && onAdminTabChange && (
                   <div className="relative mt-2 border-t border-white/5 pt-2">
                     <NotificationBell
                       collapsed={!isOpen}

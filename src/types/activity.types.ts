@@ -6,6 +6,7 @@ export type ActivityType =
     | 'user_deleted'
     | 'user_deactivated'
     | 'lgpd_accepted'
+    | 'first_access_completed'
     | 'action_created'
     | 'action_updated'
     | 'action_deleted'

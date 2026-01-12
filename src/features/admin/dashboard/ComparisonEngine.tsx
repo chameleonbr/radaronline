@@ -29,11 +29,8 @@ import { User } from '../../../types/auth.types';
 import {
     MACRORREGIOES,
     MICROREGIOES,
-    MUNICIPIOS,
     getMicroregioesByMacro,
     getMunicipiosByMicro,
-    Macrorregiao,
-    Municipio
 } from '../../../data/microregioes';
 import { CompareLevel } from './DashboardFilters';
 

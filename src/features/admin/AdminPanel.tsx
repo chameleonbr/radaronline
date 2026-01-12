@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Users,
-  MapPin,
   Plus,
   Search,
   MoreVertical,
@@ -17,19 +16,24 @@ import {
   Activity,
   RefreshCw,
   Download,
-  BarChart3
+  Maximize,
+  Minimize,
+  CalendarRange,
 } from 'lucide-react';
+import { NotificationBell } from '../../components/common/NotificationBell';
+import { ZoomControl } from '../../components/common/ZoomControl';
 import { useAuth } from '../../auth';
 import { User } from '../../types/auth.types';
-import { Action, TeamMember } from '../../types';
-import { MICROREGIOES, MACRORREGIOES, getMicroregiaoById, getMacrorregioes, getMicroregioesByMacro } from '../../data/microregioes';
+import { Action, TeamMember, Objective, Activity as ActivityType } from '../../types';
+import { Sidebar } from '../../components/layout/Sidebar';
+import { MICROREGIOES, getMicroregiaoById, getMacrorregioes } from '../../data/microregioes';
 import * as authService from '../../services/authService';
 import { saveUserMunicipality, loadPendingRegistrations, deletePendingRegistration, PendingRegistration } from '../../services/dataService';
 import { UserFormModal } from './UserFormModal';
 import {
   AdminOverview,
-  MacroRegionMap,
-  AlertsPanel,
+  MinasMicroMap,
+  WorkforcePanel,
   RankingPanel,
   ActivityLog,
   ActivityCenter,
@@ -38,23 +42,28 @@ import {
   defaultFiltersState,
   DashboardFiltersState,
   PendingRegistrationsPanel,
+  LinearCalendar,
+  RequestsManagement,
 } from './dashboard';
 import { AnalyticsDashboard } from './dashboard/AnalyticsDashboard';
-import { ConfirmModal, StatsCard, useToast } from '../../components/common';
+import { UserSettingsModal } from '../settings/UserSettingsModal';
+import { ConfirmModal, useToast } from '../../components/common';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
 import { log, logError } from '../../lib/logger';
 
-type TabType = 'dashboard' | 'usuarios' | 'microregioes' | 'alertas' | 'ranking' | 'atividades' | 'analytics';
+type TabType = 'dashboard' | 'usuarios' | 'microregioes' | 'ranking' | 'atividades' | 'calendar' | 'requests';
 
 interface AdminPanelProps {
   onBack?: () => void;
   actions?: Action[];
   teams?: Record<string, TeamMember[]>;
+  objectives?: Objective[];
+  activities?: Record<number, ActivityType[]>;
 }
 
 export function AdminPanel(props: AdminPanelProps) {
-  const { onBack, actions = [], teams = {} } = props;
-  const { user: currentUser, setViewingMicrorregiao, isAdmin, isSuperAdmin } = useAuth();
+  const { onBack, actions = [], teams = {}, objectives = [], activities = {} } = props;
+  const { user: currentUser, setViewingMicrorregiao, isAdmin, isSuperAdmin, logout } = useAuth();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -87,11 +96,43 @@ export function AdminPanel(props: AdminPanelProps) {
     municipio?: string;
   } | null>(null);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    }
+  };
+
+  // Sidebar state
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
+  const [selectedObjective, setSelectedObjective] = useState<number>(objectives[0]?.id || 1);
+  const [selectedActivity, setSelectedActivity] = useState<string>(activities[objectives[0]?.id]?.[0]?.id || '1.1');
+  const [currentNav, setCurrentNav] = useState<'strategy' | 'home' | 'settings'>('strategy');
+
+  // Settings modal state
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'profile' | 'appearance'>('profile');
+  const [settingsMode, setSettingsMode] = useState<'settings' | 'avatar'>('settings');
+
   // Carrega usuários
   useEffect(() => {
     loadUsers();
     loadPending();
-  }, []);
+
+    // Resetar filtro de microrregião ao entrar no admin (zerar seleção global)
+    // Isso garante que o admin comece com "visão geral"
+    if (setViewingMicrorregiao) {
+      setViewingMicrorregiao('all');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas na montagem
 
   const loadPending = async () => {
     setPendingLoading(true);
@@ -139,7 +180,8 @@ export function AdminPanel(props: AdminPanelProps) {
     }).sort((a, b) => {
       // Helper to get region info safely
       const getRegionInfo = (user: User) => {
-        if (!user.microregiaoId || user.microregiaoId === 'all') return { macro: 'ZZZ', micro: 'ZZZ' }; // Put 'all' at the bottom
+        if (!user.microregiaoId || user.microregiaoId === 'all') return { macro: 'ZZZ', micro: ' Minas Gerais (Global)' }; // 'all' first or last? Using space to put first if desired, or ZZZ for last.
+        // User requested alphabetical order of microregions.
         const micro = getMicroregiaoById(user.microregiaoId);
         return micro ? { macro: micro.macrorregiao, micro: micro.nome } : { macro: 'ZZZ', micro: 'ZZZ' };
       };
@@ -147,13 +189,11 @@ export function AdminPanel(props: AdminPanelProps) {
       const infoA = getRegionInfo(a);
       const infoB = getRegionInfo(b);
 
-      // 1. Sort by Macro
-      if (infoA.macro !== infoB.macro) return infoA.macro.localeCompare(infoB.macro);
+      // 1. Sort by Micro (A-Z)
+      const microComparison = infoA.micro.localeCompare(infoB.micro);
+      if (microComparison !== 0) return microComparison;
 
-      // 2. Sort by Micro
-      if (infoA.micro !== infoB.micro) return infoA.micro.localeCompare(infoB.micro);
-
-      // 3. Sort by Name
+      // 2. Sort by Name (A-Z)
       return a.nome.localeCompare(b.nome);
     });
   }, [users, searchTerm, filterRole, userFilterMacro, userFilterMicro]);
@@ -279,17 +319,15 @@ export function AdminPanel(props: AdminPanelProps) {
     );
   };
 
-  const tabs = [
+  const _tabs = [
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard, count: null },
-    { id: 'microregioes' as TabType, label: 'Microrregiões', icon: MapPin, count: MICROREGIOES.length },
     { id: 'atividades' as TabType, label: 'Atividades', icon: Activity, count: null },
     { id: 'usuarios' as TabType, label: 'Usuários', icon: Users, count: users.length },
-    { id: 'alertas' as TabType, label: 'Alertas', icon: AlertTriangle, count: null },
+    { id: 'calendar' as TabType, label: 'Calendário', icon: CalendarRange, count: null },
     { id: 'ranking' as TabType, label: 'Ranking', icon: Trophy, count: null },
-    { id: 'analytics' as TabType, label: 'Analytics', icon: BarChart3, count: null },
   ];
 
-  const kpis = useMemo(() => {
+  const _kpis = useMemo(() => {
     const total = users.length;
     const ativos = users.filter(u => u.ativo).length;
     const inativos = total - ativos;
@@ -318,694 +356,734 @@ export function AdminPanel(props: AdminPanelProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
-      {/* Header Premium com Gradiente */}
-      <header className="bg-gradient-to-r from-teal-600 via-teal-500 to-emerald-500 dark:from-teal-900 dark:via-teal-800 dark:to-emerald-900 sticky top-0 z-10 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={onBack}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                title="Voltar ao painel"
-              >
-                <ArrowLeft className="w-5 h-5 text-white" />
-              </button>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center">
-                      <Shield className="w-5 h-5 text-white" />
-                    </div>
-                    Painel Administrativo
-                  </h1>
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${isSuperAdmin
-                    ? 'bg-purple-400/30 text-purple-100 border border-purple-300/40'
-                    : 'bg-white/20 text-white/90 border border-white/30'
-                    }`}>
-                    {isSuperAdmin ? '👑 SUPER ADMIN' : '🛡️ ADMIN'}
-                  </span>
+    <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 overflow-hidden transition-colors duration-200">
+      {/* Sidebar */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        currentNav={currentNav}
+        setCurrentNav={(nav: string) => setCurrentNav(nav as 'strategy' | 'home' | 'settings')}
+        selectedObjective={selectedObjective}
+        setSelectedObjective={setSelectedObjective}
+        selectedActivity={selectedActivity}
+        setSelectedActivity={setSelectedActivity}
+        setViewMode={() => { }} // No viewMode control in admin
+        objectives={objectives}
+        activities={activities}
+        onProfileClick={() => {
+          setSettingsInitialTab('profile');
+          setSettingsMode('avatar'); // Avatar click opens 'avatar' mode (hub style)
+          setIsSettingsModalOpen(true);
+        }}
+        userName={currentUser?.nome}
+        userRole={currentUser?.role}
+        userAvatarId={currentUser?.avatarId}
+        onLogout={logout}
+        isAdmin={isAdmin}
+        isEditMode={false}
+        onOpenSettings={(mode) => {
+          if (mode === 'avatar') {
+            setSettingsInitialTab('profile');
+            setSettingsMode('avatar');
+          } else {
+            setSettingsInitialTab('appearance');
+            setSettingsMode('settings');
+          }
+          setIsSettingsModalOpen(true);
+        }}
+        onSelectMicroregiao={(microId) => handleViewMicrorregiao(microId)}
+        onViewAllMicroregioes={() => setActiveTab('microregioes')}
+        showPlanningNavigation={false}
+        adminActiveTab={activeTab}
+        onAdminTabChange={(tab: string) => setActiveTab(tab as TabType)}
+      />
+
+      {/* Main Admin Content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+
+        {/* Header Premium Clean */}
+        <header className="bg-white dark:bg-slate-900 sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-teal-500/20">
+                        <Shield className="w-5 h-5 text-white" />
+                      </div>
+                      Painel Administrativo
+                    </h1>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide border ${isSuperAdmin
+                      ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800'
+                      : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                      }`}>
+                      {isSuperAdmin ? 'Super Admin' : 'Admin'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 ml-1">
+                    Gerenciando {MICROREGIOES.length} microrregiões
+                  </p>
                 </div>
-                <p className="text-sm text-white/80 mt-0.5">
-                  Central de comando para {MICROREGIOES.length} microrregiões de Minas Gerais
-                </p>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                {/* Actions Group */}
+                <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
 
+                  <ZoomControl />
 
-              <button
-                onClick={loadUsers}
-                className="p-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-                title="Atualizar dados"
-              >
-                <RefreshCw className={`w-5 h-5 text-white ${isLoading ? 'animate-spin' : ''}`} />
-              </button>
+                  <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
 
-              <button
-                className="p-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-                title="Exportar relatório"
-              >
-                <Download className="w-5 h-5 text-white" />
-              </button>
+                  <button
+                    onClick={loadUsers}
+                    className="p-2 text-slate-500 hover:text-teal-600 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all"
+                    title="Atualizar dados"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  </button>
 
-              <div className="ml-2 pl-2 border-l border-white/20">
-                <ThemeToggle />
+                  <button
+                    className="p-2 text-slate-500 hover:text-teal-600 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all"
+                    title="Exportar relatório"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+
+                  <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
+
+                  <button
+                    onClick={toggleFullscreen}
+                    className="p-2 text-slate-500 hover:text-teal-600 hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all"
+                    title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+                  >
+                    {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                <div className="pl-3 border-l border-slate-200 dark:border-slate-800 flex items-center gap-3">
+                  <NotificationBell />
+                  <ThemeToggle />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Tabs Modernizadas */}
-      <div className="bg-gradient-to-b from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-b border-slate-200 dark:border-slate-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <nav className="flex gap-1 overflow-x-auto scrollbar-hide py-2">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 font-medium text-sm transition-all whitespace-nowrap flex items-center gap-2 rounded-lg ${activeTab === tab.id
-                  ? 'bg-teal-500 text-white shadow-md shadow-teal-500/25'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50'
-                  }`}
-              >
-                <tab.icon className="w-4 h-4" />
-                {tab.label}
-                {tab.count !== null && (
-                  <span className={`px-1.5 py-0.5 text-xs rounded-full font-semibold ${activeTab === tab.id
-                    ? 'bg-white/25 text-white'
-                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                    }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
+        {/* Content */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
 
-      {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-
-        {/* Tab: Dashboard */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Filters Bar */}
-            <DashboardFilters
-              filters={dashboardFilters}
-              onChange={setDashboardFilters}
-            />
-
-            {/* Dynamic Filter Summary - Users & Micros count */}
-            {/* Dynamic Filter Summary - removed for cleanup */}
-
-            {/* Show Comparison Engine or Normal Overview */}
-            {dashboardFilters.isCompareMode ? (
-              <ComparisonEngine
-                compareLevel={dashboardFilters.compareLevel}
-                entityA={dashboardFilters.entityA}
-                entityB={dashboardFilters.entityB}
-                actions={actions}
-                users={users}
+          {/* Tab: Dashboard */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              {/* Filters Bar */}
+              <DashboardFilters
+                filters={dashboardFilters}
+                onChange={setDashboardFilters}
               />
-            ) : (
-              <>
-                {/* Overview com KPIs + Mapa + Gráficos */}
-                <AdminOverview
+
+              {/* Dynamic Filter Summary - Users & Micros count */}
+              {/* Dynamic Filter Summary - removed for cleanup */}
+
+              {/* Show Comparison Engine or Normal Overview */}
+              {dashboardFilters.isCompareMode ? (
+                <ComparisonEngine
+                  compareLevel={dashboardFilters.compareLevel}
+                  entityA={dashboardFilters.entityA}
+                  entityB={dashboardFilters.entityB}
                   actions={actions}
                   users={users}
-                  teams={teams}
-                  filters={dashboardFilters}
-                  onTabChange={setActiveTab}
-                  pendingCount={pendingRegistrations.length}
-                >
-                  {/* Mapa de Microrregiões (Inserido entre KPIs e Gráficos) */}
-                  <MacroRegionMap
-                    actions={actions}
-                    onViewMicrorregiao={handleViewMicrorregiao}
-                    selectedMacroId={dashboardFilters.selectedMacroId}
-                    onRegionChange={(macroId) => setDashboardFilters(prev => ({
-                      ...prev,
-                      selectedMacroId: macroId,
-                      selectedMicroId: null,
-                      selectedMunicipioCode: null
-                    }))}
-                  />
-                </AdminOverview>
-
-                {/* Grid com Alertas e Activity Log */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <AlertsPanel
+                />
+              ) : (
+                <>
+                  {/* Overview com KPIs + Mapa + Gráficos */}
+                  <AdminOverview
                     actions={actions}
                     users={users}
-                    onViewMicrorregiao={handleViewMicrorregiao}
-                  />
-                  <ActivityLog maxItems={8} />
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Tab: Atividades */}
-        {
-          activeTab === 'atividades' && (
-            <div className="space-y-6">
-              <ActivityCenter />
-            </div>
-          )
-        }
-
-        {/* Tab: Usuários */}
-        {
-          activeTab === 'usuarios' && (
-            <>
-              {/* Search & Filters */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                {/* User Filters: Macro */}
-                <div className="relative min-w-[180px]">
-                  <select
-                    value={userFilterMacro}
-                    onChange={(e) => {
-                      setUserFilterMacro(e.target.value);
-                      setUserFilterMicro('all'); // Reset micro when macro changes
-                    }}
-                    className="w-full appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    teams={teams}
+                    filters={dashboardFilters}
+                    onTabChange={setActiveTab}
+                    pendingCount={pendingRegistrations.length}
                   >
-                    <option value="all">Todas Macros</option>
-                    {getMacrorregioes().map(macro => (
-                      <option key={macro} value={macro}>{macro}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    {/* Mapa de Microrregiões (Inserido entre KPIs e Gráficos) */}
+                    <MinasMicroMap
+                      actions={actions}
+                      onMacroSelect={(macroId) => setDashboardFilters(prev => ({
+                        ...prev,
+                        selectedMacroId: macroId,
+                        selectedMicroId: null,
+                        selectedMunicipioCode: null
+                      }))}
+                      onMicroSelect={(microId) => setDashboardFilters(prev => ({
+                        ...prev,
+                        selectedMicroId: microId
+                      }))}
+                      onNavigateToObjectives={handleViewMicrorregiao}
+                      selectedMacroId={dashboardFilters.selectedMacroId}
+                      selectedMicroId={dashboardFilters.selectedMicroId}
+                    />
+                  </AdminOverview>
+
+                  {/* Grid com Workforce e Activity Log */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <WorkforcePanel
+                      users={users}
+                      selectedMacroId={dashboardFilters.selectedMacroId}
+                      selectedMicroId={dashboardFilters.selectedMicroId}
+                      onViewMicrorregiao={handleViewMicrorregiao}
+                    />
+                    <ActivityLog maxItems={8} />
+                  </div>
+
+                  {/* Analytics Section - Merged into Dashboard */}
+                  <div id="analytics-section" className="pt-8 border-t border-slate-200 dark:border-slate-700 scroll-mt-24">
+                    <AnalyticsDashboard />
+                  </div>
+
+                  {/* Ranking Section - Merged into Dashboard */}
+                  <div id="ranking-section" className="pt-8 border-t border-slate-200 dark:border-slate-700 scroll-mt-24">
+                    <RankingPanel actions={actions} onViewMicrorregiao={handleViewMicrorregiao} />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Tab: Atividades */}
+          {
+            activeTab === 'atividades' && (
+              <div className="space-y-6">
+                <ActivityCenter />
+              </div>
+            )
+          }
+
+          {/* Tab: Calendar */}
+          {activeTab === 'calendar' && (
+            <div className="h-[calc(100vh-140px)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+              <LinearCalendar
+                actions={actions}
+                microId={dashboardFilters.selectedMicroId}
+              />
+            </div>
+          )}
+
+          {/* Tab: Requests (Solicitações) */}
+          {activeTab === 'requests' && (
+            <div className="h-[calc(100vh-140px)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+              <RequestsManagement />
+            </div>
+          )}
+
+          {/* Tab: Usuários */}
+          {
+            activeTab === 'usuarios' && (
+              <>
+                {/* Search & Filters */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  {/* User Filters: Macro */}
+                  <div className="relative min-w-[180px]">
+                    <select
+                      value={userFilterMacro}
+                      onChange={(e) => {
+                        setUserFilterMacro(e.target.value);
+                        setUserFilterMicro('all'); // Reset micro when macro changes
+                      }}
+                      className="w-full appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="all">Todas Macros</option>
+                      {getMacrorregioes().map(macro => (
+                        <option key={macro} value={macro}>{macro}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  {/* User Filters: Micro */}
+                  <div className="relative min-w-[180px]">
+                    <select
+                      value={userFilterMicro}
+                      onChange={(e) => {
+                        const selectedMicroId = e.target.value;
+                        setUserFilterMicro(selectedMicroId);
+                        if (selectedMicroId !== 'all') {
+                          const micro = MICROREGIOES.find(m => m.id === selectedMicroId);
+                          if (micro) setUserFilterMacro(micro.macrorregiao);
+                        } else {
+                          setUserFilterMacro('all');
+                        }
+                      }}
+                      className="w-full appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="all">Todas Micros</option>
+                      {MICROREGIOES
+                        .filter(m => userFilterMacro === 'all' || m.macrorregiao === userFilterMacro)
+                        .map(micro => (
+                          <option key={micro.id} value={micro.id}>{micro.nome}</option>
+                        ))
+                      }
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por nome ou email..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <select
+                      value={filterRole}
+                      onChange={(e) => setFilterRole(e.target.value)}
+                      className="appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="all">Todos os papéis</option>
+                      <option value="admin">Administrador</option>
+                      <option value="gestor">Gestor</option>
+                      <option value="usuario">Usuário</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
+
+                  <button
+                    onClick={handleCreateUser}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-all hover:shadow-lg shadow-sm whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Novo Usuário
+                  </button>
                 </div>
 
-                {/* User Filters: Micro */}
-                <div className="relative min-w-[180px]">
-                  <select
-                    value={userFilterMicro}
-                    onChange={(e) => {
-                      const selectedMicroId = e.target.value;
-                      setUserFilterMicro(selectedMicroId);
-                      if (selectedMicroId !== 'all') {
-                        const micro = MICROREGIOES.find(m => m.id === selectedMicroId);
-                        if (micro) setUserFilterMacro(micro.macrorregiao);
-                      } else {
-                        setUserFilterMacro('all');
+                {/* Cadastros Pendentes */}
+                {pendingRegistrations.length > 0 && (
+                  <PendingRegistrationsPanel
+                    pendingRegistrations={pendingRegistrations}
+                    isLoading={pendingLoading}
+                    onCreateUser={(pending) => {
+                      // Preenche dados iniciais e abre o modal
+                      setPendingUserData({
+                        nome: pending.name,
+                        email: pending.email || '',
+                        microregiaoId: pending.microregiaoId,
+                        municipio: pending.municipio || '',
+                      });
+                      setEditingUser(null);
+                      setShowUserModal(true);
+                    }}
+                    onDelete={async (pending) => {
+                      try {
+                        await deletePendingRegistration(pending.id);
+                        showToast(`"${pending.name}" excluído com sucesso`, 'success');
+                        await loadPending(); // Recarrega lista
+                      } catch (error: any) {
+                        showToast(error?.message || 'Erro ao excluir', 'error');
                       }
                     }}
-                    className="w-full appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="all">Todas Micros</option>
-                    {MICROREGIOES
-                      .filter(m => userFilterMacro === 'all' || m.macrorregiao === userFilterMacro)
-                      .map(micro => (
-                        <option key={micro.id} value={micro.id}>{micro.nome}</option>
-                      ))
-                    }
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por nome ou email..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400"
                   />
-                </div>
+                )}
 
-                <div className="relative">
-                  <select
-                    value={filterRole}
-                    onChange={(e) => setFilterRole(e.target.value)}
-                    className="appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="all">Todos os papéis</option>
-                    <option value="admin">Administrador</option>
-                    <option value="gestor">Gestor</option>
-                    <option value="usuario">Usuário</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
+                {/* User List */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  {isLoading ? (
+                    <div className="p-12 text-center text-slate-500">
+                      <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin" />
+                      Carregando usuários...
+                    </div>
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="p-12 text-center text-slate-500">
+                      <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      Nenhum usuário encontrado
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                      {filteredUsers.map(user => {
+                        const microrregiao = getMicroregiaoById(user.microregiaoId);
+                        const isExpanded = expandedUserId === user.id;
 
-                <button
-                  onClick={handleCreateUser}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-all hover:shadow-lg shadow-sm whitespace-nowrap"
-                >
-                  <Plus className="w-4 h-4" />
-                  Novo Usuário
-                </button>
-              </div>
-
-              {/* Cadastros Pendentes */}
-              {pendingRegistrations.length > 0 && (
-                <PendingRegistrationsPanel
-                  pendingRegistrations={pendingRegistrations}
-                  isLoading={pendingLoading}
-                  onCreateUser={(pending) => {
-                    // Preenche dados iniciais e abre o modal
-                    setPendingUserData({
-                      nome: pending.name,
-                      email: pending.email || '',
-                      microregiaoId: pending.microregiaoId,
-                      municipio: pending.municipio || '',
-                    });
-                    setEditingUser(null);
-                    setShowUserModal(true);
-                  }}
-                  onDelete={async (pending) => {
-                    try {
-                      await deletePendingRegistration(pending.id);
-                      showToast(`"${pending.name}" excluído com sucesso`, 'success');
-                      await loadPending(); // Recarrega lista
-                    } catch (error: any) {
-                      showToast(error?.message || 'Erro ao excluir', 'error');
-                    }
-                  }}
-                />
-              )}
-
-              {/* User List */}
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                {isLoading ? (
-                  <div className="p-12 text-center text-slate-500">
-                    <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin" />
-                    Carregando usuários...
-                  </div>
-                ) : filteredUsers.length === 0 ? (
-                  <div className="p-12 text-center text-slate-500">
-                    <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    Nenhum usuário encontrado
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {filteredUsers.map(user => {
-                      const microrregiao = getMicroregiaoById(user.microregiaoId);
-                      const isExpanded = expandedUserId === user.id;
-
-                      return (
-                        <div key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                          <div className="p-4 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${user.ativo ? 'bg-teal-100 dark:bg-teal-900/30' : 'bg-slate-100 dark:bg-slate-700'
-                                }`}>
-                                {user.ativo ? (
-                                  <UserCheck className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                                ) : (
-                                  <UserX className="w-5 h-5 text-slate-400" />
-                                )}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-slate-800 dark:text-slate-100">{user.nome}</span>
-                                  {getRoleBadge(user.role)}
-                                  {!user.ativo && (
-                                    <span className="text-xs text-red-500 dark:text-red-400 font-medium bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">INATIVO</span>
-                                  )}
-                                  {!user.lgpdConsentimento && user.ativo && (
-                                    <span className="text-xs text-purple-500 dark:text-purple-400 font-medium bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded">LGPD PENDENTE</span>
+                        return (
+                          <div key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            <div className="p-4 flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${user.ativo ? 'bg-teal-100 dark:bg-teal-900/30' : 'bg-slate-100 dark:bg-slate-700'
+                                  }`}>
+                                  {user.ativo ? (
+                                    <UserCheck className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                                  ) : (
+                                    <UserX className="w-5 h-5 text-slate-400" />
                                   )}
                                 </div>
-                                <div className="text-sm text-slate-500 dark:text-slate-400">{user.email}</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                              <div className="text-right hidden sm:block">
-                                {user.municipio && (
-                                  <div className="text-sm font-bold text-teal-600 dark:text-teal-400 mb-0.5">
-                                    {user.municipio}
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium text-slate-800 dark:text-slate-100">{user.nome}</span>
+                                    {getRoleBadge(user.role)}
+                                    {!user.ativo && (
+                                      <span className="text-xs text-red-500 dark:text-red-400 font-medium bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">INATIVO</span>
+                                    )}
+                                    {!user.lgpdConsentimento && user.ativo && (
+                                      <span className="text-xs text-purple-500 dark:text-purple-400 font-medium bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded">LGPD PENDENTE</span>
+                                    )}
                                   </div>
-                                )}
-                                <div className={`text-xs ${user.municipio ? 'text-slate-500 font-medium' : 'text-sm font-medium text-slate-700 dark:text-slate-300'}`}>
-                                  {user.microregiaoId === 'all' ? 'Todas' : microrregiao?.nome || '-'}
-                                </div>
-                                <div className="text-[10px] text-slate-400 uppercase tracking-wider">
-                                  {user.microregiaoId === 'all' ? 'Microrregiões' : microrregiao?.macrorregiao || '-'}
+                                  <div className="text-sm text-slate-500 dark:text-slate-400">{user.email}</div>
                                 </div>
                               </div>
 
-                              <div className="relative">
-                                <button
-                                  onClick={(e) => {
-                                    if (isExpanded) {
-                                      setExpandedUserId(null);
-                                      setDropdownPosition(null);
-                                    } else {
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      const spaceBelow = window.innerHeight - rect.bottom;
-                                      const openUp = spaceBelow < 200;  // Se tem menos de 200px abaixo, abre pra cima
-                                      setDropdownPosition({
-                                        top: openUp ? rect.top : rect.bottom,
-                                        left: rect.right - 192,  // 192 = w-48 (12rem = 192px)
-                                        openUp
-                                      });
-                                      setExpandedUserId(user.id);
-                                    }
-                                  }}
-                                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                                >
-                                  <MoreVertical className="w-4 h-4 text-slate-400" />
-                                </button>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right hidden sm:block">
+                                  {user.municipio && (
+                                    <div className="text-sm font-bold text-teal-600 dark:text-teal-400 mb-0.5">
+                                      {user.municipio}
+                                    </div>
+                                  )}
+                                  <div className={`text-xs ${user.municipio ? 'text-slate-500 font-medium' : 'text-sm font-medium text-slate-700 dark:text-slate-300'}`}>
+                                    {user.microregiaoId === 'all' ? 'Todas' : microrregiao?.nome || '-'}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">
+                                    {user.microregiaoId === 'all' ? 'Microrregiões' : microrregiao?.macrorregiao || '-'}
+                                  </div>
+                                </div>
 
-                                {isExpanded && dropdownPosition && (
-                                  <div
-                                    className="fixed w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50"
-                                    style={{
-                                      top: dropdownPosition.openUp ? 'auto' : dropdownPosition.top,
-                                      bottom: dropdownPosition.openUp ? (window.innerHeight - dropdownPosition.top) : 'auto',
-                                      left: Math.max(8, dropdownPosition.left),  // Garante pelo menos 8px da borda
-                                    }}
-                                  >
-                                    <button
-                                      onClick={() => {
-                                        handleEditUser(user);
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      if (isExpanded) {
                                         setExpandedUserId(null);
+                                        setDropdownPosition(null);
+                                      } else {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const spaceBelow = window.innerHeight - rect.bottom;
+                                        const openUp = spaceBelow < 200;  // Se tem menos de 200px abaixo, abre pra cima
+                                        setDropdownPosition({
+                                          top: openUp ? rect.top : rect.bottom,
+                                          left: rect.right - 192,  // 192 = w-48 (12rem = 192px)
+                                          openUp
+                                        });
+                                        setExpandedUserId(user.id);
+                                      }
+                                    }}
+                                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                  >
+                                    <MoreVertical className="w-4 h-4 text-slate-400" />
+                                  </button>
+
+                                  {isExpanded && dropdownPosition && (
+                                    <div
+                                      className="fixed w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50"
+                                      style={{
+                                        top: dropdownPosition.openUp ? 'auto' : dropdownPosition.top,
+                                        bottom: dropdownPosition.openUp ? (window.innerHeight - dropdownPosition.top) : 'auto',
+                                        left: Math.max(8, dropdownPosition.left),  // Garante pelo menos 8px da borda
                                       }}
-                                      className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
                                     >
-                                      Editar usuário
-                                    </button>
-                                    {user.microregiaoId !== 'all' && (
                                       <button
                                         onClick={() => {
-                                          handleViewMicrorregiao(user.microregiaoId);
+                                          handleEditUser(user);
                                           setExpandedUserId(null);
                                         }}
-                                        className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-teal-600 dark:text-teal-400"
+                                        className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
                                       >
-                                        Ver microrregião
+                                        Editar usuário
                                       </button>
-                                    )}
-                                    <button
-                                      onClick={() => {
-                                        handleToggleUserStatus(user.id);
-                                        setExpandedUserId(null);
-                                      }}
-                                      disabled={actionLoadingId === user.id}
-                                      className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${user.ativo ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
-                                        }`}
-                                    >
-                                      {user.ativo ? 'Desativar usuário' : 'Ativar usuário'}
-                                    </button>
-                                    {/* Botão Excluir - apenas para SuperAdmin e não pode excluir superadmin */}
-                                    {isSuperAdmin && user.role !== 'superadmin' && (
+                                      {user.microregiaoId !== 'all' && (
+                                        <button
+                                          onClick={() => {
+                                            handleViewMicrorregiao(user.microregiaoId);
+                                            setExpandedUserId(null);
+                                          }}
+                                          className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-teal-600 dark:text-teal-400"
+                                        >
+                                          Ver microrregião
+                                        </button>
+                                      )}
                                       <button
                                         onClick={() => {
-                                          setConfirmDelete({ open: true, user });
+                                          handleToggleUserStatus(user.id);
                                           setExpandedUserId(null);
                                         }}
                                         disabled={actionLoadingId === user.id}
-                                        className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border-t border-slate-100 dark:border-slate-700"
+                                        className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 ${user.ativo ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
+                                          }`}
                                       >
-                                        Excluir permanentemente
+                                        {user.ativo ? 'Desativar usuário' : 'Ativar usuário'}
                                       </button>
-                                    )}
-                                  </div>
-                                )}
+                                      {/* Botão Excluir - apenas para SuperAdmin e não pode excluir superadmin */}
+                                      {isSuperAdmin && user.role !== 'superadmin' && (
+                                        <button
+                                          onClick={() => {
+                                            setConfirmDelete({ open: true, user });
+                                            setExpandedUserId(null);
+                                          }}
+                                          disabled={actionLoadingId === user.id}
+                                          className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 border-t border-slate-100 dark:border-slate-700"
+                                        >
+                                          Excluir permanentemente
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </>
-          )
-        }
-
-        {/* Tab: Microrregiões */}
-        {
-          activeTab === 'microregioes' && (
-            <>
-              {/* Search & Filters */}
-              {/* Search & Filters */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                {/* 1. Macro Filter */}
-                <div className="relative min-w-[200px]">
-                  <select
-                    value={filterMacro}
-                    onChange={(e) => setFilterMacro(e.target.value)}
-                    className="w-full appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="all">Todas Macrorregiões</option>
-                    {getMacrorregioes().map(macro => (
-                      <option key={macro} value={macro}>{macro}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                </div>
-
-                {/* 2. Search */}
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar microrregião..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400"
-                  />
-                </div>
-              </div>
-
-              {/* Microrregião Grid */}
-              {/* Microrregião Grid - Grouped by Macro */}
-              <div className="space-y-8">
-                {Array.from(new Set(filteredMicroregioes.map(m => m.macrorregiao))).map(macroName => {
-                  const microsInMacro = filteredMicroregioes.filter(m => m.macrorregiao === macroName);
-                  if (microsInMacro.length === 0) return null;
-
-                  return (
-                    <div key={macroName} className="animate-in fade-in duration-500">
-                      <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 px-1 border-l-4 border-teal-500 pl-3 flex items-center gap-2">
-                        {macroName}
-                        <span className="text-xs font-normal text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
-                          {microsInMacro.length}
-                        </span>
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {microsInMacro.map(micro => {
-                          const usersCount = users.filter(u => u.microregiaoId === micro.id).length;
-                          const microActions = actions.filter(a => a.microregiaoId === micro.id);
-                          const progressoMedio = microActions.length > 0
-                            ? Math.round(microActions.reduce((sum, a) => sum + a.progress, 0) / microActions.length)
-                            : 0;
-                          const atrasadas = microActions.filter(a => {
-                            if (a.status === 'Concluído') return false;
-                            return new Date(a.plannedEndDate) < new Date();
-                          }).length;
-
-                          return (
-                            <div
-                              key={micro.id}
-                              className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 hover:shadow-lg transition-all hover:scale-[1.02] group"
-                            >
-                              <div className="flex items-start justify-between mb-3">
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                    <Building2 className="w-5 h-5" />
-                                  </div>
-                                  <div>
-                                    <h3 className="font-medium text-slate-800 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
-                                      {micro.nome}
-                                    </h3>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">{micro.macrorregiao}</p>
-                                  </div>
-                                </div>
-                                <span className="text-xs font-mono text-slate-400 dark:text-slate-500">{micro.codigo}</span>
-                              </div>
-
-                              {/* Stats */}
-                              <div className="grid grid-cols-3 gap-2 mb-3 text-center">
-                                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg py-1.5">
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">Ações</p>
-                                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{microActions.length}</p>
-                                </div>
-                                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg py-1.5">
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">Progresso</p>
-                                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                                    {microActions.length > 0 ? `${progressoMedio}%` : '-'}
-                                  </p>
-                                </div>
-                                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg py-1.5">
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">Usuários</p>
-                                  <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{usersCount}</p>
-                                </div>
-                              </div>
-
-                              {/* Progress bar */}
-                              {microActions.length > 0 && (
-                                <div className="mb-3">
-                                  <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                    <div
-                                      className="h-full transition-all bg-teal-500"
-                                      style={{ width: `${progressoMedio}%` }}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Alerts */}
-                              {atrasadas > 0 && (
-                                <div className="mb-3 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
-                                  <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-500" />
-                                  {atrasadas} ação(ões) atrasada(s)
-                                </div>
-                              )}
-
-                              <button
-                                onClick={() => handleViewMicrorregiao(micro.id)}
-                                className="w-full text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 font-medium py-2 rounded-lg transition-colors"
-                              >
-                                Visualizar painel →
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
-              </div>
-            </>
-          )
-        }
+                  )}
+                </div>
+              </>
+            )
+          }
 
-        {/* Tab: Alertas */}
-        {
-          activeTab === 'alertas' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <AlertsPanel
-                  actions={actions}
-                  users={users}
-                  onViewMicrorregiao={handleViewMicrorregiao}
-                />
-              </div>
-              <div>
-                <ActivityLog maxItems={10} />
-              </div>
-            </div>
-          )
-        }
+          {/* Tab: Microrregiões */}
+          {
+            activeTab === 'microregioes' && (
+              <>
+                {/* Search & Filters */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  {/* 1. Macro Filter */}
+                  <div className="relative min-w-[200px]">
+                    <select
+                      value={filterMacro}
+                      onChange={(e) => setFilterMacro(e.target.value)}
+                      className="w-full appearance-none pl-4 pr-10 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="all">Todas Macrorregiões</option>
+                      {getMacrorregioes().map(macro => (
+                        <option key={macro} value={macro}>{macro}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
 
-        {/* Tab: Ranking */}
+                  {/* 2. Search */}
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar microrregião..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Microrregião Grid */}
+                <div className="space-y-8">
+                  {Array.from(new Set(filteredMicroregioes.map(m => m.macrorregiao))).map(macroName => {
+                    const microsInMacro = filteredMicroregioes.filter(m => m.macrorregiao === macroName);
+                    if (microsInMacro.length === 0) return null;
+
+                    return (
+                      <div key={macroName} className="animate-in fade-in duration-500">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4 px-1 border-l-4 border-teal-500 pl-3 flex items-center gap-2">
+                          {macroName}
+                          <span className="text-xs font-normal text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                            {microsInMacro.length}
+                          </span>
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                          {microsInMacro.map(micro => {
+                            const usersCount = users.filter(u => u.microregiaoId === micro.id).length;
+                            const microActions = actions.filter(a => a.microregiaoId === micro.id);
+                            const progressoMedio = microActions.length > 0
+                              ? Math.round(microActions.reduce((sum, a) => sum + a.progress, 0) / microActions.length)
+                              : 0;
+                            const atrasadas = microActions.filter(a => {
+                              if (a.status === 'Concluído') return false;
+                              return new Date(a.plannedEndDate) < new Date();
+                            }).length;
+
+                            return (
+                              <div
+                                key={micro.id}
+                                className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 hover:shadow-lg transition-all hover:scale-[1.02] group"
+                              >
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                      <Building2 className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                      <h3 className="font-medium text-slate-800 dark:text-slate-100 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                                        {micro.nome}
+                                      </h3>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400">{micro.macrorregiao}</p>
+                                    </div>
+                                  </div>
+                                  <span className="text-xs font-mono text-slate-400 dark:text-slate-500">{micro.codigo}</span>
+                                </div>
+
+                                {/* Stats */}
+                                <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+                                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg py-1.5">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Ações</p>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{microActions.length}</p>
+                                  </div>
+                                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg py-1.5">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Progresso</p>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                                      {microActions.length > 0 ? `${progressoMedio}%` : '-'}
+                                    </p>
+                                  </div>
+                                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg py-1.5">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Usuários</p>
+                                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{usersCount}</p>
+                                  </div>
+                                </div>
+
+                                {/* Progress bar */}
+                                {microActions.length > 0 && (
+                                  <div className="mb-3">
+                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full transition-all bg-teal-500"
+                                        style={{ width: `${progressoMedio}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Alerts */}
+                                {atrasadas > 0 && (
+                                  <div className="mb-3 flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
+                                    <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-500" />
+                                    {atrasadas} ação(ões) atrasada(s)
+                                  </div>
+                                )}
+
+                                <button
+                                  onClick={() => handleViewMicrorregiao(micro.id)}
+                                  className="w-full text-xs text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 font-medium py-2 rounded-lg transition-colors"
+                                >
+                                  Visualizar painel →
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )
+          }
+
+          {/* Tab: Ranking */}
+          {
+            activeTab === 'ranking' && (
+              <RankingPanel
+                actions={actions}
+                onViewMicrorregiao={handleViewMicrorregiao}
+              />
+            )
+          }
+
+        </main >
+
+        {/* Modal de Usuário */}
         {
-          activeTab === 'ranking' && (
-            <RankingPanel
-              actions={actions}
-              onViewMicrorregiao={handleViewMicrorregiao}
+          showUserModal && (
+            <UserFormModal
+              user={editingUser}
+              onClose={() => {
+                setShowUserModal(false);
+                setPendingUserData(null); // Limpa dados de pendente ao fechar
+              }}
+              onSave={async (userData) => {
+                await handleSaveUser(userData);
+                setPendingUserData(null); // Limpa após salvar
+                await loadPending(); // Recarrega lista de pendentes
+              }}
+              isSaving={actionLoadingId === 'save-user'}
+              initialData={pendingUserData || undefined}
             />
           )
         }
 
-        {/* Tab: Analytics */}
+        {/* Confirmar ativação/desativação */}
+        <ConfirmModal
+          isOpen={confirmToggle.open}
+          onCancel={() => setConfirmToggle({ open: false })}
+          onConfirm={async () => {
+            if (!confirmToggle.user || confirmToggle.nextStatus === undefined) return;
+            try {
+              setActionLoadingId(confirmToggle.user.id);
+              await authService.updateUser(confirmToggle.user.id, { ativo: confirmToggle.nextStatus });
+              showToast(`Usuário ${confirmToggle.nextStatus ? 'ativado' : 'desativado'}`, 'success');
+              await loadUsers();
+            } catch (error) {
+              console.error(error);
+              showToast('Erro ao atualizar usuário', 'error');
+            } finally {
+              setActionLoadingId(null);
+            }
+          }}
+          title={confirmToggle.nextStatus ? 'Ativar usuário' : 'Desativar usuário'}
+          message={
+            confirmToggle.user
+              ? `Tem certeza que deseja ${confirmToggle.nextStatus ? 'ativar' : 'desativar'} ${confirmToggle.user.nome}?`
+              : ''
+          }
+          confirmText={confirmToggle.nextStatus ? 'Ativar' : 'Desativar'}
+          confirmType={confirmToggle.nextStatus ? 'info' : 'danger'}
+        />
+
+        {/* Confirmar exclusão permanente */}
+        <ConfirmModal
+          isOpen={confirmDelete.open}
+          onCancel={() => setConfirmDelete({ open: false })}
+          onConfirm={async () => {
+            if (!confirmDelete.user) return;
+            try {
+              setActionLoadingId(confirmDelete.user.id);
+              await authService.deleteUser(confirmDelete.user.id);
+              showToast('Usuário excluído permanentemente', 'success');
+              await loadUsers();
+              setConfirmDelete({ open: false });
+            } catch (error: any) {
+              console.error(error);
+              showToast(error?.message || 'Erro ao excluir usuário', 'error');
+            } finally {
+              setActionLoadingId(null);
+            }
+          }}
+          title="Excluir usuário permanentemente"
+          message={
+            confirmDelete.user
+              ? `ATENÇÃO: Esta ação é IRREVERSÍVEL! O usuário "${confirmDelete.user.nome}" será excluído permanentemente do sistema. Tem certeza?`
+              : ''
+          }
+          confirmText="Sim, excluir permanentemente"
+          confirmType="danger"
+        />
+
+        {/* Overlay para fechar menu expandido */}
         {
-          activeTab === 'analytics' && (
-            <AnalyticsDashboard />
+          expandedUserId && (
+            <div
+              className="fixed inset-0 z-0"
+              onClick={() => setExpandedUserId(null)}
+            />
           )
         }
-      </main >
+      </div>
 
-      {/* Modal de Usuário */}
-      {
-        showUserModal && (
-          <UserFormModal
-            user={editingUser}
-            onClose={() => {
-              setShowUserModal(false);
-              setPendingUserData(null); // Limpa dados de pendente ao fechar
-            }}
-            onSave={async (userData) => {
-              await handleSaveUser(userData);
-              setPendingUserData(null); // Limpa após salvar
-              await loadPending(); // Recarrega lista de pendentes
-            }}
-            isSaving={actionLoadingId === 'save-user'}
-            initialData={pendingUserData || undefined}
-          />
-        )
-      }
 
-      {/* Confirmar ativação/desativação */}
-      <ConfirmModal
-        isOpen={confirmToggle.open}
-        onClose={() => setConfirmToggle({ open: false })}
-        onConfirm={async () => {
-          if (!confirmToggle.user || confirmToggle.nextStatus === undefined) return;
-          try {
-            setActionLoadingId(confirmToggle.user.id);
-            await authService.updateUser(confirmToggle.user.id, { ativo: confirmToggle.nextStatus });
-            showToast(`Usuário ${confirmToggle.nextStatus ? 'ativado' : 'desativado'}`, 'success');
-            await loadUsers();
-          } catch (error) {
-            console.error(error);
-            showToast('Erro ao atualizar usuário', 'error');
-          } finally {
-            setActionLoadingId(null);
-          }
-        }}
-        title={confirmToggle.nextStatus ? 'Ativar usuário' : 'Desativar usuário'}
-        message={
-          confirmToggle.user
-            ? `Tem certeza que deseja ${confirmToggle.nextStatus ? 'ativar' : 'desativar'} ${confirmToggle.user.nome}?`
-            : ''
-        }
-        confirmText={confirmToggle.nextStatus ? 'Ativar' : 'Desativar'}
-        type={confirmToggle.nextStatus ? 'info' : 'danger'}
+      <UserSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        initialTab={settingsInitialTab}
+        mode={settingsMode}
       />
 
-      {/* Confirmar exclusão permanente */}
-      <ConfirmModal
-        isOpen={confirmDelete.open}
-        onClose={() => setConfirmDelete({ open: false })}
-        onConfirm={async () => {
-          if (!confirmDelete.user) return;
-          try {
-            setActionLoadingId(confirmDelete.user.id);
-            await authService.deleteUser(confirmDelete.user.id);
-            showToast('Usuário excluído permanentemente', 'success');
-            await loadUsers();
-            setConfirmDelete({ open: false });
-          } catch (error: any) {
-            console.error(error);
-            showToast(error?.message || 'Erro ao excluir usuário', 'error');
-          } finally {
-            setActionLoadingId(null);
-          }
-        }}
-        title="Excluir usuário permanentemente"
-        message={
-          confirmDelete.user
-            ? `ATENÇÃO: Esta ação é IRREVERSÍVEL! O usuário "${confirmDelete.user.nome}" será excluído permanentemente do sistema. Tem certeza?`
-            : ''
-        }
-        confirmText="Sim, excluir permanentemente"
-        type="danger"
-      />
-
-      {/* Overlay para fechar menu expandido */}
-      {
-        expandedUserId && (
-          <div
-            className="fixed inset-0 z-0"
-            onClick={() => setExpandedUserId(null)}
-          />
-        )
-      }
-    </div >
+    </div>
   );
 }
-
-
 

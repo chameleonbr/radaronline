@@ -7,11 +7,14 @@ interface ThemeContextType {
     resolvedTheme: 'light' | 'dark';
     setTheme: (theme: Theme) => void;
     toggleTheme: () => void;
+    zoom: number;
+    setZoom: (zoom: number) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 const STORAGE_KEY = 'radar-theme-preference';
+const ZOOM_STORAGE_KEY = 'radar-zoom-level';
 
 function getSystemTheme(): 'light' | 'dark' {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -30,8 +33,22 @@ function getStoredTheme(): Theme {
     return 'system';
 }
 
+function getStoredZoom(): number {
+    if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(ZOOM_STORAGE_KEY);
+        if (stored) {
+            const parsed = parseFloat(stored);
+            if (!isNaN(parsed) && parsed >= 0.5 && parsed <= 2) {
+                return parsed;
+            }
+        }
+    }
+    return 1;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
+    const [zoom, setZoomState] = useState<number>(() => getStoredZoom());
     const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
         const stored = getStoredTheme();
         return stored === 'system' ? getSystemTheme() : stored;
@@ -40,36 +57,44 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Update resolved theme when theme or system preference changes
     const updateResolvedTheme = useCallback(() => {
         const resolved = theme === 'system' ? getSystemTheme() : theme;
-        console.log('[Theme] updateResolvedTheme called:', { theme, resolved });
         setResolvedTheme(resolved);
 
         // Apply to document
         const root = document.documentElement;
-        console.log('[Theme] Before change - HTML classes:', root.className);
         if (resolved === 'dark') {
             root.classList.add('dark');
         } else {
             root.classList.remove('dark');
         }
-        console.log('[Theme] After change - HTML classes:', root.className);
     }, [theme]);
+
+    // Apply zoom
+    useEffect(() => {
+        const root = document.documentElement;
+        // Adjust root font size (percentage based on 16px default)
+        // 1 = 100%, 0.9 = 90%, etc.
+        root.style.fontSize = `${zoom * 100}%`;
+    }, [zoom]);
 
     // Set theme and persist
     const setTheme = useCallback((newTheme: Theme) => {
-        console.log('[Theme] setTheme called:', { from: theme, to: newTheme });
         setThemeState(newTheme);
         localStorage.setItem(STORAGE_KEY, newTheme);
-    }, [theme]);
+    }, []);
+
+    // Set zoom and persist
+    const setZoom = useCallback((newZoom: number) => {
+        setZoomState(newZoom);
+        localStorage.setItem(ZOOM_STORAGE_KEY, newZoom.toString());
+    }, []);
 
     // Toggle between light and dark
     const toggleTheme = useCallback(() => {
-        console.log('[Theme] toggleTheme called');
         setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
     }, [resolvedTheme, setTheme]);
 
     // Apply theme on mount and when theme changes
     useEffect(() => {
-        console.log('[Theme] useEffect triggered - calling updateResolvedTheme');
         updateResolvedTheme();
     }, [updateResolvedTheme]);
 
@@ -85,7 +110,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }, [theme, updateResolvedTheme]);
 
     return (
-        <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, toggleTheme }}>
+        <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme, toggleTheme, zoom, setZoom }}>
             {children}
         </ThemeContext.Provider>
     );

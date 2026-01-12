@@ -42,7 +42,7 @@ interface MainViewProps {
   onSaveAction: () => void;
   onCreateAction: () => void;
   onDeleteAction: (uid: string) => void;
-  onAddRaci: (uid: string, memberId: string, role: any) => void;
+  onAddRaci: (uid: string, memberId: string, role: 'R' | 'A' | 'C' | 'I') => void;
   onRemoveRaci: (uid: string, idx: number, memberName: string) => void;
   onAddComment: (uid: string, content: string) => void;
   isSaving: boolean;

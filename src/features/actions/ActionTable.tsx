@@ -1,5 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
-import { Calendar, Plus, Trash2, Lock, Eye, MessageCircle, Send } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar, Plus, Trash2, Lock, Eye, MessageCircle, Send, CheckCircle2 } from 'lucide-react';
+import { staggerContainerFast, staggerItem } from '../../lib/motion';
 import { Action, Status, RaciRole, TeamMember, ActionComment } from '../../types';
 import { formatDateBr, getTodayStr } from '../../lib/date';
 import {
@@ -68,7 +70,21 @@ export const formatRelativeTime = (dateString: string) => {
   if (days < 7) return `há ${days}d`;
   if (weeks < 5) return `há ${weeks} sem`;
   if (months < 12) return `há ${months} mes`;
+
   return `há ${years}a`;
+};
+
+// Formato dd/mm/yy (ex: 25/12/26) para tabela compacta
+const formatDateShortYear = (dateString?: string) => {
+  if (!dateString) return "-";
+  const [year, month, day] = dateString.split('-');
+  return `${day}/${month}/${year.slice(2)}`;
+
+};
+
+const formatActionId = (id: string) => {
+  const parts = id.split('.');
+  return parts[parts.length - 1];
 };
 
 const CommentItem: React.FC<{ comment: ActionComment }> = ({ comment }) => {
@@ -173,7 +189,7 @@ export const ActionTable: React.FC<ActionTableProps> = ({
   }, [commentDrafts, onAddComment, user]);
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div data-tour="actions-table" className="max-w-5xl mx-auto px-4 py-8">
       {/* Aviso de modo somente leitura */}
       {readOnly && (
         <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm">
@@ -193,7 +209,7 @@ export const ActionTable: React.FC<ActionTableProps> = ({
         teamMembers={team}
       />
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.05),0_10px_15px_-3px_rgba(0,0,0,0.03)] border border-slate-200/50 dark:border-slate-700 overflow-hidden transition-all duration-300">
         {/* Linha de hoje */}
         <div className="px-6 py-2.5 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
           <span className="h-px flex-1 bg-gradient-to-r from-transparent via-teal-300 dark:via-teal-600 to-transparent" aria-hidden="true" />
@@ -206,15 +222,28 @@ export const ActionTable: React.FC<ActionTableProps> = ({
 
         {/* Header */}
         <div className="hidden sm:grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider" role="row">
-          <div className="col-span-1" role="columnheader">ID</div>
-          <div className="col-span-5" role="columnheader">Ação</div>
-          <div className="col-span-2" role="columnheader">Prazo</div>
+          <div className="col-span-1" role="columnheader">
+            ID
+            {filteredActions.length > 0 && (
+              <span className="ml-1 text-[10px] normal-case opacity-70">
+                {filteredActions[0].id.split('.').slice(0, -1).join('.')}.x
+              </span>
+            )}
+          </div>
+          <div className="col-span-4" role="columnheader">Ação</div>
+          <div className="col-span-3" role="columnheader">Cronograma</div>
           <div className="col-span-2" role="columnheader">Status</div>
           <div className="col-span-2 text-right" role="columnheader">Equipe</div>
         </div>
 
         {/* Rows */}
-        <div className="divide-y divide-slate-100 dark:divide-slate-700" role="rowgroup">
+        <motion.div
+          variants={staggerContainerFast}
+          initial="initial"
+          animate="animate"
+          className="divide-y divide-slate-100 dark:divide-slate-700"
+          role="rowgroup"
+        >
           {filteredActions.length === 0 ? (
             <div className="p-8 text-center text-slate-500">
               <p className="text-sm">Nenhuma ação encontrada</p>
@@ -230,13 +259,14 @@ export const ActionTable: React.FC<ActionTableProps> = ({
           ) : filteredActions.map((action, idx) => {
             // Usa UID para identificar a ação expandida
             const isExpanded = expandedActionId === action.uid;
-            const zebra = idx % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-slate-50/50 dark:bg-slate-700/50';
+            const zebra = idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/20';
             // Em modo readOnly, ninguém pode editar
             const userCanEdit = !readOnly && canEdit(action);
             const userCanDelete = !readOnly && canDelete(action);
 
             return (
-              <div
+              <motion.div
+                variants={staggerItem}
                 key={action.uid}
                 id={`action-${action.uid}`}
                 className={`transition-colors ${isExpanded ? 'bg-blue-50/30 dark:bg-blue-900/20' : `${zebra} hover:bg-slate-100/60 dark:hover:bg-slate-700/50`}`}
@@ -250,16 +280,43 @@ export const ActionTable: React.FC<ActionTableProps> = ({
                   tabIndex={0}
                   onKeyDown={e => { if (e.key === 'Enter') toggleRow(action.uid); }}
                 >
-                  <div className="col-span-1 font-mono text-xs text-slate-400">{action.id}</div>
-                  <div className="col-span-5 font-medium text-sm text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                    {action.title}
+                  <div className="col-span-1">
+                    <Tooltip content={`ID: ${action.id}`}>
+                      <span className="inline-block font-mono text-[10px] font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-600 cursor-help min-w-[24px] text-center">
+                        {formatActionId(action.id)}
+                      </span>
+                    </Tooltip>
+                  </div>
+                  <div className="col-span-4 font-medium text-sm text-slate-700 dark:text-slate-200 flex items-center gap-2 truncate">
+                    <span className="truncate" title={action.title}>{action.title}</span>
                     {!userCanEdit && (
                       <Tooltip content={readOnly ? "Modo somente leitura" : "Você não tem permissão para editar"}>
-                        <Lock size={12} className="text-slate-400" />
+                        <Lock size={12} className="text-slate-400 shrink-0" />
                       </Tooltip>
                     )}
                   </div>
-                  <div className="col-span-2 text-xs text-slate-500 flex items-center gap-1"><Calendar size={12} /> {formatDateBr(action.endDate)}</div>
+
+                  {/* Coluna CRONOGRAMA Unificada */}
+                  <div className="col-span-3 flex flex-col justify-center text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-500 mb-0.5">
+                      <Calendar size={12} className="shrink-0" />
+                      <span>
+                        {formatDateShortYear(action.startDate)}
+                        <span className="mx-1 text-slate-300">→</span>
+                        {formatDateShortYear(action.plannedEndDate)}
+                      </span>
+                    </div>
+                    {action.endDate && (
+                      <div className={`flex items-center gap-1.5 font-medium w-fit px-1.5 py-0.5 rounded-[4px] ${action.plannedEndDate && action.endDate > action.plannedEndDate
+                        ? 'text-rose-600 bg-rose-50'
+                        : 'text-emerald-600 bg-emerald-50'
+                        }`}>
+                        <CheckCircle2 size={10} className="shrink-0" />
+                        <span>Real: {formatDateShortYear(action.endDate)}</span>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="col-span-2"><StatusBadge status={action.status} /></div>
                   <div className="col-span-2 flex justify-end gap-1">
                     {[...action.raci].sort((a, b) => rolePriority[a.role] - rolePriority[b.role]).map((r, i) => <RaciCompactPill key={i} person={r} />)}
@@ -271,7 +328,11 @@ export const ActionTable: React.FC<ActionTableProps> = ({
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-xs text-slate-400">{action.id}</span>
+                        <Tooltip content={`ID: ${action.id}`}>
+                          <span className="inline-block font-mono text-[10px] font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-600 cursor-help min-w-[24px] text-center">
+                            {formatActionId(action.id)}
+                          </span>
+                        </Tooltip>
                         <StatusBadge status={action.status} />
                         {!userCanEdit && <Lock size={12} className="text-slate-400" />}
                       </div>
@@ -324,7 +385,7 @@ export const ActionTable: React.FC<ActionTableProps> = ({
                               </div>
                             ) : (
                               <div>
-                                {action.comments!.map(c => <CommentItem key={c.id} comment={c} />)}
+                                {(action.comments || []).map(c => <CommentItem key={c.id} comment={c} />)}
                               </div>
                             )}
                           </div>
@@ -500,10 +561,10 @@ export const ActionTable: React.FC<ActionTableProps> = ({
                     </div>
                   </div>
                 )}
-              </div>
+              </motion.div>
             );
           })}
-        </div>
+        </motion.div>
       </div>
 
       {/* Botão Nova Ação */}

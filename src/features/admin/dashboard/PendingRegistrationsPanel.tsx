@@ -249,7 +249,7 @@ export function PendingRegistrationsPanel({
                                                     className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
                                                 >
                                                     <UserPlus className="w-4 h-4" />
-                                                    <span className="hidden sm:inline">Criar Usuário</span>
+                                                    <span className="hidden sm:inline">Aprovar</span>
                                                 </button>
                                             )}
                                         </div>

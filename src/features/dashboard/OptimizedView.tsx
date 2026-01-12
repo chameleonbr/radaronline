@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -229,11 +229,11 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
 
   const today = parseDateLocal(getTodayStr());
 
-  const isActionLate = (action: Action): boolean => {
+  const isActionLate = useCallback((action: Action): boolean => {
     if (action.status === 'Concluído') return false;
     const endDate = parseDateLocal(action.plannedEndDate);
     return Boolean(endDate && today && endDate < today);
-  };
+  }, [today]);
 
   const filteredActions = useMemo(() => {
     return actions.filter(a => {
@@ -242,7 +242,7 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
       if (statusFilter !== 'all' && a.status !== statusFilter) return false;
       return true;
     });
-  }, [actions, searchTerm, statusFilter]);
+  }, [actions, searchTerm, statusFilter, isActionLate]);
 
   // Atualiza localAction quando selecionada mudar
   useEffect(() => {
@@ -264,7 +264,7 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
     const late = actions.filter(isActionLate).length;
     const avgProgress = total > 0 ? Math.round(actions.reduce((s, a) => s + a.progress, 0) / total) : 0;
     return { total, completed, inProgress, late, avgProgress };
-  }, [actions]);
+  }, [actions, isActionLate]);
 
   const groupedData = useMemo(() => {
     return objectives.map(obj => {
@@ -286,7 +286,7 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
         lateCount: objLate,
       };
     });
-  }, [objectives, activities, filteredActions]);
+  }, [objectives, activities, filteredActions, isActionLate]);
 
   const handleSelectAction = (uid: string) => {
     setSelectedUid(uid);

@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { X, Target, AlertOctagon, MapPin, CheckCircle2, Clock, AlertTriangle, TrendingUp, Calendar, BarChart2, PieChart as PieChartIcon, ChevronDown, ChevronUp, User } from 'lucide-react';
-import { Action } from '../../../types';
-import { MICROREGIOES, getMicroregiaoById } from '../../../data/microregioes';
 
 type KpiType = 'conclusao' | 'risco' | 'cobertura' | 'horizonte' | 'status';
 
@@ -380,7 +378,7 @@ export function KpiDetailModal({
                             {deadlineHorizon.map((item, idx) => {
                                 const percentage = deadlineTotal > 0 ? Math.round((item.value / deadlineTotal) * 100) : 0;
                                 const isExpanded = expandedCategory === item.name;
-                                const hasActions = item.actions && item.actions.length > 0;
+                                const _hasActions = item.actions && item.actions.length > 0;
 
                                 return (
                                     <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700">

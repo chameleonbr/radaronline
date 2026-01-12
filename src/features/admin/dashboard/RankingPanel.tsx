@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Trophy,
   TrendingUp,
@@ -11,6 +12,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { Action } from '../../../types';
 import { MICROREGIOES } from '../../../data/microregioes';
+import { staggerContainer, staggerItem, cardHover } from '../../../lib/motion';
 
 interface RankingPanelProps {
   actions: Action[];
@@ -81,6 +83,21 @@ export function RankingPanel({ actions, onViewMicrorregiao }: RankingPanelProps)
     });
   }, [actions, sortBy]);
 
+  // Se não há rankings, mostrar estado vazio
+  if (rankings.length === 0) {
+    return (
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 text-center">
+        <Trophy className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+        <h3 className="font-semibold text-slate-600 dark:text-slate-400 mb-2">
+          Nenhum ranking disponível
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-500">
+          Ainda não há ações cadastradas para gerar o ranking das microrregiões.
+        </p>
+      </div>
+    );
+  }
+
   const topRankings = showAll ? rankings : rankings.slice(0, 10);
   const bottomRankings = rankings.slice(-5).reverse();
 
@@ -118,11 +135,18 @@ export function RankingPanel({ actions, onViewMicrorregiao }: RankingPanelProps)
           </select>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <motion.div
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+          className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        >
           {rankings.slice(0, 3).map((micro, index) => (
-            <div
+            <motion.div
+              variants={staggerItem}
+              whileHover={cardHover}
               key={micro.id}
-              className={`relative p-4 rounded-xl border-2 ${getMedalBg(index)} transition-transform hover:scale-105`}
+              className={`relative p-4 rounded-xl border-2 ${getMedalBg(index)} cursor-pointer`}
             >
               {/* Medal */}
               <div className="absolute -top-3 -left-2">
@@ -169,9 +193,9 @@ export function RankingPanel({ actions, onViewMicrorregiao }: RankingPanelProps)
                   Visualizar
                 </button>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
 
       {/* Gráfico de Barras Horizontais - Top 10 */}
@@ -183,7 +207,7 @@ export function RankingPanel({ actions, onViewMicrorregiao }: RankingPanelProps)
           </h3>
           <span className="text-xs text-slate-500 dark:text-slate-400">Clique na barra para ver detalhes</span>
         </div>
-        <div className="h-80">
+        <div className="h-80" style={{ minHeight: '320px' }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={rankings.slice(0, 10).map(m => ({

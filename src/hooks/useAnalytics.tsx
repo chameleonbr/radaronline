@@ -9,7 +9,7 @@ import { analyticsService } from '../services/analyticsService';
 import type { DeviceInfo } from '../types/analytics.types';
 
 // Gerar ID de sessão único por aba
-const generateSessionId = (): string => {
+const _generateSessionId = (): string => {
     const existing = sessionStorage.getItem('analytics_session_id');
     if (existing) return existing;
 
@@ -321,6 +321,7 @@ export const AnalyticsProvider = ({ children }: AnalyticsProviderProps) => {
             cleanupScroll();
             cleanupTime();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [analytics.isTracking]);
 
     // Track page view on route change
@@ -328,6 +329,7 @@ export const AnalyticsProvider = ({ children }: AnalyticsProviderProps) => {
         if (analytics.isTracking) {
             analytics.trackPageView();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [analytics.isTracking]);
 
     return (

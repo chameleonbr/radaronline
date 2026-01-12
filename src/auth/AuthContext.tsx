@@ -20,7 +20,6 @@ type AuthProviderProps = {
 // Isso garante que o cache persista entre renders
 const profileCache = new Map<string, { profile: User; timestamp: number }>();
 const CACHE_TTL = 60000; // 1 minuto
-let queryCount = 0; // Contador de queries para monitoramento
 
 // ✅ CORREÇÃO: Função para limpar sessão corrompida do localStorage
 const clearCorruptedSession = () => {
@@ -34,9 +33,9 @@ const clearCorruptedSession = () => {
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
-    console.log('[AuthContext] Sessão corrompida limpa do localStorage');
-  } catch (e) {
-    console.error('[AuthContext] Erro ao limpar sessão:', e);
+    // Sessão corrompida limpa do localStorage
+  } catch {
+    // Erro ao limpar sessão - ignorado silenciosamente
   }
 };
 
@@ -56,40 +55,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (useCache) {
       const cached = profileCache.get(userId);
       if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        console.log(`[AuthContext] Cache HIT para userId: ${userId}`);
+        // Cache HIT
         return cached.profile;
       }
     }
 
-    // ✅ FASE 1: Logging de queries
-    queryCount++;
-    console.log(`[AuthContext] Query #${queryCount} - loadUserProfile(${userId})${useCache ? ' [CACHE MISS]' : ' [FORCE REFRESH]'}`);
-
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, avatar_id, created_by, created_at')
+        .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, avatar_id, created_by, created_at, first_access')
         .eq('id', userId)
         .single();
 
       if (error) {
-        console.error('[AuthContext] Erro ao carregar perfil:', error);
-        console.error('[AuthContext] Error details:', {
-          code: error.code,
-          message: error.message,
-          hint: error.hint,
-          details: error.details,
-        });
+        // Erro ao carregar perfil - tratado silenciosamente
         return null;
       }
 
       if (!data) {
-        console.warn('[AuthContext] Perfil não encontrado para usuário:', userId);
+        // Perfil não encontrado
         return null;
       }
 
       if (!data.ativo) {
-        console.warn('[AuthContext] Usuário inativo:', userId);
+        // Usuário inativo
         return null;
       }
 
@@ -106,6 +95,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         lgpdConsentimentoData: data.lgpd_consentimento_data || undefined,
         avatarId: data.avatar_id || 'zg10', // Default avatar
         createdBy: data.created_by || undefined,
+        firstAccess: data.first_access ?? true, // Se não existir, assume primeiro acesso
         createdAt: data.created_at,
       };
 
@@ -115,8 +105,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       return profile;
-    } catch (error) {
-      console.error('[AuthContext] Erro inesperado ao carregar perfil:', error);
+    } catch {
+      // Erro inesperado ao carregar perfil
       return null;
     }
   }, []);
@@ -127,14 +117,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Invalida o cache primeiro
     profileCache.delete(user.id);
-    console.log(`[AuthContext] Cache invalidado para userId: ${user.id}, recarregando perfil...`);
+    // Cache invalidado, recarregando perfil
 
     // Recarrega o perfil do banco
     const profile = await loadUserProfile(user.id, false);
 
     if (profile) {
       setUser(profile);
-      console.log('[AuthContext] Perfil atualizado com sucesso!');
+      // Perfil atualizado com sucesso
     }
   }, [user, loadUserProfile]);
 
@@ -160,13 +150,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     timeoutId = setTimeout(() => {
       if (hasResolvedSession) return; // Já resolveu, não fazer nada
 
-      console.warn('[AuthContext] Timeout ao carregar sessão - verificando cache');
+      // Timeout ao carregar sessão - verificando cache
 
       // ✅ CORREÇÃO: Tentar usar cache antigo antes de desistir
       const cachedProfiles = Array.from(profileCache.values());
       if (cachedProfiles.length > 0) {
         const mostRecent = cachedProfiles.sort((a, b) => b.timestamp - a.timestamp)[0];
-        console.log('[AuthContext] Usando cache antigo como fallback');
+        // Usando cache antigo como fallback
         if (mounted) {
           setUser(mostRecent.profile);
           const microId = mostRecent.profile.microregiaoId === 'all' ? null : mostRecent.profile.microregiaoId;
@@ -177,7 +167,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       // ✅ CORREÇÃO: Só limpa sessão se realmente não tiver dados
-      console.warn('[AuthContext] Sem cache disponível - redirecionando para login');
+      // Sem cache disponível - redirecionando para login
       if (mounted) {
         setUser(null);
         setIsLoading(false);
@@ -190,7 +180,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       hasResolvedSession = true; // ✅ CORREÇÃO: Marca como resolvido
 
       if (error) {
-        console.error('[AuthContext] Erro ao obter sessão:', error);
+        // Erro ao obter sessão
         // ✅ CORREÇÃO: Só limpa se for erro de token inválido
         if (error.message?.includes('invalid') || error.message?.includes('expired')) {
           clearCorruptedSession();
@@ -209,7 +199,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // ✅ CORREÇÃO: Se perfil não encontrado ou inativo, fazer logout automático
         if (!profile || !profile.ativo) {
-          console.warn('[AuthContext] Sessão encontrada mas perfil inválido/inativo - fazendo logout');
+          // Sessão encontrada mas perfil inválido/inativo - fazendo logout
           await supabase.auth.signOut();
           setUser(null);
           setViewingMicroregiaoId(null);
@@ -226,9 +216,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         resetLoading();
         setIsInitialized(true); // ✅ CORREÇÃO: Marca como inicializado
       }
-    }).catch((error) => {
+    }).catch((_error) => {
       if (!mounted) return;
-      console.error('[AuthContext] Erro inesperado ao obter sessão:', error);
+      // Erro inesperado ao obter sessão
       resetLoading();
       setIsInitialized(true);
     });
@@ -242,11 +232,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // ✅ CORREÇÃO: Ignorar eventos durante inicialização inicial
       // O getSession já processa a sessão inicial
       if (!isInitialized && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
-        console.log(`[AuthContext] Ignorando evento ${event} durante inicialização`);
+        // Ignorando evento durante inicialização
         return;
       }
 
-      console.log(`[AuthContext] Evento de auth: ${event}`);
+      // Evento de auth processado
 
       if (event === 'SIGNED_IN' && session?.user) {
         setIsLoading(true);
@@ -254,7 +244,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // Verifica se está ativo antes de permitir login
         if (!profile || !profile.ativo) {
-          console.warn('[AuthContext] Tentativa de login com usuário inativo ou não encontrado');
+          // Tentativa de login com usuário inativo ou não encontrado
           await supabase.auth.signOut();
           setIsLoading(false);
           return;
@@ -274,7 +264,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const profile = await loadUserProfile(session.user.id, false);
 
         if (!profile || !profile.ativo) {
-          console.warn('[AuthContext] Perfil inválido após refresh - fazendo logout');
+          // Perfil inválido após refresh - fazendo logout
           await supabase.auth.signOut();
           setUser(null);
           setViewingMicroregiaoId(null);
@@ -303,7 +293,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
       if (error) {
-        console.error('[AuthContext] Erro no login:', error);
+        // Erro no login tratado
         return {
           success: false,
           error: error.message === 'Invalid login credentials'
@@ -334,9 +324,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       return { success: false, error: 'Erro ao fazer login' };
-    } catch (error: any) {
-      console.error('[AuthContext] Erro inesperado no login:', error);
-      return { success: false, error: error.message || 'Erro ao fazer login' };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer login';
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -348,35 +338,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await supabase.auth.signOut();
       setUser(null);
       setViewingMicroregiaoId(null);
-    } catch (error) {
-      console.error('[AuthContext] Erro ao fazer logout:', error);
+    } catch {
+      // Erro ao fazer logout - ignorado
     }
   }, []);
 
   // Aceitar LGPD
   const acceptLgpd = useCallback(async () => {
     if (!user) {
-      console.warn('[AuthContext] Tentativa de aceitar LGPD sem usuário logado');
+      // Tentativa de aceitar LGPD sem usuário logado
       return;
     }
 
-    try {
-      await authService.acceptLgpd(user.id);
-      setUser(prev => prev ? {
-        ...prev,
-        lgpdConsentimento: true,
-        lgpdConsentimentoData: new Date().toISOString(),
-      } : null);
-    } catch (error) {
-      console.error('[AuthContext] Erro ao aceitar LGPD:', error);
-      throw error; // Propaga erro para o componente tratar
-    }
+    await authService.acceptLgpd(user.id);
+    setUser(prev => prev ? {
+      ...prev,
+      lgpdConsentimento: true,
+      lgpdConsentimentoData: new Date().toISOString(),
+    } : null);
   }, [user]);
 
   // Trocar microrregião visualizada (admin ou superadmin)
   const setViewingMicrorregiao = useCallback((microregiaoId: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
-      console.warn('[AuthContext] Apenas admins podem trocar microrregião visualizada');
+      // Apenas admins podem trocar microrregião visualizada
       return;
     }
     setViewingMicroregiaoId(microregiaoId === 'all' ? null : microregiaoId);

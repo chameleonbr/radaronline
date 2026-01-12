@@ -128,7 +128,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     const totalWidth = totalDaysInRange * columnWidth;
 
     const days: Date[] = [];
-    let curr = new Date(startDate);
+    const curr = new Date(startDate);
     const MAX_DAYS = 365 * 5;
     let count = 0;
     while (curr <= endDate && count < MAX_DAYS) {
@@ -282,7 +282,7 @@ export const GanttChart: React.FC<GanttChartProps> = ({
     }
   }, [filteredActions, focusedIdx, onActionClick]);
 
-  const renderHeaderLabel = (day: Date, index: number) => {
+  const renderHeaderLabel = (day: Date, _index: number) => {
     const width = ganttConfig.columnWidth;
     if (width < 12) return null;
     if (width < 20) return day.getDate() % 5 === 0 ? day.getDate() : null;

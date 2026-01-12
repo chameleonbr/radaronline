@@ -1,156 +1,116 @@
-import React, { useEffect, useRef } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { AlertTriangle } from 'lucide-react';
+import { fadeIn, scaleIn } from '../../lib/motion';
 
 interface ConfirmModalProps {
   isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
   title: string;
   message: string;
   confirmText?: string;
   cancelText?: string;
-  type?: 'danger' | 'warning' | 'info';
+  confirmType?: 'danger' | 'warning' | 'info';
+  type?: 'danger' | 'warning' | 'info'; // Alias for confirmType
+  onConfirm: () => void;
+  onCancel?: () => void;
+  onClose?: () => void; // Alias for onCancel
 }
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   isOpen,
-  onClose,
-  onConfirm,
   title,
   message,
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
-  type = 'danger',
+  confirmType,
+  type,
+  onConfirm,
+  onCancel,
+  onClose
 }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const confirmButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Focus trap e ESC para fechar
-  useEffect(() => {
-    if (isOpen) {
-      confirmButtonRef.current?.focus();
-      const handleEsc = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') onClose();
-      };
-      document.addEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.removeEventListener('keydown', handleEsc);
-        document.body.style.overflow = '';
-      };
-    }
-  }, [isOpen, onClose]);
-
   if (!isOpen) return null;
 
-  const colors = {
+  // Suporta tanto confirmType quanto type
+  const finalType = confirmType || type || 'warning';
+  // Suporta tanto onCancel quanto onClose
+  const handleCancel = onCancel || onClose || (() => { });
+
+  const typeConfig = {
     danger: {
-      icon: 'text-rose-500 bg-rose-100 dark:bg-rose-900/50 dark:text-rose-400',
-      button: 'bg-rose-600 hover:bg-rose-700',
+      icon: <AlertTriangle className="text-rose-500" size={24} />,
+      btnClass: 'bg-rose-600 hover:bg-rose-700 text-white',
+      headerClass: 'text-rose-600 dark:text-rose-400'
     },
     warning: {
-      icon: 'text-amber-500 bg-amber-100 dark:bg-amber-900/50 dark:text-amber-400',
-      button: 'bg-amber-600 hover:bg-amber-700',
+      icon: <AlertTriangle className="text-amber-500" size={24} />,
+      btnClass: 'bg-amber-600 hover:bg-amber-700 text-white',
+      headerClass: 'text-amber-600 dark:text-amber-400'
     },
     info: {
-      icon: 'text-blue-500 bg-blue-100 dark:bg-blue-900/50 dark:text-blue-400',
-      button: 'bg-blue-600 hover:bg-blue-700',
-    },
+      icon: <AlertTriangle className="text-blue-500" size={24} />,
+      btnClass: 'bg-blue-600 hover:bg-blue-700 text-white',
+      headerClass: 'text-blue-600 dark:text-blue-400'
+    }
   };
 
+  const config = typeConfig[finalType];
+
   return (
-    <div
-      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-    >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 animate-fade-in"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Modal */}
-      <div
-        ref={modalRef}
-        className="relative bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full animate-scale-in"
+    <AnimatePresence mode="wait">
+      <motion.div
+        key="confirm-modal-backdrop"
+        variants={fadeIn}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       >
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-          aria-label="Fechar"
-        >
-          <X size={20} />
-        </button>
+        {/* Backdrop */}
+        <motion.div
+          className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+          onClick={handleCancel}
+        />
 
-        <div className="p-6">
-          {/* Icon */}
-          <div className={`w-12 h-12 rounded-full ${colors[type].icon} flex items-center justify-center mx-auto mb-4`}>
-            <AlertTriangle size={24} />
+        {/* Modal */}
+        <motion.div
+          variants={scaleIn}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700"
+        >
+          <div className="p-6">
+            <div className="flex items-start gap-4">
+              <div className={`p-3 rounded-full bg-slate-50 dark:bg-slate-700/50 shrink-0`}>
+                {config.icon}
+              </div>
+              <div className="flex-1">
+                <h3 className={`text-lg font-bold mb-2 ${config.headerClass}`}>
+                  {title}
+                </h3>
+                <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
+                  {message}
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Content */}
-          <h2 id="modal-title" className="text-lg font-bold text-slate-800 dark:text-slate-100 text-center mb-2">
-            {title}
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 text-center mb-6">
-            {message}
-          </p>
-
-          {/* Actions - Cancelar é destacado (ação segura), Confirmar é secundário (ação destrutiva) */}
-          <div className="flex gap-3">
+          <div className="flex items-center justify-end gap-3 px-6 py-4 bg-slate-50 dark:bg-slate-700/30 border-t border-slate-100 dark:border-slate-700">
             <button
-              onClick={() => {
-                onConfirm();
-                onClose();
-              }}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors border-2 ${type === 'danger'
-                  ? 'border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30'
-                  : type === 'warning'
-                    ? 'border-amber-300 dark:border-amber-700 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30'
-                    : 'border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-                }`}
-            >
-              {confirmText}
-            </button>
-            <button
-              ref={confirmButtonRef}
-              onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors shadow-sm"
+              onClick={handleCancel}
+              className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg transition-colors"
             >
               {cancelText}
             </button>
+            <button
+              onClick={onConfirm}
+              className={`px-4 py-2 text-sm font-bold rounded-lg shadow-sm transition-colors ${config.btnClass}`}
+            >
+              {confirmText}
+            </button>
           </div>
-        </div>
-      </div>
-
-      {/* Animations */}
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scale-in {
-          from {
-            transform: scale(0.95);
-            opacity: 0;
-          }
-          to {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out;
-        }
-        .animate-scale-in {
-          animation: scale-in 0.2s ease-out;
-        }
-      `}</style>
-    </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };
-

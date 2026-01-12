@@ -76,7 +76,8 @@ export function useActionHandlers({
       }
       return a;
     }));
-  }, [actions, showToast, checkCanEdit, isViewingAllMicros, isAdmin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actions, showToast, checkCanEdit, isViewingAllMicros, isAdmin]); // setActions é estável
 
   const handleSaveAction = useCallback(() => {
     setIsSaving(true);

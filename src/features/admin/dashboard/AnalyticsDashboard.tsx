@@ -3,17 +3,15 @@
 // Visualização de métricas de uso do sistema
 // ============================================
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     BarChart3,
     Users,
     Clock,
-    MousePointerClick,
     TrendingUp,
     AlertTriangle,
     MapPin,
     Activity,
-    Calendar,
     RefreshCw,
     ChevronDown,
     Loader2,
@@ -23,10 +21,9 @@ import {
     Zap
 } from 'lucide-react';
 import { analyticsService } from '../../../services/analyticsService';
-import { MICROREGIOES, getMicroregiaoById } from '../../../data/microregioes';
+import { getMicroregiaoById } from '../../../data/microregioes';
 import type {
     AnalyticsSummary,
-    TopPage,
     HourlyUsage,
     InactiveMunicipality,
     RegionEngagement,
@@ -457,7 +454,8 @@ export const AnalyticsDashboard: React.FC = () => {
 
     useEffect(() => {
         loadData();
-    }, [period]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [period]); // loadData é definido no escopo, não precisa ser dependência
 
     if (loading) {
         return (

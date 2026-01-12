@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     X, Save, Trash2, Calendar, MessageCircle, Send,
-    Users, Target, Clock, ChevronDown, Plus, Lock, Eye, Reply, CornerDownRight, Pencil, Check
+    Users, Target, Clock, ChevronDown, Plus, Lock, Eye, Reply, CornerDownRight, Pencil, Check, ChevronUp
 } from 'lucide-react';
 import { Action, Status, RaciRole, TeamMember, ActionComment } from '../../types';
-import { formatDateBr } from '../../lib/date';
-import { StatusBadge, RaciTag } from '../../components/common';
 import { LoadingButton } from '../../components/common/LoadingSpinner';
 import { Tooltip } from '../../components/common/Tooltip';
-import { Select } from '../../ui/Select';
 import { useAuth } from '../../auth/AuthContext';
 import { getAvatarUrl } from '../settings/UserSettingsModal';
 import { formatRelativeTime } from './ActionTable';
-import { renderCommentWithMentions, extractMentions } from '../../components/common/MentionInput';
+import { renderCommentWithMentions } from '../../components/common/MentionInput';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
+import { useResponsive } from '../../hooks/useResponsive';
 
 // =====================================
 // PROPS DO COMPONENTE
@@ -32,6 +31,7 @@ interface ActionDetailModalProps {
     onAddComment?: (uid: string, content: string, parentId?: string | null) => void;
     onEditComment?: (actionUid: string, commentId: string, content: string) => void;
     onDeleteComment?: (actionUid: string, commentId: string) => void;
+    onSaveAndNew?: (updatedAction: Action) => Promise<void>;
     isSaving?: boolean;
     canEdit?: boolean;
     canDelete?: boolean;
@@ -219,15 +219,17 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     team,
     activityName = 'Atividade',
     onClose,
-    onUpdateAction,
+    onUpdateAction: _onUpdateAction,
     onSaveFullAction, // Nova prop para salvar o objeto completo
     isSaving = false,
     canEdit = true,
     onDeleteAction, // Adicionado de volta para uso no botão Excluir
     canDelete = true,
     readOnly = false,
+    onSaveAndNew,
 }) => {
     const { user, isAdmin, isSuperAdmin } = useAuth();
+    const { isMobile } = useResponsive();
 
     // =================================================================================
     // DRAFT MODE STATE
@@ -235,6 +237,9 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     // =================================================================================
     const [draftAction, setDraftAction] = useState<Action | null>(null);
     const [isDirty, setIsDirty] = useState(false);
+    const [isSavingAndNew, setIsSavingAndNew] = useState(false);
+    const [mobileSection, setMobileSection] = useState<'details' | 'raci' | 'comments'>('details');
+
 
     // Inicializa o draft quando a action muda ou o modal abre
     useEffect(() => {
@@ -257,6 +262,23 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     const [mentionIndex, setMentionIndex] = useState(0);
     const [cursorPos, setCursorPos] = useState(0);
     const [replyingTo, setReplyingTo] = useState<{ id: string; authorName: string } | null>(null);
+
+    // Confirmation Modal State
+    const [confirmConfig, setConfirmConfig] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        type: 'warning' | 'danger' | 'info';
+        confirmText: string;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        type: 'warning',
+        confirmText: 'Confirmar',
+        onConfirm: () => { },
+    });
 
     const modalRef = useRef<HTMLDivElement>(null);
     const commentInputRef = useRef<HTMLTextAreaElement>(null);
@@ -281,7 +303,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     // =================================================================================
 
     // Atualizar campos simples
-    const updateDraftField = useCallback((field: keyof Action, value: any) => {
+    const updateDraftField = useCallback((field: keyof Action, value: Action[keyof Action]) => {
         setDraftAction(prev => {
             if (!prev) return null;
             return { ...prev, [field]: value };
@@ -360,30 +382,57 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     }, []);
 
     const handleDeleteComment = useCallback((commentId: string) => {
-        if (window.confirm('Tem certeza que deseja excluir este comentário?')) {
-            setDraftAction(prev => {
-                if (!prev) return null;
-                const newComments = prev.comments?.filter(c => c.id !== commentId) || [];
-                return { ...prev, comments: newComments };
-            });
-            setIsDirty(true);
-        }
+        setConfirmConfig({
+            isOpen: true,
+            title: 'Excluir Comentário',
+            message: 'Tem certeza que deseja excluir este comentário? Esta ação não pode ser desfeita.',
+            type: 'danger',
+            confirmText: 'Excluir',
+            onConfirm: () => {
+                setDraftAction(prev => {
+                    if (!prev) return null;
+                    const newComments = prev.comments?.filter(c => c.id !== commentId) || [];
+                    return { ...prev, comments: newComments };
+                });
+                setIsDirty(true);
+                setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+            }
+        });
     }, []);
 
     // Salvar TUDO
-    const handleSaveDirty = useCallback(() => {
+    const handleSaveDirty = useCallback(async () => {
         if (draftAction && onSaveFullAction) {
             onSaveFullAction(draftAction);
             setIsDirty(false);
         }
     }, [draftAction, onSaveFullAction]);
 
+    const handleSaveAndNewDirty = useCallback(async () => {
+        if (!draftAction || !onSaveAndNew) return;
+        setIsSavingAndNew(true);
+        try {
+            await onSaveAndNew(draftAction);
+            setIsDirty(false); // Reset dirty state after successful save
+        } finally {
+            setIsSavingAndNew(false);
+        }
+    }, [draftAction, onSaveAndNew]);
+
     // Fechar com verificação
     const handleCloseDirty = useCallback(() => {
         if (isDirty) {
-            if (window.confirm("Existem alterações não salvas. Deseja sair e perder o rascunho?")) {
-                onClose();
-            }
+            setConfirmConfig({
+                isOpen: true,
+                title: 'Alterações não salvas',
+                message: 'Existem alterações no rascunho que não foram salvas. Deseja sair e perder essas alterações?',
+                type: 'warning',
+                confirmText: 'Sair sem salvar',
+                onConfirm: () => {
+                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                    onClose();
+                }
+            });
         } else {
             onClose();
         }
@@ -492,11 +541,14 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
 
         // Second pass: build the tree
         comments.forEach(c => {
-            const comment = commentMap.get(c.id)!;
+            const comment = commentMap.get(c.id);
+            if (!comment) return;
             if (c.parentId && commentMap.has(c.parentId)) {
                 // This is a reply - add to parent's replies
-                const parent = commentMap.get(c.parentId)!;
-                parent.replies = [...(parent.replies || []), comment];
+                const parent = commentMap.get(c.parentId);
+                if (parent) {
+                    parent.replies = [...(parent.replies || []), comment];
+                }
             } else {
                 // This is a root comment
                 rootComments.push(comment);
@@ -533,10 +585,14 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                 aria-hidden="true"
             />
 
-            {/* Drawer */}
+            {/* Drawer - Fullscreen on mobile, side drawer on desktop */}
             <div
                 ref={modalRef}
-                className="relative w-full max-w-2xl h-full bg-slate-50 dark:bg-slate-900 shadow-2xl flex flex-col animate-slide-in-right overflow-hidden"
+                className={`relative h-full bg-slate-50 dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden
+                    ${isMobile 
+                        ? 'w-full animate-slide-in-up safe-area-bottom' 
+                        : 'w-full max-w-2xl animate-slide-in-right'
+                    }`}
             >
                 {/* =========================================
             1. HEADER COMPACTO
@@ -587,10 +643,59 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     </button>
                 </header>
 
+                {/* Mobile Section Tabs */}
+                {isMobile && (
+                    <div className="flex bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
+                        <button
+                            onClick={() => setMobileSection('details')}
+                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                                mobileSection === 'details'
+                                    ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
+                                    : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                        >
+                            <Target size={14} />
+                            Detalhes
+                        </button>
+                        <button
+                            onClick={() => setMobileSection('raci')}
+                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                                mobileSection === 'raci'
+                                    ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
+                                    : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                        >
+                            <Users size={14} />
+                            Equipe
+                            {action.raci?.length > 0 && (
+                                <span className="ml-1 bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 text-[10px] px-1.5 rounded-full">
+                                    {action.raci.length}
+                                </span>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setMobileSection('comments')}
+                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                                mobileSection === 'comments'
+                                    ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
+                                    : 'text-slate-500 dark:text-slate-400'
+                            }`}
+                        >
+                            <MessageCircle size={14} />
+                            Comentários
+                            {action.comments?.length > 0 && (
+                                <span className="ml-1 bg-teal-100 dark:bg-teal-900 text-teal-600 dark:text-teal-400 text-[10px] px-1.5 rounded-full">
+                                    {action.comments.length}
+                                </span>
+                            )}
+                        </button>
+                    </div>
+                )}
+
                 {/* =========================================
             2. META-BAR DE CONTROLE - Layout Vertical Organizado
         ========================================= */}
-                <div className="px-4 py-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0 shadow-sm z-10 space-y-4">
+                <div className={`px-4 py-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0 shadow-sm z-10 space-y-4 ${isMobile && mobileSection !== 'details' ? 'hidden' : ''}`}>
                     {/* Linha 1: Status + Progresso */}
                     <div className="flex items-center gap-4">
                         {/* Status */}
@@ -757,7 +862,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                             }
                                         </select>
                                         {team.length === 0 && (
-                                            <p className="text-xs text-amber-600 mt-1">Nenhum membro cadastrado na equipe. Adicione membros pela aba "Equipe".</p>
+                                            <p className="text-xs text-amber-600 mt-1">Nenhum membro cadastrado na equipe. Adicione membros pela aba &quot;Equipe&quot;.</p>
                                         )}
                                     </div>
 
@@ -799,10 +904,119 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     </div>
                 </div>
 
+                {/* Confirmation Modal */}
+                <ConfirmModal
+                    isOpen={confirmConfig.isOpen}
+                    title={confirmConfig.title}
+                    message={confirmConfig.message}
+                    confirmType={confirmConfig.type}
+                    confirmText={confirmConfig.confirmText}
+                    onConfirm={confirmConfig.onConfirm}
+                    onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+                />
+
+                {/* =========================================
+            MOBILE RACI SECTION (Full screen when active)
+        ========================================= */}
+                {isMobile && mobileSection === 'raci' && (
+                    <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-800">
+                        {/* RACI Header */}
+                        <div className="px-4 py-3 bg-slate-50 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600 flex justify-between items-center">
+                            <span className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                                <Users size={16} className="text-teal-600" />
+                                Equipe RACI
+                            </span>
+                            <span className="bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-400 text-xs px-2.5 py-1 rounded-full font-bold">
+                                {action.raci?.length || 0}
+                            </span>
+                        </div>
+
+                        {/* RACI List */}
+                        <div className="flex-1 px-4 py-3 overflow-y-auto space-y-2">
+                            {action.raci?.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center text-center h-full py-12">
+                                    <div className="p-4 bg-slate-100 dark:bg-slate-700 rounded-full mb-3">
+                                        <Users className="text-slate-300" size={32} />
+                                    </div>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">Nenhum membro atribuído</p>
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Adicione membros à equipe desta ação</p>
+                                </div>
+                            ) : (
+                                [...action.raci].sort((a, b) => rolePriority[a.role] - rolePriority[b.role]).map((m, i) => (
+                                    <div 
+                                        key={i}
+                                        className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600"
+                                    >
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold ${roleLabels[m.role].color}`}>
+                                            {m.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{m.name}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400">{roleLabels[m.role].label}</p>
+                                        </div>
+                                        <div className={`px-2 py-1 rounded-md text-xs font-bold text-white ${roleLabels[m.role].color}`}>
+                                            {m.role}
+                                        </div>
+                                        {userCanEdit && (
+                                            <button
+                                                onClick={() => handleRemoveRaci(i)}
+                                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Add RACI Member - Mobile */}
+                        {userCanEdit && (
+                            <div className="p-4 bg-slate-50 dark:bg-slate-700 border-t border-slate-200 dark:border-slate-600 space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                    <select
+                                        value={selectedRaciMemberId}
+                                        onChange={(e) => setSelectedRaciMemberId(e.target.value)}
+                                        className="text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                                    >
+                                        <option value="">Selecionar pessoa...</option>
+                                        {team
+                                            .filter(t => !action.raci.some(r => r.name === t.name))
+                                            .map(t => (
+                                                <option key={t.id} value={t.id}>
+                                                    {t.name}
+                                                </option>
+                                            ))
+                                        }
+                                    </select>
+                                    <select
+                                        value={newRaciRole}
+                                        onChange={(e) => setNewRaciRole(e.target.value as RaciRole)}
+                                        className="text-sm border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                                    >
+                                        <option value="R">R - Responsável</option>
+                                        <option value="A">A - Aprovador</option>
+                                        <option value="C">C - Consultado</option>
+                                        <option value="I">I - Informado</option>
+                                    </select>
+                                </div>
+                                <button
+                                    onClick={handleAddRaci}
+                                    disabled={!selectedRaciMemberId}
+                                    className="w-full py-2.5 bg-teal-600 text-white rounded-lg font-bold text-sm hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    <Plus size={16} />
+                                    Adicionar Membro
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* =========================================
             3. CORPO PRINCIPAL - COMENTÁRIOS
         ========================================= */}
-                <div className="flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-slate-800">
+                <div className={`flex-1 flex flex-col overflow-hidden relative bg-white dark:bg-slate-800 ${isMobile && mobileSection !== 'comments' ? 'hidden' : ''}`}>
                     {/* Aviso de permissão (se necessário) */}
                     {!userCanEdit && (
                         <div className="mx-4 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-700 text-sm">
@@ -934,9 +1148,6 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                     </button>
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center">
-                                Pressione <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-medium">Enter</kbd> para enviar • Use <kbd className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400 font-medium">@</kbd> para mencionar
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -960,22 +1171,40 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                 )}
                             </div>
 
-                            {/* Lado Direito: Cancelar + Salvar */}
-                            <div className="flex items-center gap-3">
+                            {/* Lado Direito: Cancelar + Ações */}
+                            <div className="flex items-center gap-2.5">
                                 <button
                                     onClick={handleCloseDirty}
-                                    className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                    className="px-4 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-xl transition-all"
                                 >
                                     Cancelar
                                 </button>
+
+                                {onSaveAndNew && (
+                                    <LoadingButton
+                                        onClick={() => handleSaveAndNewDirty()}
+                                        isLoading={isSavingAndNew}
+                                        disabled={isSaving || !draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()}
+                                        loadingText="Salvando..."
+                                        className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all flex items-center gap-2 ${!draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()
+                                            ? 'bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed'
+                                            : 'bg-white dark:bg-slate-800 border-teal-200 dark:border-teal-700 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 shadow-sm'
+                                            }`}
+                                    >
+                                        <Plus size={16} />
+                                        <span className="hidden sm:inline">Salvar e Nova</span>
+                                        <span className="sm:hidden">S. e Nova</span>
+                                    </LoadingButton>
+                                )}
+
                                 <LoadingButton
                                     onClick={() => handleSaveDirty()}
                                     isLoading={isSaving}
-                                    disabled={action.title === 'Nova Ação' || action.title.trim() === ''}
+                                    disabled={!draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()}
                                     loadingText="Salvando..."
-                                    className={`px-6 py-2 text-sm font-medium rounded-lg shadow-sm transition-all flex items-center gap-2 ${action.title === 'Nova Ação' || action.title.trim() === ''
+                                    className={`px-6 py-2 text-sm font-bold rounded-xl shadow-md transition-all flex items-center gap-2 ${!draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()
                                         ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                                        : 'bg-teal-600 hover:bg-teal-700 text-white'
+                                        : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200/50 dark:shadow-none'
                                         }`}
                                 >
                                     <Save size={16} />

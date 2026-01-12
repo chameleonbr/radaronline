@@ -4,9 +4,9 @@
 // ============================================
 
 import { supabase } from '../lib/supabase';
+import { log, logError } from '../lib/logger';
 import type {
     AnalyticsEvent,
-    UserSession,
     DeviceInfo,
     PageViewStats,
     TopPage,
@@ -42,13 +42,13 @@ export const analyticsService = {
                 .single();
 
             if (error) {
-                console.error('[analyticsService] Erro ao criar sessão:', error);
+                logError('analyticsService', 'Erro ao criar sessão:', error);
                 return null;
             }
 
             return data.id;
         } catch (err) {
-            console.error('[analyticsService] Erro inesperado ao criar sessão:', err);
+            logError('analyticsService', 'Erro inesperado ao criar sessão:', err);
             return null;
         }
     },
@@ -87,7 +87,7 @@ export const analyticsService = {
                 })
                 .eq('id', sessionId);
         } catch (err) {
-            console.error('[analyticsService] Erro ao finalizar sessão:', err);
+            logError('analyticsService', 'Erro ao finalizar sessão:', err);
         }
     },
 
@@ -114,10 +114,10 @@ export const analyticsService = {
                 });
 
             if (error) {
-                console.error('[analyticsService] Erro ao registrar evento:', error);
+                logError('analyticsService', 'Erro ao registrar evento:', error);
             }
         } catch (err) {
-            console.error('[analyticsService] Erro inesperado ao registrar evento:', err);
+            logError('analyticsService', 'Erro inesperado ao registrar evento:', err);
         }
     },
 
@@ -142,10 +142,10 @@ export const analyticsService = {
                 .insert(records);
 
             if (error) {
-                console.error('[analyticsService] Erro ao registrar eventos em batch:', error);
+                logError('analyticsService', 'Erro ao registrar eventos em batch:', error);
             }
         } catch (err) {
-            console.error('[analyticsService] Erro inesperado ao registrar eventos:', err);
+            logError('analyticsService', 'Erro inesperado ao registrar eventos:', err);
         }
     },
 
@@ -181,10 +181,10 @@ export const analyticsService = {
         ]);
 
         // Calcular taxa de engajamento (usuários ativos / total de usuários)
+        // Não filtramos por 'status' pois pode não existir essa coluna
         const { count: totalUsers } = await supabase
             .from('profiles')
-            .select('*', { count: 'exact', head: true })
-            .eq('status', 'active');
+            .select('*', { count: 'exact', head: true });
 
         const engagementRate = totalUsers ? (activeUsersTotal / totalUsers) * 100 : 0;
 
@@ -253,7 +253,7 @@ export const analyticsService = {
                 .lte('created_at', endDate.toISOString())
                 .order('created_at', { ascending: false });
 
-            console.log('[analyticsService] getActiveUsersWithDetails:', {
+            log('analyticsService', 'getActiveUsersWithDetails:', {
                 startDate: startDate.toISOString(),
                 endDate: endDate.toISOString(),
                 analyticsCount: analyticsData?.length || 0,
@@ -261,29 +261,33 @@ export const analyticsService = {
             });
 
             if (analyticsError) {
-                console.error('[analyticsService] Erro ao buscar analytics:', analyticsError);
+                logError('analyticsService', 'Erro ao buscar analytics:', analyticsError);
                 return [];
             }
 
             if (!analyticsData || analyticsData.length === 0) {
-                console.log('[analyticsService] Nenhum dado de analytics encontrado, buscando usuários ativos por profiles...');
+                log('analyticsService', 'Nenhum dado de analytics encontrado, buscando usuários ativos por profiles...');
 
-                // Fallback: buscar usuários que fizeram login recentemente
-                const { data: recentProfiles } = await supabase
+                // Fallback: buscar usuários do sistema (sem filtro de status/last_sign_in que pode não existir)
+                const { data: recentProfiles, error: profilesError } = await supabase
                     .from('profiles')
-                    .select('id, full_name, email, microregiao_id, municipio, last_sign_in_at')
-                    .eq('status', 'active')
-                    .gte('last_sign_in_at', startDate.toISOString())
-                    .order('last_sign_in_at', { ascending: false });
+                    .select('id, nome, email, microregiao_id, municipio, created_at')
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+
+                if (profilesError) {
+                    logError('analyticsService', 'Erro ao buscar profiles (fallback):', profilesError);
+                    return [];
+                }
 
                 if (recentProfiles && recentProfiles.length > 0) {
                     return recentProfiles.map(p => ({
                         id: p.id,
-                        name: p.full_name || 'Usuário',
+                        name: p.nome || 'Usuário',
                         email: p.email || '',
                         microregiaoId: p.microregiao_id || '',
                         municipio: p.municipio || '',
-                        lastActivity: p.last_sign_in_at || ''
+                        lastActivity: p.created_at || ''
                     }));
                 }
 
@@ -299,35 +303,35 @@ export const analyticsService = {
             });
 
             const uniqueUserIds = Array.from(lastActivityMap.keys());
-            console.log('[analyticsService] Usuários únicos encontrados:', uniqueUserIds.length);
+            log('analyticsService', 'Usuários únicos encontrados:', uniqueUserIds.length);
 
             if (uniqueUserIds.length === 0) return [];
 
-            // Buscar perfis
+            // Buscar perfis - usar 'nome' ao invés de 'full_name'
             const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
-                .select('id, full_name, email, microregiao_id, municipio')
+                .select('id, nome, email, microregiao_id, municipio')
                 .in('id', uniqueUserIds);
 
             if (profilesError) {
-                console.error('[analyticsService] Erro ao buscar profiles:', profilesError);
+                logError('analyticsService', 'Erro ao buscar profiles:', profilesError);
                 return [];
             }
 
-            console.log('[analyticsService] Profiles encontrados:', profiles?.length || 0);
+            log('analyticsService', 'Profiles encontrados:', profiles?.length || 0);
 
             if (!profiles) return [];
 
             return profiles.map(p => ({
                 id: p.id,
-                name: p.full_name || 'Usuário',
+                name: p.nome || 'Usuário',
                 email: p.email || '',
                 microregiaoId: p.microregiao_id || '',
                 municipio: p.municipio || '',
                 lastActivity: lastActivityMap.get(p.id) || ''
             }));
         } catch (err) {
-            console.error('[analyticsService] Erro inesperado em getActiveUsersWithDetails:', err);
+            logError('analyticsService', 'Erro inesperado em getActiveUsersWithDetails:', err);
             return [];
         }
     },
@@ -429,11 +433,11 @@ export const analyticsService = {
         const threshold = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
         // Buscar todos os municípios com usuários
+        // Removido filtro por 'status' que pode não existir na tabela profiles
         const { data: municipalities } = await supabase
             .from('profiles')
             .select('microregiao_id, municipio')
-            .not('municipio', 'is', null)
-            .eq('status', 'active');
+            .not('municipio', 'is', null);
 
         if (!municipalities) return [];
 
@@ -497,7 +501,7 @@ export const analyticsService = {
     /**
      * Engajamento por região
      */
-    async getEngagementByRegion(startDate: Date, endDate: Date): Promise<RegionEngagement[]> {
+    async getEngagementByRegion(_startDate: Date, _endDate: Date): Promise<RegionEngagement[]> {
         const { data } = await supabase
             .from('analytics_region_engagement')
             .select('*');
@@ -537,14 +541,14 @@ export const analyticsService = {
         const { count: completed } = await supabase
             .from('actions')
             .select('*', { count: 'exact', head: true })
-            .eq('status', 'concluída')
+            .eq('status', 'Concluído')
             .gte('end_date', thirtyDaysAgo.toISOString());
 
         // Tempo médio para conclusão
         const { data: completedActions } = await supabase
             .from('actions')
             .select('start_date, end_date')
-            .eq('status', 'concluída')
+            .eq('status', 'Concluído')
             .not('start_date', 'is', null)
             .not('end_date', 'is', null);
 

@@ -23,14 +23,15 @@ const mapLogToItem = (log: ActivityLog): ActivityItem => {
 
   // Construir detalhes baseados no tipo de ação
   switch (log.action_type) {
-    case 'user_created':
+    case 'user_created': {
       // Admin criou usuário
       const targetName = meta.target_user_name || meta.name || '';
       const targetEmail = meta.target_user_email || meta.email || '';
       const targetRole = meta.target_user_role || meta.role || '';
       details = `Usuário: ${targetName} (${targetEmail}) - Role: ${targetRole}`;
       break;
-    case 'user_updated':
+    }
+    case 'user_updated': {
       // Mostrar detalhes completos (antes → depois)
       if (meta.details && Array.isArray(meta.details)) {
         details = meta.details.join(' | ');
@@ -42,12 +43,15 @@ const mapLogToItem = (log: ActivityLog): ActivityItem => {
         details = `[${meta.target_user_name}] ${details}`;
       }
       break;
-    case 'user_deactivated':
+    }
+    case 'user_deactivated': {
       details = meta.target_user_name || meta.name || 'Usuário desativado';
       break;
-    case 'action_created':
+    }
+    case 'action_created': {
       details = meta.title || 'Nova ação criada';
       break;
+    }
     case 'action_updated':
       if (meta.changes && Array.isArray(meta.changes)) {
         details = `Alterou: ${meta.changes.join(', ')}`;
@@ -91,6 +95,7 @@ const activityLabels: Record<ActivityType, string> = {
   user_deactivated: 'Usuário desativado',
   user_deleted: 'Usuário excluído',
   lgpd_accepted: 'LGPD aceito',
+  first_access_completed: 'Primeiro acesso',
   action_created: 'Ação criada',
   action_updated: 'Ação atualizada',
   action_deleted: 'Ação removida',
@@ -105,6 +110,7 @@ const activityColors: Record<ActivityType, string> = {
   user_deactivated: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700',
   user_deleted: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700',
   lgpd_accepted: 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700',
+  first_access_completed: 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-700',
   action_created: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-700',
   action_updated: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700',
   action_deleted: 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700',

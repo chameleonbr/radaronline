@@ -10,6 +10,8 @@ import {
 import { Action, TeamMember, Objective, Activity } from '../../types';
 import { parseDateLocal, getTodayStr } from '../../lib/date';
 import { useAuth } from '../../auth';
+import { useResponsive } from '../../hooks/useMediaQuery';
+import { MobileStatusChart, MobileProgressChart, MobileKpiCard, MobileRingProgress } from '../../components/mobile';
 
 interface DashboardProps {
   actions: Action[];
@@ -36,6 +38,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigate
 }) => {
   const { user } = useAuth();
+  const { isMobile, isTablet } = useResponsive();
 
   const handleCardClick = (status?: string) => {
     onNavigate('list', { status });
@@ -170,7 +173,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* KPI Cards Modernos */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {isMobile ? (
+        // Mobile: Grid 2x2 compacto
+        <div className="grid grid-cols-2 gap-3">
+          <MobileKpiCard
+            title="Total"
+            value={metrics.total}
+            icon={<Target size={20} />}
+            color="slate"
+            subtitle="Ações"
+            onClick={() => onNavigate('list', {})}
+          />
+          <MobileKpiCard
+            title="Concluído"
+            value={`${metrics.percentConcluido}%`}
+            icon={<ActivityIcon size={20} />}
+            color="teal"
+            subtitle={`${metrics.concluidos} ações`}
+            trend="up"
+            onClick={() => handleCardClick('Concluído')}
+          />
+          <MobileKpiCard
+            title="Em Execução"
+            value={metrics.emAndamento}
+            icon={<Clock size={20} />}
+            color="blue"
+            subtitle="Ativas"
+            onClick={() => handleCardClick('Em Andamento')}
+          />
+          <MobileKpiCard
+            title="Atenção"
+            value={metrics.atrasados}
+            icon={<AlertTriangle size={20} />}
+            color={metrics.atrasados > 0 ? 'rose' : 'slate'}
+            subtitle={metrics.atrasados > 0 ? 'Atrasadas' : 'OK!'}
+            trend={metrics.atrasados > 0 ? 'down' : 'neutral'}
+            onClick={() => handleCardClick('Atrasado')}
+          />
+        </div>
+      ) : (
+        // Desktop: Grid original
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           title="Total de Ações"
           value={metrics.total}
@@ -205,9 +248,57 @@ export const Dashboard: React.FC<DashboardProps> = ({
           trend={metrics.atrasados > 0 ? "down" : "neutral"}
           onClick={() => handleCardClick('Atrasado')}
         />
-      </div>
+        </div>
+      )}
 
       {/* Área Principal de Gráficos */}
+      {isMobile ? (
+        // Mobile: Lista de cards simplificada
+        <div className="space-y-6">
+          {/* Progresso Geral - Ring */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+              <PieChartIcon size={16} className="text-teal-500" />
+              Progresso Geral
+            </h3>
+            <div className="flex items-center justify-around">
+              <MobileRingProgress
+                value={metrics.percentConcluido}
+                size="lg"
+                label="Conclusão"
+                sublabel={`${metrics.concluidos}/${metrics.total} ações`}
+                color="#14b8a6"
+              />
+            </div>
+          </div>
+
+          {/* Distribuição de Status */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+              <BarChart2 size={16} className="text-slate-400" />
+              Status das Ações
+            </h3>
+            <MobileStatusChart
+              data={metrics.statusData}
+              total={metrics.total}
+              onItemClick={handleCardClick}
+            />
+          </div>
+
+          {/* Performance por Objetivo */}
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+              <Target size={16} className="text-teal-500" />
+              Por Objetivo
+            </h3>
+            <MobileProgressChart
+              data={metrics.progressoPorObjetivo}
+              onItemClick={(objId) => onNavigate('list', { objectiveId: objId })}
+            />
+          </div>
+        </div>
+      ) : (
+      // Desktop: Gráficos originais
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Status Chart (Donut) */}
@@ -302,9 +393,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Linha Inferior: Equipe e Prazos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid grid-cols-1 ${isMobile ? 'gap-4' : 'lg:grid-cols-2 gap-6'}`}>
 
         {/* Próximas Entregas */}
         <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">

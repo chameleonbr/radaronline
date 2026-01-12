@@ -89,7 +89,7 @@ export const SearchFilter: React.FC<SearchFilterProps> = ({
         <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
           {searchTerm && (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs rounded-full">
-              Busca: "{searchTerm}"
+              Busca: &quot;{searchTerm}&quot;
               <button onClick={() => onSearchChange('')} className="hover:text-teal-900 dark:hover:text-teal-100"><X size={12} /></button>
             </span>
           )}

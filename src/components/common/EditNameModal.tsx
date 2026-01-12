@@ -7,6 +7,8 @@ interface EditNameModalProps {
     onSave: (newName: string) => void;
     title: string;
     initialValue: string;
+    inputType?: 'text' | 'textarea';
+    label?: string;
 }
 
 export const EditNameModal: React.FC<EditNameModalProps> = ({
@@ -15,22 +17,28 @@ export const EditNameModal: React.FC<EditNameModalProps> = ({
     onSave,
     title,
     initialValue,
+    inputType = 'text',
+    label = 'Nome',
 }) => {
     const [value, setValue] = useState(initialValue);
     const inputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
         if (isOpen) {
             setValue(initialValue);
             // Timeout para garantir que o input seja focado após a animação de entrada
             setTimeout(() => {
-                if (inputRef.current) {
+                if (inputType === 'text' && inputRef.current) {
                     inputRef.current.focus();
                     inputRef.current.select();
+                } else if (inputType === 'textarea' && textareaRef.current) {
+                    textareaRef.current.focus();
+                    textareaRef.current.select();
                 }
             }, 100);
         }
-    }, [isOpen, initialValue]);
+    }, [isOpen, initialValue, inputType]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -65,16 +73,26 @@ export const EditNameModal: React.FC<EditNameModalProps> = ({
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
-                                    Nome
+                                    {label}
                                 </label>
-                                <input
-                                    ref={inputRef}
-                                    type="text"
-                                    value={value}
-                                    onChange={(e) => setValue(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 outline-none transition-all font-medium text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900"
-                                    placeholder="Digite o novo nome..."
-                                />
+                                {inputType === 'textarea' ? (
+                                    <textarea
+                                        ref={textareaRef}
+                                        value={value}
+                                        onChange={(e) => setValue(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 outline-none transition-all font-medium text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 min-h-[120px] resize-y"
+                                        placeholder={`Digite ${label.toLowerCase()}...`}
+                                    />
+                                ) : (
+                                    <input
+                                        ref={inputRef}
+                                        type="text"
+                                        value={value}
+                                        onChange={(e) => setValue(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 outline-none transition-all font-medium text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900"
+                                        placeholder={`Digite ${label.toLowerCase()}...`}
+                                    />
+                                )}
                             </div>
 
                             <div className="flex gap-3 pt-2">

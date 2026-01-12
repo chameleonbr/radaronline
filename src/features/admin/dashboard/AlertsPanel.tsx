@@ -4,7 +4,6 @@ import {
   Clock,
   UserX,
   Shield,
-  MapPin,
   TrendingUp,
   Award,
   CheckCircle2,
@@ -213,7 +212,8 @@ export function AlertsPanel({ actions, users, onViewMicrorregiao }: AlertsPanelP
     };
 
     return items.sort((a, b) => sortScore(a.type) - sortScore(b.type));
-  }, [actions, users]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actions, users]); // onViewMicrorregiao é estável (useCallback no parent)
 
   const criticalCount = intelligenceItems.filter(i => i.type === 'alert_critico').length;
   const isAllClear = criticalCount === 0;

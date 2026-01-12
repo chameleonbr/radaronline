@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
     Filter,
     GitCompare,
@@ -6,17 +6,12 @@ import {
     X,
     Layers,
     MapPin,
-    Building2
 } from 'lucide-react';
 import {
     MACRORREGIOES,
     MICROREGIOES,
-    MUNICIPIOS,
     getMicroregioesByMacro,
     getMunicipiosByMicro,
-    Macrorregiao,
-    Microrregiao,
-    Municipio
 } from '../../../data/microregioes';
 
 export type CompareLevel = 'macro' | 'micro';
@@ -46,7 +41,7 @@ export function DashboardFilters({ filters, onChange }: DashboardFiltersProps) {
         return macro ? getMicroregioesByMacro(macro.nome) : MICROREGIOES;
     }, [filters.selectedMacroId]);
 
-    const municipioOptions = useMemo(() => {
+    const _municipioOptions = useMemo(() => {
         if (!filters.selectedMicroId) return [];
         return getMunicipiosByMicro(filters.selectedMicroId);
     }, [filters.selectedMicroId]);
@@ -91,7 +86,7 @@ export function DashboardFilters({ filters, onChange }: DashboardFiltersProps) {
         });
     };
 
-    const handleMunicipioChange = (codigo: string) => {
+    const _handleMunicipioChange = (codigo: string) => {
         onChange({
             ...filters,
             selectedMunicipioCode: codigo || null,

@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { User, ProfileDTO, UserRole } from '../types/auth.types';
-import { log, logError } from '../lib/logger';
+import { log, logError, logWarn } from '../lib/logger';
 import { loggingService } from './loggingService';
 import { FunctionsHttpError, FunctionsRelayError, FunctionsFetchError } from '@supabase/supabase-js';
 
@@ -61,6 +61,7 @@ function mapProfileToUser(profile: ProfileDTO): User {
     lgpdConsentimentoData: profile.lgpd_consentimento_data || undefined,
     createdBy: profile.created_by || undefined,
     municipio: profile.municipio || undefined,
+    firstAccess: profile.first_access ?? true, // Se não existir, assume primeiro acesso
     createdAt: profile.created_at,
   };
 }
@@ -81,7 +82,7 @@ export async function listUsers(): Promise<User[]> {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[authService] Erro ao listar usuários:', error);
+      logError('authService', 'Erro ao listar usuários', error);
       throw new Error(`Erro ao listar usuários: ${error.message}`);
     }
 
@@ -90,7 +91,7 @@ export async function listUsers(): Promise<User[]> {
       updated_at: profile.updated_at || profile.created_at || new Date().toISOString(),
     }));
   } catch (error) {
-    console.error('[authService] Erro inesperado ao listar usuários:', error);
+    logError('authService', 'Erro inesperado ao listar usuários', error);
     throw error;
   }
 }
@@ -136,7 +137,7 @@ export async function createUser(userData: {
       .eq('id', currentUser.id)
       .single();
     if (profileError) {
-      console.error('[authService] Erro ao verificar permissões:', profileError);
+      logError('authService', 'Erro ao verificar permissões', profileError);
       throw new Error(`Erro ao verificar permissões: ${profileError.message}`);
     }
     if (profile?.role !== 'admin' && profile?.role !== 'superadmin') {
@@ -148,7 +149,7 @@ export async function createUser(userData: {
       ? null
       : userData.microregiaoId || null;
     // ✅ Log para debug
-    console.log('[authService] Criando usuário via Edge Function:', {
+    log('authService', 'Criando usuário via Edge Function', {
       email: userData.email,
       role: userData.role,
       microregiao_id,
@@ -157,7 +158,7 @@ export async function createUser(userData: {
     // ✅ Chamar Edge Function com timeout
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => {
-        console.warn('[authService] Timeout na Edge Function - verifique logs no Supabase Dashboard');
+        logWarn('authService', 'Timeout na Edge Function - verifique logs no Supabase Dashboard');
         reject(new Error('Timeout: A requisição demorou mais de 30 segundos'));
       }, EDGE_FUNCTION_TIMEOUT_MS);
     });
@@ -184,7 +185,7 @@ export async function createUser(userData: {
     } catch (error: any) {
       // Se foi timeout
       if (error.message?.includes('Timeout')) {
-        logError('[authService]', 'Timeout detectado - Edge Function pode estar lenta ou com problemas');
+        logError('authService', 'Timeout detectado - Edge Function pode estar lenta ou com problemas', error);
         throw new Error('A requisição demorou muito. Verifique sua conexão ou tente novamente.');
       }
 
@@ -197,25 +198,25 @@ export async function createUser(userData: {
             : (error.context?.response ? await error.context.response.json().catch(() => null) : null);
           errorMessage = body?.error || errorMessage;
         } catch (e) {
-          log('[authService] Não foi possível parsear body do erro:', String(e));
+          log('authService', 'Não foi possível parsear body do erro', String(e));
         }
-        logError('[authService]', 'Edge Function retornou erro HTTP', { status: error.context?.status, message: errorMessage });
+        logError('authService', 'Edge Function retornou erro HTTP', { status: error.context?.status, message: errorMessage });
         throw new Error(getErrorMessage(typeof errorMessage === 'string' ? errorMessage : undefined));  // Usa helper
       } else if (error instanceof FunctionsRelayError) {
-        logError('[authService]', 'Erro de rede com Supabase', { message: error.message });
+        logError('authService', 'Erro de rede com Supabase', { message: error.message });
         throw new Error('Erro de conexão com o servidor. Verifique sua internet.');
       } else if (error instanceof FunctionsFetchError) {
-        logError('[authService]', 'Erro ao alcançar Edge Function', { message: error.message });
+        logError('authService', 'Erro ao alcançar Edge Function', { message: error.message });
         throw new Error('Não foi possível conectar ao servidor. Tente novamente.');
       } else {
-        logError('[authService]', 'Erro desconhecido', error);
+        logError('authService', 'Erro desconhecido', error);
         throw error;
       }
     }
 
     // ✅ Fallback unificado (remove duplicatas)
     if (functionError) {
-      logError('[authService]', 'Erro na Edge Function', functionError);
+      logError('authService', 'Erro na Edge Function', functionError);
       throw new Error(getErrorMessage(functionError.message));  // Usa helper
     }
     if (!functionData?.data?.user) {
@@ -223,11 +224,11 @@ export async function createUser(userData: {
     }
     // ✅ Se a Edge Function já retornou o perfil, usar diretamente
     if (functionData.data.profile) {
-      console.log('[authService] Perfil retornado pela Edge Function');
+      log('authService', 'Perfil retornado pela Edge Function');
       return mapProfileToUser(functionData.data.profile as ProfileDTO);
     }
     // ✅ FASE 1: Retry otimizado (2 tentativas com delay fixo de 500ms)
-    console.log('[authService] Buscando perfil criado...');
+    log('authService', 'Buscando perfil criado...');
     let newProfile: ProfileDTO | null = null;
     let lastError: any = null;
     for (let i = 0; i < 2; i++) {
@@ -242,13 +243,13 @@ export async function createUser(userData: {
       }
       lastError = error;
       if (error && i < 1) {
-        console.warn(`[authService] Retry ${i + 1}/2 ao buscar perfil:`, error.message);
+        logWarn('authService', `Retry ${i + 1}/2 ao buscar perfil`, { message: error.message });
         // ✅ FASE 1: Delay fixo de 500ms (mais rápido que progressivo)
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
     if (!newProfile) {
-      console.error('[authService] Perfil não encontrado. Último erro:', lastError);
+      logError('authService', 'Perfil não encontrado. Último erro', lastError);
       throw new Error(
         lastError?.message ||
         'Perfil não foi criado pelo trigger. Verifique se o trigger está ativo no Supabase.'
@@ -265,7 +266,7 @@ export async function createUser(userData: {
 
     return newUser;
   } catch (error: any) {
-    console.error('[authService] Erro inesperado ao criar usuário:', error);
+    logError('authService', 'Erro inesperado ao criar usuário', error);
     throw error;
   }
 }
@@ -334,13 +335,11 @@ export async function updateUser(
         throw new Error('Senha deve ter no mínimo 6 caracteres');
       }
 
-      console.log('[authService] Atualizando senha para userId:', userId);
-      log('[authService]', `Atualizando senha para usuário ${userId}`);
-
+      log('authService', 'Atualizando senha para userId', { userId });
       // Chamar Edge Function com timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => {
-          console.warn('[authService] Timeout ao atualizar senha');
+          logWarn('authService', 'Timeout ao atualizar senha');
           reject(new Error('Timeout: A requisição demorou mais de 30 segundos'));
         }, EDGE_FUNCTION_TIMEOUT_MS);
       });
@@ -360,21 +359,18 @@ export async function updateUser(
       } catch (error: any) {
         // Se foi timeout ou outro erro
         if (error.message?.includes('Timeout')) {
-          logError('[authService]', 'Timeout ao atualizar senha');
+          logError('authService', 'Timeout ao atualizar senha');
           throw new Error('Atualização de senha demorou demais. Tente novamente ou verifique a função no Supabase.');
         }
         throw error;
       }
 
       if (passwordUpdateError) {
-        logError('[authService]', 'Erro ao atualizar senha:', passwordUpdateError);
+        logError('authService', 'Erro ao atualizar senha', passwordUpdateError);
         throw new Error(`Erro ao atualizar senha: ${passwordUpdateError.message || 'Erro desconhecido'}`);
       }
 
-      console.log('[authService] Senha atualizada com sucesso');
-      log('[authService]', 'Senha atualizada com sucesso');
-
-      // ✅ LOG ACTIVITY
+      log('authService', 'Senha atualizada com sucesso');
       loggingService.logActivity('user_updated', 'user', userId, { changes: ['password'] });
     }
 
@@ -410,7 +406,7 @@ export async function updateUser(
         .single();
 
       if (error) {
-        console.error('[authService] Erro ao atualizar usuário:', error);
+        logError('authService', 'Erro ao atualizar usuário', error);
         // ✅ FASE 2: Se senha foi atualizada mas profile falhou, não fazer rollback da senha
         // (senha é mais crítico, profile pode ser corrigido depois)
         throw new Error(`Erro ao atualizar usuário: ${error.message}`);
@@ -475,7 +471,7 @@ export async function updateUser(
 
     return mapProfileToUser(data as ProfileDTO);
   } catch (error: any) {
-    console.error('[authService] Erro inesperado ao atualizar usuário:', error);
+    logError('authService', 'Erro inesperado ao atualizar usuário', error);
     // ✅ FASE 2: Rollback não necessário - senha é atualizada primeiro, se falhar não atualiza profile
     // Se profile falhar mas senha foi atualizada, é aceitável (senha é mais crítico)
     throw error;
@@ -508,7 +504,7 @@ export async function deactivateUser(userId: string): Promise<boolean> {
       .eq('id', userId);
 
     if (error) {
-      console.error('[authService] Erro ao desativar usuário:', error);
+      logError('authService', 'Erro ao desativar usuário', error);
       throw new Error(`Erro ao desativar usuário: ${error.message}`);
     }
 
@@ -517,7 +513,7 @@ export async function deactivateUser(userId: string): Promise<boolean> {
 
     return true;
   } catch (error: any) {
-    console.error('[authService] Erro inesperado ao desativar usuário:', error);
+    logError('authService', 'Erro inesperado ao desativar usuário', error);
     throw error;
   }
 }
@@ -555,7 +551,7 @@ export async function deleteUser(userId: string): Promise<boolean> {
       throw new Error('Não é possível excluir o Super Admin.');
     }
 
-    console.log('[authService] Excluindo usuário:', userId);
+    log('authService', 'Excluindo usuário', { userId });
 
     // ✅ Chamar Edge Function para deletar usuário (precisa de Admin API)
     const { error: functionError } = await supabase.functions.invoke('delete-user', {
@@ -563,18 +559,18 @@ export async function deleteUser(userId: string): Promise<boolean> {
     });
 
     if (functionError) {
-      console.error('[authService] Erro ao excluir usuário:', functionError);
+      logError('authService', 'Erro ao excluir usuário', functionError);
       throw new Error(`Erro ao excluir usuário: ${functionError.message}`);
     }
 
-    console.log('[authService] Usuário excluído com sucesso');
+    log('authService', 'Usuário excluído com sucesso');
 
     // ✅ LOG ACTIVITY
     loggingService.logActivity('user_deleted', 'user', userId, {});
 
     return true;
   } catch (error: any) {
-    console.error('[authService] Erro inesperado ao excluir usuário:', error);
+    logError('authService', 'Erro inesperado ao excluir usuário', error);
     throw error;
   }
 }
@@ -594,14 +590,153 @@ export async function acceptLgpd(userId: string): Promise<void> {
       .eq('id', userId);
 
     if (error) {
-      console.error('[authService] Erro ao aceitar LGPD:', error);
+      logError('authService', 'Erro ao aceitar LGPD', error);
       throw new Error(`Erro ao aceitar LGPD: ${error.message}`);
     }
 
     // ✅ LOG ACTIVITY
     loggingService.logActivity('lgpd_accepted', 'user', userId, {});
   } catch (error: any) {
-    console.error('[authService] Erro inesperado ao aceitar LGPD:', error);
+    logError('authService', 'Erro inesperado ao aceitar LGPD', error);
+    throw error;
+  }
+}
+
+/**
+ * Completa o primeiro acesso do usuário
+ * - Atualiza a senha (obrigatório)
+ * - Registra o município na tabela teams
+ * - Marca first_access como false no perfil
+ */
+export async function completeFirstAccess(
+  userId: string,
+  userEmail: string,
+  municipio: string,
+  novaSenha: string,
+  microregiaoId: string
+): Promise<void> {
+  try {
+    log('authService', 'Iniciando processo de primeiro acesso', { userId, municipio });
+
+    // ✅ Validar senha
+    if (!novaSenha || novaSenha.length < 6) {
+      throw new Error('Senha deve ter no mínimo 6 caracteres');
+    }
+
+    // ✅ Validar município
+    if (!municipio) {
+      throw new Error('Município é obrigatório');
+    }
+
+    // ✅ PASSO 1: Atualizar senha via Edge Function
+    log('authService', 'Atualizando senha do usuário');
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Timeout: A requisição demorou mais de 30 segundos'));
+      }, EDGE_FUNCTION_TIMEOUT_MS);
+    });
+
+    const functionPromise = supabase.functions.invoke('update-user-password', {
+      body: {
+        userId: userId,
+        password: novaSenha,
+      },
+    });
+
+    let passwordUpdateError: any;
+
+    try {
+      const result = await Promise.race([functionPromise, timeoutPromise]) as any;
+      passwordUpdateError = result.error;
+    } catch (error: any) {
+      if (error.message?.includes('Timeout')) {
+        throw new Error('Atualização de senha demorou demais. Tente novamente.');
+      }
+      throw error;
+    }
+
+    if (passwordUpdateError) {
+      logError('authService', 'Erro ao atualizar senha no primeiro acesso', passwordUpdateError);
+      throw new Error(`Erro ao atualizar senha: ${passwordUpdateError.message || 'Erro desconhecido'}`);
+    }
+
+    log('authService', 'Senha atualizada com sucesso');
+
+    // ✅ PASSO 2: Registrar município na tabela teams
+    log('authService', 'Registrando município na tabela teams', { municipio });
+
+    // Verificar se já existe registro
+    const { data: existingTeam } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('email', userEmail)
+      .eq('microregiao_id', microregiaoId)
+      .maybeSingle();
+
+    if (existingTeam) {
+      // Atualizar registro existente
+      const { error: updateTeamError } = await supabase
+        .from('teams')
+        .update({
+          municipio: municipio,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingTeam.id);
+
+      if (updateTeamError) {
+        logWarn('authService', 'Erro ao atualizar município no teams', updateTeamError);
+      }
+    } else {
+      // Buscar nome do usuário
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('nome')
+        .eq('id', userId)
+        .single();
+
+      // Criar novo registro
+      const { error: insertTeamError } = await supabase
+        .from('teams')
+        .insert({
+          name: profile?.nome || 'Usuário',
+          email: userEmail,
+          microregiao_id: microregiaoId,
+          municipio: municipio,
+          cargo: 'Membro',
+        });
+
+      if (insertTeamError) {
+        logWarn('authService', 'Erro ao criar registro no teams', insertTeamError);
+      }
+    }
+
+    // ✅ PASSO 3: Marcar first_access como false
+    log('authService', 'Marcando primeiro acesso como concluído');
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        first_access: false,
+        municipio: municipio,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
+
+    if (profileError) {
+      logError('authService', 'Erro ao atualizar profile', profileError);
+      throw new Error(`Erro ao finalizar configuração: ${profileError.message}`);
+    }
+
+    // ✅ LOG ACTIVITY
+    loggingService.logActivity('first_access_completed', 'user', userId, {
+      municipio,
+      password_changed: true,
+    });
+
+    log('authService', 'Primeiro acesso concluído com sucesso!');
+  } catch (error: any) {
+    logError('authService', 'Erro no processo de primeiro acesso', error);
     throw error;
   }
 }

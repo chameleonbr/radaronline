@@ -1,4 +1,5 @@
 export { StatusBadge } from './StatusBadge';
+export { EditNameModal } from './EditNameModal';
 export { RaciCompactPill, RaciTag } from './RaciPill';
 export { ExpandableDescription } from './ExpandableDescription';
 export { ToastProvider, useToast } from './Toast';
@@ -10,3 +11,4 @@ export { ErrorBoundary } from './ErrorBoundary';
 export { Breadcrumb, createBreadcrumbItems } from './Breadcrumb';
 export { LoadingSpinner, LoadingButton } from './LoadingSpinner';
 export { Tooltip } from './Tooltip';
+export { ZoomControl } from './ZoomControl';

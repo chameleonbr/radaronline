@@ -17,6 +17,7 @@ export interface ProfileDTO {
   avatar_id: string | null;
   created_by: string | null;
   municipio: string | null;
+  first_access: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,7 @@ export interface User {
   avatarId: string;
   createdBy?: string;
   municipio?: string;
+  firstAccess: boolean; // true = primeiro acesso, precisa completar onboarding
   createdAt: string;
 }
 

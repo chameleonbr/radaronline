@@ -17,12 +17,12 @@ import {
 import { formatISODate, parseDateLocal } from './lib/date';
 import { clampProgress } from './lib/validation';
 
-// Data
-import { INITIAL_DATA, INITIAL_OBJECTIVES, INITIAL_ACTIVITIES } from './data/mockData';
+// Data - Apenas constantes de configuração, sem mocks
 import { MICROREGIOES } from './data/microregioes';
 
-// Services
+// Services - Fonte única de dados
 import * as dataService from './services/dataService';
+import * as authService from './services/authService';
 
 // Auth
 import { AuthProvider, canEditAction, canDeleteAction, canCreateAction, canManageTeam } from './auth';
@@ -36,14 +36,20 @@ import { AnalyticsProvider } from './hooks/useAnalytics';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 
+// Mobile Components
+import { MobileBottomNav, MobileFab, MobileActionList } from './components/mobile';
+
+// Onboarding
+import { OnboardingTour } from './components/onboarding';
+
 // Common Components
 import {
   // ExpandableDescription removido
   ToastProvider,
   useToast,
   ConfirmModal,
+  EditNameModal, // Added import
   ErrorBoundary,
-  Breadcrumb,
   createBreadcrumbItems,
 } from './components/common';
 
@@ -76,7 +82,7 @@ function AppContent() {
   const isAuthenticated = authContext?.isAuthenticated ?? false;
   const _isLoading = authContext?.isLoading ?? true;
   const currentMicrorregiao = authContext?.currentMicrorregiao ?? null;
-  const logout = authContext?.logout ?? (() => { });
+  const logout = useMemo(() => authContext?.logout ?? (() => { }), [authContext?.logout]);
   const viewingMicroregiaoId = authContext?.viewingMicroregiaoId ?? null;
   const _isContextLoading = !authContext || authContext.isLoading;
 
@@ -84,12 +90,13 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<'main' | 'admin' | 'lgpd'>('main');
   const [didAutoOpenAdmin, setDidAutoOpenAdmin] = useState(false);
   const [selectedObjective, setSelectedObjective] = useState<number>(1);
-  const [selectedActivity, setSelectedActivity] = useState<string>(INITIAL_DATA.activities[1][0].id);
+  const [selectedActivity, setSelectedActivity] = useState<string>('1.1'); // Default inicial
   const [viewMode, setViewMode] = useState<'table' | 'gantt' | 'team' | 'optimized'>('table');
   const [ganttRange, setGanttRange] = useState<GanttRange>('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(!isMobile);
   const [currentNav, setCurrentNav] = useState<'strategy' | 'home' | 'settings'>('strategy');
-  const [showStickyActivity, setShowStickyActivity] = useState<boolean>(false);
+  const [_showStickyActivity, setShowStickyActivity] = useState<boolean>(false);
+  const [isEditMode, setIsEditMode] = useState(false); // New lifted state
   const activityTabsRef = useRef<HTMLDivElement | null>(null);
 
   // --- DATA STATE ---
@@ -100,9 +107,9 @@ function AppContent() {
   const [_isDataLoading, setIsDataLoading] = useState<boolean>(true);
   const [_dataError, setDataError] = useState<string | null>(null);
 
-  // --- OBJECTIVES & ACTIVITIES STATE (editable by admin/superadmin) ---
-  const [objectives, setObjectives] = useState(INITIAL_OBJECTIVES);
-  const [activities, setActivities] = useState(INITIAL_ACTIVITIES);
+  // --- OBJECTIVES & ACTIVITIES STATE (carregados do banco) ---
+  const [objectives, setObjectives] = useState<{ id: number; title: string; status: 'on-track' | 'delayed' }[]>([]);
+  const [activities, setActivities] = useState<Record<number, { id: string; title: string; description: string }[]>>({});
 
   // Manter ref sincronizada com state
   useEffect(() => {
@@ -126,7 +133,69 @@ function AppContent() {
   const [isCreateActionModalOpen, setIsCreateActionModalOpen] = useState(false);
   const [createActionMicroId, setCreateActionMicroId] = useState<string>('');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [allowAvatarChange, setAllowAvatarChange] = useState(false);
   const [showMunicipalityModal, setShowMunicipalityModal] = useState(false);
+
+  // --- ONBOARDING STATE ---
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
+  const [pendingOnboarding, setPendingOnboarding] = useState<boolean>(false);
+
+  // Check if user should see onboarding (first time using Radar)
+  // Only show after municipality modal is closed (firstAccess completed)
+  useEffect(() => {
+    if (isAuthenticated && user && !isAdmin) {
+      const onboardingKey = `radar_onboarding_completed_${user.id}`;
+      const hasCompletedOnboarding = localStorage.getItem(onboardingKey);
+      
+      // If user still needs to complete first access (password/municipality), mark as pending
+      if (user.firstAccess) {
+        if (!hasCompletedOnboarding) {
+          setPendingOnboarding(true);
+        }
+        return; // Don't show onboarding yet
+      }
+      
+      // User has completed first access, check if we should show onboarding
+      if (!hasCompletedOnboarding || pendingOnboarding) {
+        // Small delay to let the app render first
+        setTimeout(() => {
+          setShowOnboarding(true);
+          setPendingOnboarding(false);
+        }, 800);
+      }
+    }
+  }, [isAuthenticated, user, isAdmin, user?.firstAccess, pendingOnboarding]);
+
+  const handleOnboardingComplete = useCallback(() => {
+    if (user) {
+      localStorage.setItem(`radar_onboarding_completed_${user.id}`, 'true');
+    }
+    setShowOnboarding(false);
+  }, [user]);
+
+  const handleOnboardingSkip = useCallback(() => {
+    if (user) {
+      localStorage.setItem(`radar_onboarding_completed_${user.id}`, 'true');
+    }
+    setShowOnboarding(false);
+  }, [user]);
+
+  // Centralized Edit Modal State
+  const [editModalConfig, setEditModalConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    initialValue: string;
+    inputType: 'text' | 'textarea';
+    label: string;
+    onSave: (value: string) => void;
+  }>({
+    isOpen: false,
+    title: '',
+    initialValue: '',
+    inputType: 'text',
+    label: '',
+    onSave: () => { },
+  });
   const [pendingNewActionUid, setPendingNewActionUid] = useState<string | null>(null); // Track unsaved new actions
 
   // --- REFS ---
@@ -204,32 +273,13 @@ function AppContent() {
     }
   }, [user, currentPage, isAuthenticated, isAdmin, didAutoOpenAdmin]);
 
-  // Check for municipality onboarding
+  // Check for first-time access onboarding (municipality + password)
   useEffect(() => {
-    const checkMunicipality = async () => {
-      if (isAuthenticated && user && !isAdmin && user.email) {
-        try {
-          // Verifica se o usuário já tem um município salvo na tabela de times
-          const teamStatus = await dataService.getUserTeamStatus(user.email);
-
-          // Se não tiver registro ou o município não estiver definido (ou for o padrão placeholder 'Sede/Remoto' mas queremos forçar escolha se não tiver registro explicito)
-          // Na verdade a lógica é: se não existir registro na tabela teams, forçar o modal.
-          // Se existir mas for nulo, forçar.
-          // Se já existir com valor, ok.
-          if (!teamStatus.exists || !teamStatus.municipio) {
-            setShowMunicipalityModal(true);
-          }
-        } catch (e) {
-          console.error("[App] Erro ao verificar município do usuário:", e);
-        }
-      }
-    };
-
-    // Executar apenas uma vez quando autenticado
-    if (isAuthenticated) {
-      checkMunicipality();
+    // Apenas usuários não-admin com firstAccess = true precisam completar onboarding
+    if (isAuthenticated && user && !isAdmin && user.firstAccess) {
+      setShowMunicipalityModal(true);
     }
-  }, [isAuthenticated, isAdmin, user?.email]); // user.email é estável
+  }, [isAuthenticated, isAdmin, user?.firstAccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ✅ FASE 2: Consolidar useEffects relacionados a navegação e view mode
   useEffect(() => {
@@ -242,6 +292,9 @@ function AppContent() {
     if (viewMode === 'gantt') {
       setGanttRange('all');
     }
+
+    // Nota: Admins podem editar objetivos/atividades mesmo quando visualizam uma microrregião específica
+    // O modo de edição não é mais desativado automaticamente ao selecionar uma microrregião
   }, [viewMode, selectedObjective, isMobile]);
 
   // ✅ FASE 2: Consolidar useEffects relacionados a sticky activity
@@ -304,6 +357,8 @@ function AppContent() {
     if (!isAuthenticated) {
       setActions([]);
       setTeamsByMicro({});
+      setObjectives([]);
+      setActivities({});
       setIsDataLoading(false);
       return;
     }
@@ -315,27 +370,42 @@ function AppContent() {
       try {
         // Carregar ações (filtradas por micro se não for admin vendo todas)
         const microId = isViewingAllMicros ? undefined : currentMicroId;
-        const [actionsData, teamsData] = await Promise.all([
+
+        // Carregar todos os dados em paralelo
+        const [actionsData, teamsData, objectivesData, activitiesData] = await Promise.all([
           dataService.loadActions(microId),
           dataService.loadTeams(microId),
+          dataService.loadObjectives(),
+          dataService.loadActivities(),
         ]);
 
         setActions(actionsData);
         setTeamsByMicro(teamsData);
+        setObjectives(objectivesData);
+        setActivities(activitiesData);
+
+        // Se não há objetivos/atividades selecionados, selecionar o primeiro
+        if (objectivesData.length > 0) {
+          if (!objectivesData.some(o => o.id === selectedObjective)) {
+            setSelectedObjective(objectivesData[0].id);
+          }
+          const firstObjectiveActivities = activitiesData[selectedObjective] || activitiesData[objectivesData[0].id];
+          if (firstObjectiveActivities?.length > 0 && !firstObjectiveActivities.some(a => a.id === selectedActivity)) {
+            setSelectedActivity(firstObjectiveActivities[0].id);
+          }
+        }
       } catch (error: any) {
         console.error('[App] Erro ao carregar dados:', error);
         setDataError(error.message || 'Erro ao carregar dados');
-        // Fallback para dados mock em caso de erro
-        setActions(INITIAL_DATA.actions);
-        setTeamsByMicro(INITIAL_DATA.teams);
-        showToast('Usando dados offline (erro ao conectar)', 'warning');
+        showToast('Erro ao carregar dados do servidor. Verifique sua conexão.', 'error');
       } finally {
         setIsDataLoading(false);
       }
     };
 
     loadData();
-  }, [isAuthenticated, currentMicroId, isViewingAllMicros]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, currentMicroId, isViewingAllMicros]); // showToast é estável, não precisa ser dependência
 
   // =====================================
   // PERMISSION HELPERS
@@ -690,16 +760,28 @@ function AppContent() {
 
     try {
       await dataService.addRaciMember(uid, member.name, role);
-      setActions(prev => prev.map(a =>
-        a.uid === uid
-          ? { ...a, raci: [...a.raci, { name: member.name, role }] }
-          : a
-      ));
       showToast(`${member.name} adicionado à equipe!`, 'info');
     } catch (error: any) {
-      console.error('[App] Erro ao adicionar membro RACI:', error);
-      showToast(`Erro ao adicionar membro: ${error.message}`, 'error');
+      // Se o erro for "Ação não encontrada", significa que é uma ação nova não salva
+      // Nesse caso, permitimos adicionar ao estado local (draft)
+      const isNewActionError = error.message?.includes('Ação não encontrada') || error.message?.includes('row not found');
+
+      if (isNewActionError) {
+        console.log('[App] Adicionando membro a ação não salva (local state only)');
+      } else {
+        console.error('[App] Erro ao adicionar membro RACI:', error);
+        showToast(`Erro ao adicionar membro: ${error.message}`, 'error');
+        // Se for erro real (network, etc) que não seja "não encontrado", aborta update local
+        return;
+      }
     }
+
+    // Update local state (Optimistic or Draft)
+    setActions(prev => prev.map(a =>
+      a.uid === uid
+        ? { ...a, raci: [...a.raci, { name: member.name, role }] }
+        : a
+    ));
   }, [currentTeam, showToast, actions, checkCanManageTeam, currentMicroId, isViewingAllMicros, isAdmin, allTeams]);
 
   const handleRemoveRaci = useCallback((uid: string, idx: number, memberName: string) => {
@@ -732,16 +814,23 @@ function AppContent() {
       onConfirm: async () => {
         try {
           await dataService.removeRaciMember(uid, memberName);
-          setActions(prev => prev.map(a =>
-            a.uid === uid
-              ? { ...a, raci: a.raci.filter((_, i) => i !== idx) }
-              : a
-          ));
-          showToast('Membro removido!', 'info');
+          showToast(`${memberName} removido da equipe.`, 'info');
         } catch (error: any) {
-          console.error('[App] Erro ao remover membro RACI:', error);
-          showToast(`Erro ao remover membro: ${error.message}`, 'error');
+          const isNewActionError = error.message?.includes('Ação não encontrada') || error.message?.includes('row not found');
+          if (isNewActionError) {
+            console.log('[App] Removendo membro de ação não salva (local state only)');
+          } else {
+            console.error('[App] Erro ao remover membro RACI:', error);
+            showToast(`Erro ao remover: ${error.message}`, 'error');
+            return;
+          }
         }
+
+        setActions(prev => prev.map(a =>
+          a.uid === uid
+            ? { ...a, raci: a.raci.filter((_, i) => i !== idx) }
+            : a
+        ));
       }
     });
   }, [showToast, actions, checkCanManageTeam, currentMicroId, isViewingAllMicros, isAdmin]);
@@ -816,7 +905,8 @@ function AppContent() {
     }
   }, [isAdmin]);
 
-  const handleOpenSettings = useCallback(() => {
+  const handleOpenSettings = useCallback((mode: 'settings' | 'avatar' = 'settings') => {
+    setAllowAvatarChange(mode === 'avatar');
     setIsSettingsModalOpen(true);
   }, []);
 
@@ -852,29 +942,32 @@ function AppContent() {
   // (Admin/SuperAdmin only)
   // =====================================
 
-  const handleAddObjective = useCallback(() => {
+  const handleAddObjective = useCallback(async () => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem adicionar objetivos', 'error');
       return;
     }
 
-    const maxId = Math.max(...objectives.map(o => o.id), 0);
-    const newId = maxId + 1;
-    const newObjective = {
-      id: newId,
-      title: `${newId}. Novo Objetivo`,
-      status: 'on-track' as const,
-    };
+    try {
+      const maxId = Math.max(...objectives.map(o => o.id), 0);
+      const newTitle = `${maxId + 1}. Novo Objetivo`;
 
-    setObjectives(prev => [...prev, newObjective]);
-    setActivities(prev => ({
-      ...prev,
-      [newId]: [], // Iniciar sem atividades
-    }));
-    showToast('Objetivo adicionado! Edite o título conforme necessário.', 'success');
+      // Salvar no banco
+      const newObjective = await dataService.createObjective(newTitle);
+
+      setObjectives(prev => [...prev, newObjective]);
+      setActivities(prev => ({
+        ...prev,
+        [newObjective.id]: [], // Iniciar sem atividades
+      }));
+      showToast('Objetivo adicionado! Edite o título conforme necessário.', 'success');
+    } catch (error: any) {
+      console.error('[App] Erro ao criar objetivo:', error);
+      showToast(`Erro ao criar objetivo: ${error.message}`, 'error');
+    }
   }, [objectives, user?.role, showToast]);
 
-  const handleDeleteObjective = useCallback((id: number) => {
+  const handleDeleteObjective = useCallback(async (id: number) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem excluir objetivos', 'error');
       return;
@@ -891,29 +984,37 @@ function AppContent() {
       return;
     }
 
-    setObjectives(prev => prev.filter(o => o.id !== id));
-    setActivities(prev => {
-      const newActivities = { ...prev };
-      delete newActivities[id];
-      return newActivities;
-    });
+    try {
+      // Excluir do banco
+      await dataService.deleteObjective(id);
 
-    // Se o objetivo excluído estava selecionado, selecionar o primeiro
-    if (selectedObjective === id) {
-      const remaining = objectives.filter(o => o.id !== id);
-      if (remaining.length > 0) {
-        setSelectedObjective(remaining[0].id);
-        const firstActivity = activities[remaining[0].id]?.[0];
-        if (firstActivity) {
-          setSelectedActivity(firstActivity.id);
+      setObjectives(prev => prev.filter(o => o.id !== id));
+      setActivities(prev => {
+        const newActivities = { ...prev };
+        delete newActivities[id];
+        return newActivities;
+      });
+
+      // Se o objetivo excluído estava selecionado, selecionar o primeiro
+      if (selectedObjective === id) {
+        const remaining = objectives.filter(o => o.id !== id);
+        if (remaining.length > 0) {
+          setSelectedObjective(remaining[0].id);
+          const firstActivity = activities[remaining[0].id]?.[0];
+          if (firstActivity) {
+            setSelectedActivity(firstActivity.id);
+          }
         }
       }
-    }
 
-    showToast('Objetivo excluído!', 'success');
+      showToast('Objetivo excluído!', 'success');
+    } catch (error: any) {
+      console.error('[App] Erro ao excluir objetivo:', error);
+      showToast(`Erro ao excluir objetivo: ${error.message}`, 'error');
+    }
   }, [user?.role, activities, actions, objectives, selectedObjective, showToast]);
 
-  const handleAddActivity = useCallback((objectiveId: number) => {
+  const handleAddActivity = useCallback(async (objectiveId: number) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem adicionar atividades', 'error');
       return;
@@ -926,22 +1027,26 @@ function AppContent() {
     });
     const nextNum = activityNumbers.length > 0 ? Math.max(...activityNumbers) + 1 : 1;
     const newActivityId = `${objectiveId}.${nextNum}`;
+    const newTitle = `Nova Atividade ${nextNum}`;
+    const newDescription = 'Descrição da nova atividade.';
 
-    const newActivity = {
-      id: newActivityId,
-      title: `Nova Atividade ${nextNum}`,
-      description: 'Descrição da nova atividade.',
-    };
+    try {
+      // Salvar no banco
+      const newActivity = await dataService.createActivity(objectiveId, newActivityId, newTitle, newDescription);
 
-    setActivities(prev => ({
-      ...prev,
-      [objectiveId]: [...(prev[objectiveId] || []), newActivity],
-    }));
+      setActivities(prev => ({
+        ...prev,
+        [objectiveId]: [...(prev[objectiveId] || []), newActivity],
+      }));
 
-    showToast('Atividade adicionada!', 'success');
+      showToast('Atividade adicionada!', 'success');
+    } catch (error: any) {
+      console.error('[App] Erro ao criar atividade:', error);
+      showToast(`Erro ao criar atividade: ${error.message}`, 'error');
+    }
   }, [user?.role, activities, showToast]);
 
-  const handleDeleteActivity = useCallback((objectiveId: number, activityId: string) => {
+  const handleDeleteActivity = useCallback(async (objectiveId: number, activityId: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem excluir atividades', 'error');
       return;
@@ -954,42 +1059,90 @@ function AppContent() {
       return;
     }
 
-    setActivities(prev => ({
-      ...prev,
-      [objectiveId]: (prev[objectiveId] || []).filter(a => a.id !== activityId),
-    }));
+    try {
+      // Excluir do banco
+      await dataService.deleteActivity(activityId);
 
-    // Se a atividade excluída estava selecionada, selecionar a primeira
-    if (selectedActivity === activityId) {
-      const remaining = (activities[objectiveId] || []).filter(a => a.id !== activityId);
-      if (remaining.length > 0) {
-        setSelectedActivity(remaining[0].id);
+      setActivities(prev => ({
+        ...prev,
+        [objectiveId]: (prev[objectiveId] || []).filter(a => a.id !== activityId),
+      }));
+
+      // Se a atividade excluída estava selecionada, selecionar a primeira
+      if (selectedActivity === activityId) {
+        const remaining = (activities[objectiveId] || []).filter(a => a.id !== activityId);
+        if (remaining.length > 0) {
+          setSelectedActivity(remaining[0].id);
+        }
       }
-    }
 
-    showToast('Atividade excluída!', 'success');
+      showToast('Atividade excluída!', 'success');
+    } catch (error: any) {
+      console.error('[App] Erro ao excluir atividade:', error);
+      showToast(`Erro ao excluir atividade: ${error.message}`, 'error');
+    }
   }, [user?.role, actions, activities, selectedActivity, showToast]);
 
-  const handleUpdateObjective = useCallback((id: number, newTitle: string) => {
+  const handleUpdateObjective = useCallback(async (id: number, newTitle: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem editar objetivos', 'error');
       return;
     }
-    setObjectives(prev => prev.map(o => o.id === id ? { ...o, title: newTitle } : o));
-    showToast('Objetivo atualizado!', 'success');
+
+    try {
+      // Salvar no banco
+      await dataService.updateObjective(id, { title: newTitle });
+
+      setObjectives(prev => prev.map(o => o.id === id ? { ...o, title: newTitle } : o));
+      showToast('Objetivo atualizado!', 'success');
+    } catch (error: any) {
+      console.error('[App] Erro ao atualizar objetivo:', error);
+      showToast(`Erro ao atualizar objetivo: ${error.message}`, 'error');
+    }
   }, [user?.role, showToast]);
 
-  const handleUpdateActivity = useCallback((objectiveId: number, activityId: string, newTitle: string) => {
+  const handleUpdateActivity = useCallback(async (objectiveId: number, activityId: string, field: 'title' | 'description', value: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem editar atividades', 'error');
       return;
     }
-    setActivities(prev => ({
-      ...prev,
-      [objectiveId]: prev[objectiveId]?.map(a => a.id === activityId ? { ...a, title: newTitle } : a) || []
-    }));
-    showToast('Atividade atualizada!', 'success');
+
+    try {
+      // Salvar no banco
+      await dataService.updateActivity(activityId, { [field]: value });
+
+      setActivities(prev => ({
+        ...prev,
+        [objectiveId]: prev[objectiveId]?.map(a => a.id === activityId ? { ...a, [field]: value } : a) || []
+      }));
+      showToast('Atividade atualizada!', 'success');
+    } catch (error: any) {
+      console.error('[App] Erro ao atualizar atividade:', error);
+      showToast(`Erro ao atualizar atividade: ${error.message}`, 'error');
+    }
   }, [user?.role, showToast]);
+
+  const handleEditObjective = (id: number, currentTitle: string) => {
+    setEditModalConfig({
+      isOpen: true,
+      title: 'Editar Objetivo',
+      initialValue: currentTitle,
+      inputType: 'text',
+      label: 'Novo Título',
+      onSave: (newTitle) => handleUpdateObjective(id, newTitle)
+    });
+  };
+
+  const handleEditActivity = (id: string, field: 'title' | 'description', currentValue: string) => {
+    setEditModalConfig({
+      isOpen: true,
+      title: field === 'title' ? 'Editar Atividade' : 'Editar Descrição',
+      initialValue: currentValue,
+      inputType: field === 'description' ? 'textarea' : 'text',
+      label: field === 'title' ? 'Novo Título' : 'Nova Descrição',
+      onSave: (newValue) => handleUpdateActivity(selectedObjective, id, field, newValue)
+    });
+  };
 
   const handleSaveFullAction = useCallback(async (updatedAction: Action) => {
     setIsSaving(true);
@@ -1019,13 +1172,70 @@ function AppContent() {
     } finally {
       setIsSaving(false);
     }
-  }, [showToast, handleCloseActionModal]);
+  }, [showToast]);
+
+  const handleSaveAndNewAction = useCallback(async (updatedAction: Action) => {
+    setIsSaving(true);
+    try {
+      // 1. Salvar a ação atual
+      const saved = await dataService.upsertAction(updatedAction);
+
+      // 2. Atualizar estado local
+      setActions(prev => {
+        const exists = prev.some(a => a.uid === saved.uid);
+        if (exists) {
+          return prev.map(a => a.uid === saved.uid ? saved : a);
+        } else {
+          return [...prev, saved];
+        }
+      });
+
+      showToast('Ação salva! Criando próxima...', 'success');
+
+      // 3. Limpar estados da ação anterior
+      setPendingNewActionUid(null);
+      // NÃO fechamos o modal ainda, vamos trocar o UID para o novo
+
+      // 4. Criar a PRÓXIMA ação (lógica similar ao handleCreateAction)
+      // Precisamos dos valores mais recentes de actions
+      const currentActions = actionsRef.current;
+      const nextNum = getNextActionNumber(currentActions, selectedActivity, updatedAction.microregiaoId);
+      const actionId = `${selectedActivity}.${nextNum}`;
+      const tempUid = `${updatedAction.microregiaoId}::${actionId}`;
+
+      const tempAction: Action = {
+        uid: tempUid,
+        id: actionId,
+        activityId: selectedActivity,
+        microregiaoId: updatedAction.microregiaoId,
+        title: 'Nova Ação',
+        status: 'Não Iniciado',
+        startDate: '',
+        plannedEndDate: '',
+        endDate: '',
+        progress: 0,
+        raci: [],
+        notes: '',
+        comments: [],
+      };
+
+      setActions(prev => [...prev, tempAction]);
+      setPendingNewActionUid(tempUid);
+      setExpandedActionUid(tempUid);
+
+    } catch (error: any) {
+      console.error('[App] Erro no fluxo Salvar e Nova:', error);
+      showToast(`Erro: ${error.message}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [selectedActivity, showToast]);
 
   // =====================================
   // UI HELPERS
   // =====================================
 
-  const breadcrumbItems = createBreadcrumbItems(
+  const _breadcrumbItems = createBreadcrumbItems(
     currentNav,
     currentObjective?.title,
     currentActivity?.id,
@@ -1038,13 +1248,11 @@ function AppContent() {
     ? currentMicrorregiao.nome
     : isViewingAllMicros
       ? 'Todas as microrregiões (somente leitura)'
-      : INITIAL_DATA.micro;
+      : '';
 
   const macrorregiaoNome = currentMicrorregiao
     ? currentMicrorregiao.macrorregiao
-    : isViewingAllMicros
-      ? ''
-      : INITIAL_DATA.macro;
+    : '';
 
   // =====================================
   // RENDERIZAÇÃO CONDICIONAL
@@ -1071,7 +1279,9 @@ function AppContent() {
       <AdminPanel
         onBack={handleNavigateToMain}
         actions={actions}
-        teams={INITIAL_DATA.teams}
+        teams={teamsByMicro}
+        objectives={objectives}
+        activities={activities}
       />
     );
   }
@@ -1080,7 +1290,7 @@ function AppContent() {
   // RENDER PRINCIPAL
   // =====================================
   return (
-    <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-100 overflow-hidden transition-colors duration-200">
+    <div className="flex h-screen w-full bg-[#f8fafc] dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-200">
       {/* Global Styles */}
       <style>{`
         .pattern-diagonal-lines {
@@ -1116,15 +1326,14 @@ function AppContent() {
         />
       )}
 
-      {/* Confirm Modal */}
       <ConfirmModal
         isOpen={confirmModal.isOpen}
-        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
         onConfirm={confirmModal.onConfirm}
         title={confirmModal.title}
         message={confirmModal.message}
         confirmText="Excluir"
-        type="danger"
+        confirmType="danger"
       />
 
       {/* Modal para admin criar ação escolhendo microrregião */}
@@ -1207,9 +1416,10 @@ function AppContent() {
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         currentNav={currentNav}
-        setCurrentNav={setCurrentNav}
+        setCurrentNav={(nav: string) => setCurrentNav(nav as 'strategy' | 'home' | 'settings')}
         selectedObjective={selectedObjective}
         setSelectedObjective={setSelectedObjective}
+        selectedActivity={selectedActivity}
         setSelectedActivity={setSelectedActivity}
         setViewMode={setViewMode}
         objectives={objectives}
@@ -1221,23 +1431,34 @@ function AppContent() {
         userAvatarId={user?.avatarId}
         onLogout={handleLogout}
         isAdmin={isAdmin}
+        onAdminClick={() => setCurrentPage('admin')}
         onOpenSettings={handleOpenSettings}
         onAddObjective={handleAddObjective}
         onDeleteObjective={handleDeleteObjective}
         onUpdateObjective={handleUpdateObjective}
         onAddActivity={handleAddActivity}
         onDeleteActivity={handleDeleteActivity}
-        onUpdateActivity={handleUpdateActivity}
+        onUpdateActivity={(objectiveId, activityId, field, value) => handleUpdateActivity(objectiveId, activityId, field as 'title' | 'description', String(value))}
+        // NOTE: Sidebar currently manages its own Edit/Delete modals internally or we need to pass the generic open handler?
+        // The user asked to fix prefixes in sidebar. Now refactoring editing.
+        // If we want Sidebar to use the NEW modal, we should pass onEditObjective and onEditActivity to it.
+        // For now, let's keep sidebar as is or update it later (STEP 19).
+        // Let's first wire up Main Content (Header/Tabs).
+        // Edit Mode Props
+        isEditMode={isEditMode}
+        onToggleEditMode={() => setIsEditMode(!isEditMode)}
+        showNotifications={!viewingMicroregiaoId} // Hides bell when in Micro view (moves to Header)
       />
 
       {/* USER SETTINGS MODAL */}
       <UserSettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+        mode={allowAvatarChange ? 'avatar' : 'settings'}
       />
 
       {/* MAIN CONTENT */}
-      <main id="main-content" className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 dark:bg-slate-900 relative overflow-hidden" role="main">
+      <main id="main-content" className="flex-1 flex flex-col h-full min-w-0 bg-[#f8fafc] dark:bg-slate-900 relative overflow-hidden" role="main">
         {/* HEADER */}
         <Header
           macro={macrorregiaoNome}
@@ -1252,10 +1473,15 @@ function AppContent() {
           isAdmin={isAdmin}
           userRole={user?.role}
           onAdminClick={() => setCurrentPage('admin')}
+          // Edit Mode Props
+          isEditMode={isEditMode}
+          // Admins e superadmins podem editar objetivos/atividades em qualquer momento
+          onToggleEditMode={isAdmin ? () => setIsEditMode(!isEditMode) : undefined}
+          onUpdateObjective={(id, newTitle) => handleEditObjective(id, newTitle)}
         />
 
         {/* SCROLLABLE AREA */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden relative ${isMobile ? 'pb-mobile-nav' : ''}`}>
 
           {/* Breadcrumb */}
           {/* Breadcrumb removido por redundância e estética */}
@@ -1269,6 +1495,8 @@ function AppContent() {
                 activities={activities[selectedObjective] || []}
                 selectedActivity={selectedActivity}
                 setSelectedActivity={setSelectedActivity}
+                isEditMode={isEditMode}
+                onUpdateActivity={(id, field, value) => handleEditActivity(id, field, value)}
               />
             </div>
           )}
@@ -1435,6 +1663,7 @@ function AppContent() {
             activityName={currentActivity?.title || 'Atividade'}
             onClose={handleCloseActionModal}
             onSaveFullAction={handleSaveFullAction}
+            onSaveAndNew={handleSaveAndNewAction}
             onDeleteAction={handleDeleteAction}
             isSaving={isSaving}
             canEdit={selectedAction ? checkCanEdit(selectedAction) : false}
@@ -1443,6 +1672,83 @@ function AppContent() {
           />
         );
       })()}
+
+      <EditNameModal
+        isOpen={editModalConfig.isOpen}
+        onClose={() => setEditModalConfig(prev => ({ ...prev, isOpen: false }))}
+        onSave={(newValue) => {
+          editModalConfig.onSave(newValue);
+          setEditModalConfig(prev => ({ ...prev, isOpen: false }));
+        }}
+        title={editModalConfig.title}
+        initialValue={editModalConfig.initialValue}
+        inputType={editModalConfig.inputType}
+        label={editModalConfig.label}
+      />
+
+      {/* FIRST ACCESS ONBOARDING MODAL */}
+      {showMunicipalityModal && user && !isAdmin && (
+        <MunicipalityOnboardingModal
+          user={user}
+          onSave={async (municipio, novaSenha) => {
+            try {
+              await authService.completeFirstAccess(
+                user.id,
+                user.email,
+                municipio,
+                novaSenha,
+                user.microregiaoId
+              );
+
+              // Atualizar o contexto de autenticação para refletir a mudança
+              if (authContext?.refreshUser) {
+                await authContext.refreshUser();
+              }
+
+              setShowMunicipalityModal(false);
+              showToast('Configuração concluída! Bem-vindo(a) ao sistema.', 'success');
+              
+              // Trigger onboarding tour after first access is completed
+              const onboardingKey = `radar_onboarding_completed_${user.id}`;
+              const hasCompletedOnboarding = localStorage.getItem(onboardingKey);
+              if (!hasCompletedOnboarding) {
+                setTimeout(() => setShowOnboarding(true), 500);
+              }
+            } catch (error: any) {
+              console.error('[App] Erro no primeiro acesso:', error);
+              throw error; // Re-throw para o modal mostrar o erro
+            }
+          }}
+        />
+      )}
+
+      {/* ONBOARDING TOUR */}
+      <OnboardingTour
+        isOpen={showOnboarding}
+        onComplete={handleOnboardingComplete}
+        onSkip={handleOnboardingSkip}
+      />
+
+      {/* MOBILE BOTTOM NAVIGATION */}
+      {isMobile && (
+        <MobileBottomNav
+          currentNav={currentNav}
+          viewMode={viewMode}
+          onNavChange={(nav) => setCurrentNav(nav)}
+          onViewModeChange={(mode) => setViewMode(mode)}
+          showTeamOption={user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'gestor'}
+        />
+      )}
+
+      {/* MOBILE FAB - Nova Ação */}
+      {isMobile && currentNav === 'strategy' && viewMode === 'table' && checkCanCreate() && (
+        <MobileFab
+          onClick={handleCreateAction}
+          icon={<span className="text-2xl leading-none">+</span>}
+          label="Nova Ação"
+          color="teal"
+        />
+      )}
     </div>
   );
 }

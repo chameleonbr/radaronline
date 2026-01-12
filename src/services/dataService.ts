@@ -1,7 +1,8 @@
 import { supabase } from '../lib/supabase';
 import type { Action, ActionComment, TeamMember, RaciMember, ProfileDTO } from '../types';
 import { generateActionUid } from '../types';
-import { loggingService } from './loggingService'; // Imported loggingService
+import { loggingService } from './loggingService';
+import { log, logWarn } from '../lib/logger';
 
 // =====================================
 // TIPOS PARA O BANCO DE DADOS
@@ -46,6 +47,7 @@ interface ActionCommentDTO {
         microregiao_id: string | null;
         avatar_id: string | null;
         role: string | null;
+        municipio: string | null;
     };
 }
 
@@ -91,7 +93,7 @@ function mapActionDTOToAction(
             parentId: c.parent_id || null,
             authorId: c.author_id,
             authorName: c.author?.nome || 'Usuário',
-            authorMunicipio: c.author?.microregiao_id || '',
+            authorMunicipio: c.author?.municipio || c.author?.microregiao_id || '',
             authorAvatarId: c.author?.avatar_id || 'zg10',
             authorRole: c.author?.role || undefined,
             content: c.content,
@@ -159,7 +161,7 @@ export async function loadActions(microregiaoId?: string): Promise<Action[]> {
             .from('action_comments')
             .select(`
         *,
-        author:profiles(nome, microregiao_id, avatar_id, role)
+        author:profiles(nome, microregiao_id, avatar_id, role, municipio)
       `)
             .in('action_id', actionIds)
             .order('created_at', { ascending: true });
@@ -331,6 +333,8 @@ export async function updateAction(
  */
 export async function upsertAction(action: Action): Promise<Action> {
     try {
+        let actionDbId: string;
+
         // Primeiro, verificar se a ação existe
         const { data: existing } = await supabase
             .from('actions')
@@ -339,8 +343,9 @@ export async function upsertAction(action: Action): Promise<Action> {
             .maybeSingle();
 
         if (existing) {
+            actionDbId = existing.id;
             // Ação existe, fazer update
-            return await updateAction(action.uid, {
+            await updateAction(action.uid, {
                 title: action.title,
                 status: action.status,
                 startDate: action.startDate,
@@ -351,10 +356,7 @@ export async function upsertAction(action: Action): Promise<Action> {
             });
         } else {
             // Ação NÃO existe, criar nova
-            console.log('[dataService] Ação não existe no banco, criando:', action.uid);
-
-            // Extrair dados do UID e action
-            const { data: { user } } = await supabase.auth.getUser();
+            log('dataService', 'Ação não existe no banco, criando:', action.uid);
 
             const { data, error } = await supabase
                 .from('actions')
@@ -370,7 +372,7 @@ export async function upsertAction(action: Action): Promise<Action> {
                     end_date: action.endDate || null,
                     progress: action.progress,
                     notes: action.notes || '',
-                    created_by: user?.id || null,
+                    created_by: (await supabase.auth.getUser()).data.user?.id || null,
                 })
                 .select()
                 .single();
@@ -379,19 +381,54 @@ export async function upsertAction(action: Action): Promise<Action> {
                 console.error('[dataService] Erro ao criar ação via upsert:', error);
                 throw new Error(`Erro ao criar ação: ${error.message}`);
             }
-
-            const newAction = mapActionDTOToAction(data as ActionDTO, [], []);
+            actionDbId = data.id;
 
             // LOG ACTIVITY
             loggingService.logActivity('action_created', 'action', data.id, {
-                title: newAction.title,
-                displayId: newAction.uid,
-                microregiaoId: newAction.microregiaoId,
+                title: action.title,
+                displayId: action.uid,
+                microregiaoId: action.microregiaoId,
                 source: 'upsert'
             });
-
-            return newAction;
         }
+
+        // ============================================
+        // Sincronizar RACI (Criar/Atualizar)
+        // ============================================
+        if (action.raci && action.raci.length > 0) {
+            // Verifica os membros atuais no banco
+            const { data: currentRaci } = await supabase
+                .from('action_raci')
+                .select('member_name')
+                .eq('action_id', actionDbId);
+
+            const currentNames = new Set((currentRaci || []).map(r => r.member_name));
+
+            // Filtrar apenas novos membros que não estão no banco
+            const newMembers = action.raci.filter(m => !currentNames.has(m.name));
+
+            if (newMembers.length > 0) {
+                const raciInserts = newMembers.map(m => ({
+                    action_id: actionDbId,
+                    member_name: m.name,
+                    role: m.role
+                }));
+
+                const { error: raciError } = await supabase
+                    .from('action_raci')
+                    .insert(raciInserts);
+
+                if (raciError) {
+                    console.error('[dataService] Erro ao salvar RACI no upsert:', raciError);
+                }
+            }
+        }
+
+        // Retorna a ação atualizada chamando loadActions (ou montando objeto)
+        // Para simplificar e garantir consistência, vamos retornar o objeto action com IDs corretos
+        // Mas o ideal carrega-la para confirmar
+        return action;
+
     } catch (error) {
         console.error('[dataService] Erro inesperado ao upsert ação:', error);
         throw error;
@@ -528,7 +565,7 @@ export async function addComment(
         // Buscar perfil do usuário para nome, município, avatar e role
         const { data: profile, error: profileError } = await supabase
             .from('profiles')
-            .select('nome, microregiao_id, avatar_id, role')
+            .select('nome, microregiao_id, avatar_id, role, municipio')
             .eq('id', user.id)
             .single();
 
@@ -568,7 +605,7 @@ export async function addComment(
             parentId: data.parent_id || null,
             authorId: user.id,
             authorName: profile?.nome || 'Usuário',
-            authorMunicipio: profile?.microregiao_id || '',
+            authorMunicipio: profile?.municipio || profile?.microregiao_id || '',
             authorAvatarId: profile?.avatar_id || 'zg10',
             authorRole: profile?.role || undefined,
             content: data.content,
@@ -922,7 +959,7 @@ export async function createMentionNotification(
             .ilike('nome', mentionedUserName);
 
         if (profileError || !profiles || profiles.length === 0) {
-            console.log('[dataService] Usuário mencionado não encontrado:', mentionedUserName);
+            logWarn('dataService', 'Usuário mencionado não encontrado:', mentionedUserName);
             return; // Não é um erro, apenas não encontrou o usuário
         }
 
@@ -1036,5 +1073,195 @@ export async function deletePendingRegistration(id: string): Promise<void> {
     if (error) {
         console.error('[dataService] Erro ao excluir pendente:', error);
         throw new Error('Erro ao excluir membro pendente');
+    }
+}
+
+// =====================================
+// OBJECTIVES & ACTIVITIES - CRUD DO BANCO
+// =====================================
+
+interface ObjectiveDTO {
+    id: number;
+    title: string;
+    status: string;
+    created_at: string;
+}
+
+interface ActivityDTO {
+    id: string;
+    objective_id: number;
+    title: string;
+    description: string | null;
+    created_at: string;
+}
+
+/**
+ * Carrega todos os objetivos do banco
+ */
+export async function loadObjectives(): Promise<{ id: number; title: string; status: 'on-track' | 'delayed' }[]> {
+    try {
+        const { data, error } = await supabase
+            .from('objectives')
+            .select('id, title, status, created_at')
+            .order('id', { ascending: true });
+
+        if (error) {
+            console.error('[dataService] Erro ao carregar objectives:', error);
+            throw new Error(`Erro ao carregar objetivos: ${error.message}`);
+        }
+
+        return (data || []).map((obj: ObjectiveDTO) => ({
+            id: obj.id,
+            title: obj.title,
+            status: (obj.status === 'delayed' ? 'delayed' : 'on-track') as 'on-track' | 'delayed',
+        }));
+    } catch (error) {
+        console.error('[dataService] Erro inesperado ao carregar objectives:', error);
+        throw error;
+    }
+}
+
+/**
+ * Carrega todas as atividades do banco, agrupadas por objective_id
+ */
+export async function loadActivities(): Promise<Record<number, { id: string; title: string; description: string }[]>> {
+    try {
+        const { data, error } = await supabase
+            .from('activities')
+            .select('id, objective_id, title, description, created_at')
+            .order('id', { ascending: true });
+
+        if (error) {
+            console.error('[dataService] Erro ao carregar activities:', error);
+            throw new Error(`Erro ao carregar atividades: ${error.message}`);
+        }
+
+        // Agrupar por objective_id
+        const grouped: Record<number, { id: string; title: string; description: string }[]> = {};
+        
+        (data || []).forEach((act: ActivityDTO) => {
+            if (!grouped[act.objective_id]) {
+                grouped[act.objective_id] = [];
+            }
+            grouped[act.objective_id].push({
+                id: act.id,
+                title: act.title,
+                description: act.description || '',
+            });
+        });
+
+        return grouped;
+    } catch (error) {
+        console.error('[dataService] Erro inesperado ao carregar activities:', error);
+        throw error;
+    }
+}
+
+/**
+ * Cria um novo objetivo
+ */
+export async function createObjective(title: string): Promise<{ id: number; title: string; status: 'on-track' | 'delayed' }> {
+    const { data, error } = await supabase
+        .from('objectives')
+        .insert({ title, status: 'on-track' })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('[dataService] Erro ao criar objective:', error);
+        throw new Error(`Erro ao criar objetivo: ${error.message}`);
+    }
+
+    return {
+        id: data.id,
+        title: data.title,
+        status: 'on-track',
+    };
+}
+
+/**
+ * Atualiza um objetivo
+ */
+export async function updateObjective(id: number, updates: { title?: string; status?: 'on-track' | 'delayed' }): Promise<void> {
+    const { error } = await supabase
+        .from('objectives')
+        .update(updates)
+        .eq('id', id);
+
+    if (error) {
+        console.error('[dataService] Erro ao atualizar objective:', error);
+        throw new Error(`Erro ao atualizar objetivo: ${error.message}`);
+    }
+}
+
+/**
+ * Exclui um objetivo (cascade deleta atividades relacionadas)
+ */
+export async function deleteObjective(id: number): Promise<void> {
+    const { error } = await supabase
+        .from('objectives')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('[dataService] Erro ao excluir objective:', error);
+        throw new Error(`Erro ao excluir objetivo: ${error.message}`);
+    }
+}
+
+/**
+ * Cria uma nova atividade
+ */
+export async function createActivity(objectiveId: number, id: string, title: string, description: string = ''): Promise<{ id: string; title: string; description: string }> {
+    const { data, error } = await supabase
+        .from('activities')
+        .insert({ 
+            id, 
+            objective_id: objectiveId, 
+            title, 
+            description 
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error('[dataService] Erro ao criar activity:', error);
+        throw new Error(`Erro ao criar atividade: ${error.message}`);
+    }
+
+    return {
+        id: data.id,
+        title: data.title,
+        description: data.description || '',
+    };
+}
+
+/**
+ * Atualiza uma atividade
+ */
+export async function updateActivity(id: string, updates: { title?: string; description?: string }): Promise<void> {
+    const { error } = await supabase
+        .from('activities')
+        .update(updates)
+        .eq('id', id);
+
+    if (error) {
+        console.error('[dataService] Erro ao atualizar activity:', error);
+        throw new Error(`Erro ao atualizar atividade: ${error.message}`);
+    }
+}
+
+/**
+ * Exclui uma atividade
+ */
+export async function deleteActivity(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('[dataService] Erro ao excluir activity:', error);
+        throw new Error(`Erro ao excluir atividade: ${error.message}`);
     }
 }

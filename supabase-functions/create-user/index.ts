@@ -3,29 +3,38 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.87.3';
 
 // ✅ DICA 1: Constantes centralizadas (evita hardcode)
-const VALID_ROLES = ['admin', 'gestor', 'usuario'] as const;
+const VALID_ROLES = ['admin', 'superadmin', 'gestor', 'usuario'] as const;
 const MIN_PASSWORD_LENGTH = 6;
 const MAX_RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 500;
 const REQUEST_TIMEOUT_MS = 30000;
 
 // CORS Headers reutilizáveis
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+// ⚠️ SEGURANÇA: Em produção, defina ALLOWED_ORIGIN como variável de ambiente no Supabase
+// Suporta múltiplas origens separadas por vírgula: "https://example.com,http://localhost:3000"
+const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGIN') || 'https://radar-ses-mg.vercel.app').split(',');
+
+// Função para obter headers CORS baseado na origem da requisição
+const getCorsHeaders = (origin: string | null) => {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+  };
 };
 
 // ✅ DICA 1: Helper pra respostas de erro (remove duplicatas)
-const errorResponse = (message: string, status: number) => new Response(
+const errorResponse = (message: string, status: number, origin: string | null) => new Response(
   JSON.stringify({ error: message }),
-  { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  { status, headers: { ...getCorsHeaders(origin), 'Content-Type': 'application/json' } }
 );
 
 // ✅ DICA 1: Helper pra respostas de sucesso (consistência)
-const successResponse = (data: any) => new Response(
+const successResponse = (data: any, origin: string | null) => new Response(
   JSON.stringify(data),
-  { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  { status: 200, headers: { ...getCorsHeaders(origin), 'Content-Type': 'application/json' } }
 );
 
 // ✅ DICA 2: Sanitização global (previne inputs sujos)
@@ -39,7 +48,7 @@ interface ValidatedInput {
   email: string;
   password: string;
   nome: string;
-  role: 'admin' | 'gestor' | 'usuario';
+  role: 'admin' | 'superadmin' | 'gestor' | 'usuario';
   microregiao_id: string | null;
   created_by: string;
 }
@@ -80,7 +89,7 @@ const validateAndSanitizeInputs = (
 
   // Converter microregiaoId (camelCase) para microregiao_id (snake_case)
   let microregiao_id: string | null = null;
-  if (role === 'admin' || microregiaoId === 'all' || !microregiaoId) {
+  if (role === 'admin' || role === 'superadmin' || microregiaoId === 'all' || !microregiaoId) {
     microregiao_id = null;
   } else {
     if (!microregiaoId) {
@@ -93,7 +102,7 @@ const validateAndSanitizeInputs = (
     email: email.toLowerCase(),
     password,
     nome,
-    role: role as 'admin' | 'gestor' | 'usuario',
+    role: role as 'admin' | 'superadmin' | 'gestor' | 'usuario',
     microregiao_id,
     created_by: createdBy,
   };
@@ -114,7 +123,7 @@ const checkIsAdmin = async (
     return false;
   }
 
-  return profile.role === 'admin';
+  return profile.role === 'admin' || profile.role === 'superadmin';
 };
 
 // ✅ DICA 3: Retry com timeout (safeguard automático)
@@ -155,16 +164,19 @@ const insertProfileWithRetry = async (
 };
 
 serve(async (req: Request) => {
+  // Obter origem da requisição para CORS dinâmico
+  const origin = req.headers.get('origin');
+
   // Handle OPTIONS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { headers: getCorsHeaders(origin) });
   }
 
   try {
     // ✅ Obter e validar auth token
     const authHeader = req.headers.get('authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return errorResponse('Não autenticado', 401);
+      return errorResponse('Não autenticado', 401, origin);
     }
     const token = authHeader.replace('Bearer ', '');
 
@@ -177,13 +189,13 @@ serve(async (req: Request) => {
     // ✅ Obter usuário atual
     const { data: { user: currentUser }, error: userError } = await supabaseAdmin.auth.getUser(token);
     if (userError || !currentUser) {
-      return errorResponse('Não autenticado', 401);
+      return errorResponse('Não autenticado', 401, origin);
     }
 
     // ✅ DICA 2: Verificar se é admin (função extraída, testável)
     const isAdmin = await checkIsAdmin(supabaseAdmin, currentUser.id);
     if (!isAdmin) {
-      return errorResponse('Apenas administradores podem criar usuários', 403);
+      return errorResponse('Apenas administradores podem criar usuários', 403, origin);
     }
 
     // ✅ Parse body (único)
@@ -192,7 +204,7 @@ serve(async (req: Request) => {
       body = await req.json();
     } catch (error: any) {
       console.error('[create-user] Erro ao parsear body:', error);
-      return errorResponse('Dados inválidos', 400);
+      return errorResponse('Dados inválidos', 400, origin);
     }
 
     // ✅ DICA 1: Validação e sanitização centralizadas
@@ -211,10 +223,10 @@ serve(async (req: Request) => {
       if (authError.message?.includes('already registered') ||
         authError.message?.includes('already exists') ||
         authError.message?.includes('já está cadastrado')) {
-        return errorResponse('Este email já está cadastrado', 400);
+        return errorResponse('Este email já está cadastrado', 400, origin);
       }
 
-      return errorResponse(authError.message || 'Erro ao criar usuário', 500);
+      return errorResponse(authError.message || 'Erro ao criar usuário', 500, origin);
     }
 
     // ✅ DICA 3: Insert com retry e timeout (safeguard automático)
@@ -245,7 +257,7 @@ serve(async (req: Request) => {
       // Rollback: Delete user do Auth
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
 
-      return errorResponse('Erro ao criar perfil de usuário', 500);
+      return errorResponse('Erro ao criar perfil de usuário', 500, origin);
     }
 
     // ✅ AUDITORIA: Log de criação de usuário
@@ -285,7 +297,7 @@ serve(async (req: Request) => {
         },
         profile: newProfile,
       },
-    });
+    }, origin);
 
   } catch (error: any) {
     // ✅ DICA 4: Logging padronizado com tags
@@ -300,7 +312,7 @@ serve(async (req: Request) => {
       errorMessage.includes('obrigatório') ||
       errorMessage.includes('já está') ? 400 : 500;
 
-    return errorResponse(errorMessage, status);
+    return errorResponse(errorMessage, status, null);
   }
 });
 

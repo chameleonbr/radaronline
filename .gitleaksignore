@@ -1,0 +1,14 @@
+# Gitleaks Ignore File
+# Fingerprints de findings que podem ser ignorados com segurança
+
+# .env está no .gitignore e não vai pro repositório
+# O JWT é a anon key pública do Supabase (não é secret sensível)
+# Ver: https://supabase.com/docs/guides/api#api-keys
+.env:jwt:2
+
+# dist/ está no .gitignore e não vai pro repositório
+dist/assets/index-DICeSxt8.js:jwt:82
+dist/assets/index-DICeSxt8.js:jwt:96
+
+# Documentação de deploy contém placeholder "SUA_ANON_KEY" (não é um secret real)
+supabase-functions/DEPLOY-GUIDE.md:curl-auth-header:78

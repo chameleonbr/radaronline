@@ -32,19 +32,11 @@ export class ErrorBoundary extends Component<Props, State> {
       url: typeof window !== 'undefined' ? window.location.href : 'N/A',
     };
 
-    console.error('[ErrorBoundary] Erro capturado:', errorDetails);
-    
     // Em produção, você pode enviar para um serviço de logging (ex: Sentry, LogRocket)
-    // Exemplo: logService.captureException(error, { extra: errorDetails });
+    // logService.captureException(error, { extra: errorDetails });
     
-    // Log estruturado para facilitar análise
-    if (process.env.NODE_ENV === 'development') {
-      console.group('🔴 Detalhes do Erro');
-      console.error('Mensagem:', error.message);
-      console.error('Stack:', error.stack);
-      console.error('Component Stack:', errorInfo.componentStack);
-      console.groupEnd();
-    }
+    // Manter errorDetails para possível uso futuro
+    void errorDetails;
   }
 
   private handleRetry = () => {

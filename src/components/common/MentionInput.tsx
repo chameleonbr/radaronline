@@ -117,13 +117,13 @@ export const MentionInput: React.FC<MentionInputProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Focus textarea externally
-    const focus = useCallback(() => {
+    // Focus textarea externally (disponível para uso externo via ref)
+    const _focus = useCallback(() => {
         textareaRef.current?.focus();
     }, []);
 
-    // Insert mention at current position
-    const insertMention = useCallback((name: string) => {
+    // Insert mention at current position (disponível para uso externo)
+    const _insertMention = useCallback((name: string) => {
         const cursorPos = textareaRef.current?.selectionStart || value.length;
         const newValue = value.slice(0, cursorPos) + `@${name} ` + value.slice(cursorPos);
         onChange(newValue);

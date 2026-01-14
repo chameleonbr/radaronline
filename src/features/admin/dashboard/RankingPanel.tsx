@@ -208,7 +208,7 @@ export function RankingPanel({ actions, onViewMicrorregiao }: RankingPanelProps)
           <span className="text-xs text-slate-500 dark:text-slate-400">Clique na barra para ver detalhes</span>
         </div>
         <div className="h-80" style={{ minHeight: '320px' }}>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart
               data={rankings.slice(0, 10).map(m => ({
                 name: m.nome.length > 15 ? m.nome.substring(0, 15) + '...' : m.nome,

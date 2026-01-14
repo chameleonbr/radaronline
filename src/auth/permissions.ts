@@ -18,12 +18,6 @@ export const RACI_PERMISSIONS: Record<RaciRole, RaciPermission> = {
     criar: true,
     excluir: true,
   },
-  'C': { // Consulted - Consultado
-    visualizar: true,
-    editar: false, // Só pode adicionar notas/comentários
-    criar: false,
-    excluir: false,
-  },
   'I': { // Informed - Informado
     visualizar: true,
     editar: false,
@@ -50,12 +44,12 @@ export function getUserRaciRole(user: User, action: Action): RaciRole | null {
 export function canViewAction(user: User, _action: Action, actionMicroregiaoId?: string): boolean {
   // Admin pode ver tudo
   if (user.role === 'admin') return true;
-  
+
   // Verifica se está na mesma microrregião
   if (actionMicroregiaoId && actionMicroregiaoId !== user.microregiaoId) {
     return false;
   }
-  
+
   // Qualquer pessoa da mesma microrregião pode visualizar
   return true;
 }
@@ -66,7 +60,7 @@ export function canViewAction(user: User, _action: Action, actionMicroregiaoId?:
 export function canEditAction(user: User, action: Action, actionMicroregiaoId?: string): boolean {
   // Admin pode editar tudo
   if (user.role === 'admin') return true;
-  
+
   // Gestor pode editar qualquer ação da sua microrregião
   if (user.role === 'gestor') {
     if (actionMicroregiaoId && actionMicroregiaoId !== user.microregiaoId) {
@@ -74,16 +68,16 @@ export function canEditAction(user: User, action: Action, actionMicroregiaoId?: 
     }
     return true;
   }
-  
+
   // Verifica microrregião
   if (actionMicroregiaoId && actionMicroregiaoId !== user.microregiaoId) {
     return false;
   }
-  
+
   // Usuário comum: verifica papel RACI
   const raciRole = getUserRaciRole(user, action);
   if (!raciRole) return false;
-  
+
   return RACI_PERMISSIONS[raciRole].editar;
 }
 
@@ -101,15 +95,15 @@ export function canCreateAction(user: User): boolean {
 export function canDeleteAction(user: User, action: Action, actionMicroregiaoId?: string): boolean {
   // Admin pode excluir qualquer coisa
   if (user.role === 'admin') return true;
-  
+
   // Verifica microrregião
   if (actionMicroregiaoId && actionMicroregiaoId !== user.microregiaoId) {
     return false;
   }
-  
+
   // Gestor pode excluir na sua microrregião
   if (user.role === 'gestor') return true;
-  
+
   // Usuário comum: só 'A' (Accountable) pode excluir
   const raciRole = getUserRaciRole(user, action);
   return raciRole === 'A';
@@ -121,15 +115,15 @@ export function canDeleteAction(user: User, action: Action, actionMicroregiaoId?
 export function canManageTeam(user: User, action: Action, actionMicroregiaoId?: string): boolean {
   // Admin pode tudo
   if (user.role === 'admin') return true;
-  
+
   // Verifica microrregião
   if (actionMicroregiaoId && actionMicroregiaoId !== user.microregiaoId) {
     return false;
   }
-  
+
   // Gestor pode gerenciar equipe
   if (user.role === 'gestor') return true;
-  
+
   // Usuário comum: apenas R ou A podem gerenciar equipe
   const raciRole = getUserRaciRole(user, action);
   return raciRole === 'R' || raciRole === 'A';

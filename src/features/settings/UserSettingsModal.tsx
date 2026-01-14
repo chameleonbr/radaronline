@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, Check, User as UserIcon, Save, Send, Bell, Moon, Sun, Shield,
     Palette, KeyRound, Monitor, Laptop, Smartphone, LogOut,
-    Clock, RotateCcw, MessageSquare, AtSign, XCircle
+    Clock, RotateCcw, MessageSquare, AtSign, XCircle, LifeBuoy,
+    MapPin, Building, Layers
 } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -11,6 +12,7 @@ import { useToast } from '../../components/common/Toast';
 import { logError } from '../../lib/logger';
 // import { AVATARS, AVATAR_CATEGORIES, getAvatarUrl } from './AvatarData';
 import { fadeIn, scaleIn, slideInRight } from '../../lib/motion';
+import { getMicroregiaoById } from '../../data/microregioes';
 
 // =====================================
 // AVATAR DATA MOVED TO SEPARATE EXPORT IF NEEDED
@@ -103,7 +105,7 @@ interface UserSettingsModalProps {
 
 type Tab = 'profile' | 'appearance' | 'notifications' | 'security';
 
-export function UserSettingsModal({ isOpen, onClose, initialTab = 'profile', mode = 'settings' }: UserSettingsModalProps) {
+export function UserSettingsModal({ isOpen, onClose, initialTab, mode = 'settings' }: UserSettingsModalProps) {
     const { user, refreshUser } = useAuth();
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<Tab>('profile');
@@ -273,7 +275,6 @@ export function UserSettingsModal({ isOpen, onClose, initialTab = 'profile', mod
     }, [user?.id, loadRequests]);
 
     // Reset when opening
-
     useEffect(() => {
         if (isOpen && user) {
             setSelectedAvatar(user.avatarId || 'zg10');
@@ -284,24 +285,19 @@ export function UserSettingsModal({ isOpen, onClose, initialTab = 'profile', mod
                 setTheme('light');
             }
 
-            // Set initial tab based on mode or defaults
-            if (activeTab) {
-                setActiveTab(initialTab || (isAvatarMode ? 'notifications' : 'profile'));
+            // Determinar aba inicial:
+            // 1. Se initialTab foi passado explicitamente, usar ele
+            // 2. Se mode=avatar, mostrar 'profile' (seletor de avatar)
+            // 3. Se mode=settings, mostrar 'security' (suporte)
+            if (initialTab) {
+                setActiveTab(initialTab);
+            } else if (isAvatarMode) {
+                setActiveTab('profile');
             } else {
-                setActiveTab(isAvatarMode ? 'notifications' : 'profile');
+                setActiveTab('security');
             }
-
-            // If in avatar mode, default to notifications unless profile explicitly requested? 
-            // Actually, let's default to notifications for the "Hub" feel, or Profile if they clicked avatar?
-            // User said "Changing Avatar AND Notifications". 
-            // Let's set it based on the passed prop if present, else notifications for hub might be cleaner?
-            // Actually, if they clicked avatar, they probably want to change it? 
-            // Sidebar passes 'avatar' mode. 
-            // Let's default to 'notifications' as the "Home" of the hub, but if they clicked explicitly to change, maybe profile?
-            // Let's stick to the prop `initialTab` if passed.
-            setActiveTab(initialTab || 'profile');
         }
-    }, [isOpen, user, initialTab]);
+    }, [isOpen, user, initialTab, isAvatarMode]);
 
     if (!isOpen || !user) return null;
 
@@ -666,8 +662,8 @@ export function UserSettingsModal({ isOpen, onClose, initialTab = 'profile', mod
                                             : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800/50'
                                             }`}
                                     >
-                                        <KeyRound className="w-4 h-4" />
-                                        Segurança
+                                        <LifeBuoy className="w-4 h-4" />
+                                        Suporte
                                     </button>
                                 </nav>
                                 <button
@@ -716,16 +712,56 @@ export function UserSettingsModal({ isOpen, onClose, initialTab = 'profile', mod
                                                         </span>
                                                     </div>
 
-                                                    <div className="grid gap-3">
-                                                        <div className="bg-slate-50 dark:bg-slate-950/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        <div className="bg-slate-50 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-3">
                                                             <div className="p-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm text-slate-500">
                                                                 <AtSign className="w-4 h-4" />
                                                             </div>
-                                                            <div className="text-left">
-                                                                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Email</div>
-                                                                <div className="text-sm font-medium text-slate-700 dark:text-slate-300">{user.email}</div>
+                                                            <div className="text-left min-w-0">
+                                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email</div>
+                                                                <div className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate" title={user.email}>{user.email}</div>
                                                             </div>
                                                         </div>
+
+                                                        {user.municipio && (
+                                                            <div className="bg-slate-50 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                                                                <div className="p-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm text-slate-500">
+                                                                    <MapPin className="w-4 h-4" />
+                                                                </div>
+                                                                <div className="text-left min-w-0">
+                                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Município</div>
+                                                                    <div className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{user.municipio}</div>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {user.microregiaoId && (
+                                                            <>
+                                                                <div className="bg-slate-50 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                                                                    <div className="p-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm text-slate-500">
+                                                                        <Layers className="w-4 h-4" />
+                                                                    </div>
+                                                                    <div className="text-left min-w-0">
+                                                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Microrregião</div>
+                                                                        <div className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                                                                            {getMicroregiaoById(user.microregiaoId)?.nome || '(Não definida)'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="bg-slate-50 dark:bg-slate-950/50 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                                                                    <div className="p-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm text-slate-500">
+                                                                        <Building className="w-4 h-4" />
+                                                                    </div>
+                                                                    <div className="text-left min-w-0">
+                                                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Macrorregião</div>
+                                                                        <div className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                                                                            {getMicroregiaoById(user.microregiaoId)?.macrorregiao || '(Não definida)'}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -898,31 +934,8 @@ export function UserSettingsModal({ isOpen, onClose, initialTab = 'profile', mod
                                 {activeTab === 'security' && (
                                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                         <div>
-                                            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Central de Segurança</h3>
-                                            <p className="text-slate-500 dark:text-slate-400">Gerencie sua proteção e suporte.</p>
-                                        </div>
-
-                                        {/* Protected Area Status Card */}
-                                        <div className="relative overflow-hidden rounded-3xl p-8 border border-amber-200 dark:border-amber-900/50 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20">
-                                            <div className="absolute top-0 right-0 p-32 bg-amber-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-
-                                            <div className="relative flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-                                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-orange-500/20 text-white">
-                                                    <Shield className="w-8 h-8" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <h4 className="text-xl font-bold text-slate-800 dark:text-white flex items-center justify-center md:justify-start gap-2">
-                                                        Conta Protegida
-                                                        <Check className="w-5 h-5 text-green-500" />
-                                                    </h4>
-                                                    <p className="text-slate-600 dark:text-slate-300 mt-1">
-                                                        Sua senha e dados sensíveis estão seguros. Nenhuma atividade suspeita detectada.
-                                                    </p>
-                                                </div>
-                                                <div className="shrink-0 bg-white/50 dark:bg-black/20 backdrop-blur-sm px-4 py-2 rounded-lg border border-amber-200/50 dark:border-amber-900/30">
-                                                    <span className="text-xs font-bold text-amber-700 dark:text-amber-500 uppercase tracking-wider">Status: Ativo</span>
-                                                </div>
-                                            </div>
+                                            <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Central de Suporte</h3>
+                                            <p className="text-slate-500 dark:text-slate-400">Solicite alterações de dados ou tire suas dúvidas.</p>
                                         </div>
 
                                         {/* Support & Requests Section */}

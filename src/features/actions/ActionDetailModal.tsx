@@ -13,6 +13,7 @@ import { renderCommentWithMentions } from '../../components/common/MentionInput'
 import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useResponsive } from '../../hooks/useResponsive';
 import { getActionDisplayId } from '../../lib/text';
+import { applyActionRules, canSaveAction, ActionRuleErrors } from '../../lib/actionRules';
 
 // =====================================
 // PROPS DO COMPONENTE
@@ -39,12 +40,11 @@ interface ActionDetailModalProps {
     readOnly?: boolean;
 }
 
-const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, C: 2, I: 3 };
+const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, I: 2 };
 
 const roleLabels: Record<RaciRole, { label: string; color: string }> = {
     R: { label: 'Responsável', color: 'bg-purple-600' },
     A: { label: 'Aprovador', color: 'bg-blue-600' },
-    C: { label: 'Consultado', color: 'bg-emerald-600' },
     I: { label: 'Informado', color: 'bg-amber-500' },
 };
 
@@ -241,6 +241,20 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     const [isSavingAndNew, setIsSavingAndNew] = useState(false);
     const [mobileSection, setMobileSection] = useState<'details' | 'raci' | 'comments'>('details');
 
+    // Rule engine state
+    const [ruleErrors, setRuleErrors] = useState<ActionRuleErrors>({});
+    const [uiState, setUiState] = useState({
+        progressDisabled: false,
+        progressDisabledReason: '',
+        isOverdue: false
+    });
+
+    // Reopen Confirmation State
+    const [reopenConfig, setReopenConfig] = useState<{
+        isOpen: boolean;
+        pendingPatch: Partial<Action> | null;
+    }>({ isOpen: false, pendingPatch: null });
+
 
     // Inicializa o draft quando a action muda ou o modal abre
     useEffect(() => {
@@ -303,14 +317,100 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     // LOCAL HANDLERS (ATUALIZAM O DRAFT)
     // =================================================================================
 
-    // Atualizar campos simples
+    // Atualizar campos usando o motor de regras centralizado (applyActionRules)
     const updateDraftField = useCallback((field: keyof Action, value: Action[keyof Action]) => {
         setDraftAction(prev => {
             if (!prev) return null;
-            return { ...prev, [field]: value };
+
+            // Aplica as regras centralizadas
+            const { next, errors, ui } = applyActionRules(prev, { [field]: value });
+
+            // Side-effects assíncronos (State updates)
+            setRuleErrors(errors);
+            setUiState(ui);
+
+            return next;
         });
         setIsDirty(true);
     }, []);
+
+
+    // Wrapper inteligente para interceptar "Reabertura"
+    const handleFieldChange = useCallback((field: keyof Action, value: any) => {
+        if (!draftAction) return;
+
+        // Se a ação já tem data fim (está concluída) e tentamos mudar algo que a reabriria
+        const isConcluded = !!draftAction.endDate;
+
+        let impliesReopen = false;
+        if (isConcluded) {
+            if (field === 'progress' && value < 100) impliesReopen = true;
+            if (field === 'status' && value !== 'Concluído') impliesReopen = true;
+            if (field === 'endDate' && !value) impliesReopen = true; // Apagar data fim
+        }
+
+        if (impliesReopen) {
+            setReopenConfig({
+                isOpen: true,
+                pendingPatch: { [field]: value }
+            });
+            return;
+        }
+
+        updateDraftField(field, value);
+    }, [draftAction, updateDraftField]);
+
+    const confirmReopen = () => {
+        if (!reopenConfig.pendingPatch) return;
+
+        // Aplica o patch pendente E força reabertura (limpa data, status em andamento)
+        // Nota: Se o patch for justamente limpar data, ok.
+        // Se for mudar status, ok.
+
+        setDraftAction(prev => {
+            if (!prev) return null;
+            const patch = reopenConfig.pendingPatch!;
+
+            // Base da reabertura
+            const reopenPatch: Partial<Action> = {
+                endDate: '', // Limpa data fim
+                status: 'Em Andamento', // Volta status
+                ...patch // Aplica a mudança desejada (ex: progresso 90)
+            };
+
+            const { next, errors, ui } = applyActionRules(prev, reopenPatch);
+            setRuleErrors(errors);
+            setUiState(ui);
+            return next;
+        });
+
+        setReopenConfig({ isOpen: false, pendingPatch: null });
+        setIsDirty(true);
+    };
+
+    const cancelReopen = () => {
+        setReopenConfig({ isOpen: false, pendingPatch: null });
+        // Se for slider, ele vai visualmente voltar pro lugar porque o state não mudou
+    };
+
+    // Atualiza regras ao carregar
+    useEffect(() => {
+        if (draftAction) {
+            const { errors, ui } = applyActionRules(draftAction, {});
+            setRuleErrors(errors);
+            setUiState(ui);
+        }
+    }, [draftAction?.uid]); // Rodar a validação inicial quando mudar de ação
+
+    // Helper para atalhos de data
+    const setDateShortcut = useCallback((field: 'startDate' | 'plannedEndDate' | 'endDate', daysToAdd: number = 0) => {
+        const date = new Date();
+        date.setDate(date.getDate() + daysToAdd);
+
+        // Formata para YYYY-MM-DD
+        const isoDate = date.toISOString().split('T')[0];
+        updateDraftField(field, isoDate);
+    }, [updateDraftField]);
 
     // Adicionar comentário (Local)
     const handleAddComment = useCallback(() => {
@@ -402,11 +502,22 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     }, []);
 
     // Salvar TUDO
-    const handleSaveDirty = useCallback(async () => {
-        if (draftAction && onSaveFullAction) {
-            onSaveFullAction(draftAction);
-            setIsDirty(false);
+    const handleSaveDirty = useCallback(() => {
+        if (!draftAction) return;
+
+        // Auto-fill Data Fim se Concluído/100% e vazio
+        const needsEndDate = (draftAction.status === 'Concluído' || draftAction.progress === 100) && !draftAction.endDate;
+        const actionToSave = needsEndDate ? {
+            ...draftAction,
+            endDate: new Date().toLocaleDateString('sv').split('T')[0], // YYYY-MM-DD Local
+            status: 'Concluído' as Status, // Garante consistência
+            progress: 100
+        } : draftAction;
+
+        if (onSaveFullAction) {
+            onSaveFullAction(actionToSave);
         }
+        setIsDirty(false);
     }, [draftAction, onSaveFullAction]);
 
     const handleSaveAndNewDirty = useCallback(async () => {
@@ -590,14 +701,25 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             <div
                 ref={modalRef}
                 className={`relative h-full bg-slate-50 dark:bg-slate-900 shadow-2xl flex flex-col overflow-hidden
-                    ${isMobile 
-                        ? 'w-full animate-slide-in-up safe-area-bottom' 
+                    ${isMobile
+                        ? 'w-full animate-slide-in-up safe-area-bottom'
                         : 'w-full max-w-2xl animate-slide-in-right'
                     }`}
             >
+                <ConfirmModal
+                    isOpen={reopenConfig.isOpen}
+                    title="Reabrir Ação?"
+                    message="Esta ação está concluída com Data Fim preenchida. Para fazer essa alteração, a ação será reaberta e a Data Fim removida."
+                    confirmText="Reabrir e Alterar"
+                    cancelText="Manter Concluída"
+                    onConfirm={confirmReopen}
+                    onCancel={cancelReopen}
+                    type="warning"
+                />
+
                 {/* =========================================
-            1. HEADER COMPACTO
-        ========================================= */}
+                   HEADER (TÍTULO E ID)
+                ========================================= */}
                 <header className="px-4 py-3 md:px-6 md:py-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:justify-between md:items-start gap-3 shrink-0 z-20">
                     <div className="flex flex-col gap-1 min-w-0 flex-1">
                         {/* Breadcrumb */}
@@ -649,22 +771,20 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                     <div className="flex bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
                         <button
                             onClick={() => setMobileSection('details')}
-                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                                mobileSection === 'details'
-                                    ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
-                                    : 'text-slate-500 dark:text-slate-400'
-                            }`}
+                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${mobileSection === 'details'
+                                ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
+                                : 'text-slate-500 dark:text-slate-400'
+                                }`}
                         >
                             <Target size={14} />
                             Detalhes
                         </button>
                         <button
                             onClick={() => setMobileSection('raci')}
-                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                                mobileSection === 'raci'
-                                    ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
-                                    : 'text-slate-500 dark:text-slate-400'
-                            }`}
+                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${mobileSection === 'raci'
+                                ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
+                                : 'text-slate-500 dark:text-slate-400'
+                                }`}
                         >
                             <Users size={14} />
                             Equipe
@@ -676,11 +796,10 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         </button>
                         <button
                             onClick={() => setMobileSection('comments')}
-                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                                mobileSection === 'comments'
-                                    ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
-                                    : 'text-slate-500 dark:text-slate-400'
-                            }`}
+                            className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${mobileSection === 'comments'
+                                ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
+                                : 'text-slate-500 dark:text-slate-400'
+                                }`}
                         >
                             <MessageCircle size={14} />
                             Comentários
@@ -707,7 +826,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                             <div className="relative">
                                 <select
                                     value={action.status}
-                                    onChange={(e) => updateDraftField('status', e.target.value)}
+                                    onChange={(e) => handleFieldChange('status', e.target.value)}
                                     disabled={!userCanEdit}
                                     className={`w-full appearance-none pl-7 pr-8 py-2 text-sm font-semibold rounded-lg border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-teal-500 disabled:opacity-60 disabled:cursor-not-allowed
                       ${currentStatus.bg} ${currentStatus.text} border-current/20`}
@@ -737,53 +856,75 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                 min="0"
                                 max="100"
                                 value={action.progress}
-                                onChange={(e) => updateDraftField('progress', parseInt(e.target.value))}
-                                disabled={!userCanEdit}
-                                className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer accent-teal-600 disabled:opacity-60"
+                                onChange={(e) => handleFieldChange('progress', parseInt(e.target.value))}
+                                disabled={!userCanEdit || uiState.progressDisabled}
+                                className={`w-full h-2 rounded-lg appearance-none cursor-pointer accent-teal-600 disabled:opacity-50 disabled:cursor-not-allowed ${uiState.progressDisabled ? 'bg-slate-100 dark:bg-slate-700' : 'bg-slate-200 dark:bg-slate-600'}`}
                             />
+                            {uiState.progressDisabled && uiState.progressDisabledReason && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-1 font-medium animate-fade-in">
+                                    {uiState.progressDisabledReason}
+                                </p>
+                            )}
                         </div>
                     </div>
 
                     {/* Linha 2: Datas */}
                     <div className="grid grid-cols-3 gap-3">
                         <div className="flex flex-col gap-1">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
-                                <Calendar size={10} /> Início
-                            </span>
+                            <div className="flex justify-between items-center">
+                                <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                                    <Calendar size={10} className="inline mr-1" /> Início
+                                </span>
+                                {userCanEdit && (
+                                    <button
+                                        onClick={() => setDateShortcut('startDate', 0)}
+                                        className="text-[9px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded text-slate-600 dark:text-slate-300 transition-colors"
+                                        title="Definir para Hoje"
+                                    >
+                                        Hoje
+                                    </button>
+                                )}
+                            </div>
                             <input
                                 type="date"
                                 value={action.startDate}
                                 onChange={(e) => updateDraftField('startDate', e.target.value)}
                                 disabled={!userCanEdit}
-                                className="text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 disabled:opacity-60 w-full"
+                                className={`text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-700 px-2.5 py-1.5 rounded-lg border disabled:opacity-60 w-full ${ruleErrors.startAfterPlanned || ruleErrors.endBeforeStart ? 'border-rose-400 focus:ring-rose-500' : 'border-slate-200 dark:border-slate-600'}`}
                             />
+                            {ruleErrors.startAfterPlanned && <span className="text-[9px] text-rose-500 leading-tight">Checar Data</span>}
                         </div>
                         <div className="flex flex-col gap-1">
-                            <span className="text-[10px] uppercase font-bold text-blue-600 tracking-wider">Fim Planejado</span>
+                            <div className="flex justify-between items-center">
+                                <span className="text-[10px] uppercase font-bold text-blue-600 tracking-wider">Fim Planejado</span>
+                                {userCanEdit && (
+                                    <div className="flex gap-1">
+                                        <button onClick={() => setDateShortcut('plannedEndDate', 7)} className="text-[9px] px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 rounded text-blue-600 dark:text-blue-300">+7d</button>
+                                        <button onClick={() => setDateShortcut('plannedEndDate', 15)} className="text-[9px] px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 rounded text-blue-600 dark:text-blue-300">+15d</button>
+                                        <button onClick={() => setDateShortcut('plannedEndDate', 30)} className="text-[9px] px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 rounded text-blue-600 dark:text-blue-300">+30d</button>
+                                    </div>
+                                )}
+                            </div>
                             <input
                                 type="date"
                                 value={action.plannedEndDate || ''}
                                 onChange={(e) => updateDraftField('plannedEndDate', e.target.value)}
                                 disabled={!userCanEdit}
-                                className="text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2.5 py-1.5 rounded-lg border border-blue-200 dark:border-blue-700 disabled:opacity-60 w-full"
+                                className={`text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30 px-2.5 py-1.5 rounded-lg border disabled:opacity-60 w-full ${ruleErrors.startAfterPlanned || ruleErrors.lateNeedsPlanned ? 'border-rose-400 focus:ring-rose-500' : 'border-blue-200 dark:border-blue-700'}`}
                             />
+                            {ruleErrors.startAfterPlanned && <span className="text-[9px] text-rose-500 leading-tight">{ruleErrors.startAfterPlanned}</span>}
+                            {ruleErrors.lateNeedsPlanned && <span className="text-[9px] text-rose-500 leading-tight">{ruleErrors.lateNeedsPlanned}</span>}
                         </div>
                         <div className="flex flex-col gap-1">
                             <span className="text-[10px] uppercase font-bold text-orange-600 tracking-wider">Fim Real</span>
                             <input
                                 type="date"
                                 value={action.endDate}
-                                onChange={(e) => {
-                                    const newDate = e.target.value;
-                                    updateDraftField('endDate', newDate);
-                                    if (newDate) {
-                                        updateDraftField('status', 'Concluído');
-                                        updateDraftField('progress', 100);
-                                    }
-                                }}
+                                onChange={(e) => handleFieldChange('endDate', e.target.value)}
                                 disabled={!userCanEdit}
-                                className="text-sm font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/30 px-2.5 py-1.5 rounded-lg border border-orange-200 dark:border-orange-700 disabled:opacity-60 w-full"
+                                className={`text-sm font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/30 px-2.5 py-1.5 rounded-lg border disabled:opacity-60 w-full ${ruleErrors.endBeforeStart ? 'border-rose-400 focus:ring-rose-500' : 'border-orange-200 dark:border-orange-700'}`}
                             />
+                            {ruleErrors.endBeforeStart && <span className="text-[9px] text-rose-500 leading-tight">{ruleErrors.endBeforeStart}</span>}
                         </div>
                     </div>
 
@@ -871,7 +1012,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                     <div>
                                         <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Papel (RACI)</label>
                                         <div className="grid grid-cols-4 gap-2">
-                                            {(['R', 'A', 'C', 'I'] as RaciRole[]).map(role => (
+                                            {(['R', 'A', 'I'] as RaciRole[]).map(role => (
                                                 <button
                                                     key={role}
                                                     onClick={() => setNewRaciRole(role)}
@@ -927,6 +1068,11 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                 <Users size={16} className="text-teal-600" />
                                 Equipe RACI
                             </span>
+                            {ruleErrors.missingResponsible && (
+                                <span className="text-[10px] font-bold text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 rounded-full animate-pulse">
+                                    Requer Responsável
+                                </span>
+                            )}
                             <span className="bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-400 text-xs px-2.5 py-1 rounded-full font-bold">
                                 {action.raci?.length || 0}
                             </span>
@@ -944,7 +1090,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                 </div>
                             ) : (
                                 [...action.raci].sort((a, b) => rolePriority[a.role] - rolePriority[b.role]).map((m, i) => (
-                                    <div 
+                                    <div
                                         key={i}
                                         className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600"
                                     >
@@ -997,7 +1143,6 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                     >
                                         <option value="R">R - Responsável</option>
                                         <option value="A">A - Aprovador</option>
-                                        <option value="C">C - Consultado</option>
                                         <option value="I">I - Informado</option>
                                     </select>
                                 </div>
@@ -1185,11 +1330,11 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                     <LoadingButton
                                         onClick={() => handleSaveAndNewDirty()}
                                         isLoading={isSavingAndNew}
-                                        disabled={isSaving || !draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()}
+                                        disabled={isSaving || !canSaveAction(draftAction, ruleErrors)}
                                         loadingText="Salvando..."
-                                        className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all flex items-center gap-2 ${!draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()
-                                            ? 'bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed'
-                                            : 'bg-white dark:bg-slate-800 border-teal-200 dark:border-teal-700 text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 shadow-sm'
+                                        className={`px-4 py-2 text-sm font-medium rounded-xl border transition-all flex items-center gap-2 ${!canSaveAction(draftAction, ruleErrors)
+                                            ? 'bg-slate-50 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed opacity-70'
+                                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
                                             }`}
                                     >
                                         <Plus size={16} />
@@ -1198,19 +1343,27 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                     </LoadingButton>
                                 )}
 
-                                <LoadingButton
-                                    onClick={() => handleSaveDirty()}
-                                    isLoading={isSaving}
-                                    disabled={!draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()}
-                                    loadingText="Salvando..."
-                                    className={`px-6 py-2 text-sm font-bold rounded-xl shadow-md transition-all flex items-center gap-2 ${!draftAction?.title || draftAction?.title === 'Nova Ação' || !draftAction?.title.trim()
-                                        ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                                        : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200/50 dark:shadow-none'
-                                        }`}
-                                >
-                                    <Save size={16} />
-                                    Salvar
-                                </LoadingButton>
+                                {/* Botão SALVAR */}
+                                <div className="flex flex-col items-end">
+                                    <LoadingButton
+                                        onClick={() => handleSaveDirty()}
+                                        isLoading={isSaving}
+                                        disabled={!canSaveAction(draftAction, ruleErrors)}
+                                        loadingText="Salvando..."
+                                        className={`px-6 py-2 text-sm font-bold rounded-xl shadow-md transition-all flex items-center gap-2 ${!canSaveAction(draftAction, ruleErrors)
+                                            ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                            : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200/50 dark:shadow-none'
+                                            }`}
+                                    >
+                                        <Save size={16} />
+                                        Salvar
+                                    </LoadingButton>
+                                    {ruleErrors.missingResponsible && (
+                                        <span className="text-[9px] text-rose-500 font-medium mt-1 mr-1">
+                                            Quem é responsável?
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

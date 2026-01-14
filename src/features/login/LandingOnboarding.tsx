@@ -532,7 +532,7 @@ const Deliveries = () => {
                     type: "news",
                     title: "Planejamento Local fortalece transformação digital na saúde pública",
                     url: "https://www.saude.mg.gov.br/noticias/planejamento-local-fortalece-transformacao-digital-na-saude-publica-de-minas-gerais/",
-                    img: "planjamento.jpg",
+                    img: "logos/locall.jpg",
                     label: "Destaque na Mídia",
                     icon: Newspaper,
                     buttonText: "Ler matéria"
@@ -547,6 +547,7 @@ const Deliveries = () => {
                     "Apresenta fundamentos e aplicações no SUS, com foco em governança e execução.",
                     "Aborda estratégia, Telessaúde, interoperabilidade, RNDS e e-SUS APS como contexto de sistema.",
                     "Certificação por desempenho, formando gestores prontos para decidir e implementar.",
+                    "Parceria estratégica com a FIOCRUZ para expansão da grade e novos módulos em breve.",
                 ],
                 howToUse: [
                     "Indicar para equipe (gestão, APS, regulação, vigilância).",
@@ -558,7 +559,7 @@ const Deliveries = () => {
                     type: "course",
                     title: "Acesse os cursos de Saúde Digital disponíveis no AVA",
                     url: "https://ava.saude.mg.gov.br/course/index.php?categoryid=31",
-                    img: "saude digital.jpg",
+                    img: "logos/cursosaude.png",
                     label: "Capacitação",
                     icon: GraduationCap,
                     buttonText: "Acessar AVA"
@@ -566,9 +567,9 @@ const Deliveries = () => {
             },
             bi: {
                 id: "bi",
-                title: "BI e monitoramento",
+                title: "Do plano para o resultado",
                 icon: BarChart3,
-                subtitle: "Painéis para acompanhar evolução, priorizar e provar resultado com evidência.",
+                subtitle: "Radar fecha o ciclo, mostra evolução e orienta correção de rota com dados.",
                 bullets: [
                     "Dá visibilidade para gestão local e regional, apoiando tomada de decisão.",
                     "Permite acompanhar execução, maturidade e gargalos, com linguagem de gestão.",
@@ -584,7 +585,7 @@ const Deliveries = () => {
                     type: "dashboard",
                     title: "Visualize os indicadores de Saúde Digital do estado",
                     url: "https://info.saude.mg.gov.br/15/paineis/72",
-                    img: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop",
+                    img: "logos/bi.png",
                     label: "Observatório de Dados",
                     icon: Activity,
                     buttonText: "Abrir Painéis"
@@ -621,7 +622,7 @@ const Deliveries = () => {
                     className="mt-5 text-center text-lg md:text-2xl font-semibold opacity-80 max-w-4xl mx-auto"
                     style={{ color: COLORS.ink }}
                 >
-                    Quatro blocos para convencer no primeiro acesso e, depois, guiar o gestor para ação.
+                    Uma jornada integrada que une Planejamento Local, Capacitação e BI ao Radar, transformando estratégia em execução e resultados práticos.
                 </motion.p>
 
                 <motion.div
@@ -680,14 +681,16 @@ const Deliveries = () => {
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                            className="p-8 md:p-12 rounded-[2.4rem] border-2 relative overflow-hidden min-h-[500px] flex flex-col justify-center"
+                            className="p-6 md:p-8 rounded-[2rem] border-2 relative overflow-hidden flex flex-col justify-center"
                             style={{
-                                background: "rgba(6,20,15,0.96)",
-                                borderColor: "rgba(0,0,0,1)",
-                                boxShadow: "14px 14px 0px rgba(0,0,0,1)",
+                                background: "rgba(255,255,255,0.9)",
+                                backdropFilter: "blur(24px)",
+                                WebkitBackdropFilter: "blur(24px)",
+                                borderColor: "#000",
+                                boxShadow: "12px 12px 0px #000, 0px 0px 40px -10px rgba(53,211,255,0.3)",
                             }}
                         >
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
 
                             <motion.div
                                 initial={{ rotate: -10, scale: 0.8, opacity: 0 }}
@@ -695,41 +698,41 @@ const Deliveries = () => {
                                 transition={{ duration: 1.5, ease: "easeOut" }}
                                 className="absolute -bottom-10 -right-10 pointer-events-none"
                             >
-                                <content.icon size={400} className="text-white" />
+                                <content.icon size={400} className="text-slate-900/5" />
                             </motion.div>
 
                             <div className="flex items-center gap-3 relative z-10">
                                 <div
-                                    className="w-12 h-12 rounded-2xl flex items-center justify-center border"
-                                    style={{ borderColor: "rgba(255,255,255,0.14)", background: GRADIENT_SOFT }}
+                                    className="w-12 h-12 rounded-2xl flex items-center justify-center border shadow-sm"
+                                    style={{ borderColor: "rgba(0,0,0,0.06)", background: "white" }}
                                 >
-                                    <ShieldCheck className="text-white" size={22} />
+                                    <ShieldCheck className="text-blue-600" size={22} />
                                 </div>
 
                                 <div>
-                                    <div className="text-white/70 text-xs font-black uppercase tracking-wider">
+                                    <div className="text-slate-500 text-xs font-black uppercase tracking-wider">
                                         {content.badge}
                                     </div>
-                                    <h3 className="text-2xl md:text-3xl font-black text-white leading-none">{content.title}</h3>
+                                    <h3 className="text-2xl md:text-3xl font-black text-slate-900 leading-none">{content.title}</h3>
                                 </div>
                             </div>
 
-                            <p className="mt-6 text-white/90 text-xl md:text-2xl font-bold leading-tight relative z-10">
+                            <p className="mt-4 text-slate-700 text-lg md:text-xl font-bold leading-tight relative z-10">
                                 {content.subtitle}
                             </p>
 
-                            <div className="w-16 h-1 bg-white/20 rounded-full my-8 relative z-10" />
+                            <div className="w-12 h-1 bg-slate-200 rounded-full my-5 relative z-10" />
 
-                            <div className="relative z-10 grid gap-8">
+                            <div className="relative z-10 grid gap-4 md:grid-cols-2">
                                 <div>
-                                    <div className="flex items-center gap-2 mb-3 text-white/50 text-xs font-black uppercase tracking-wider">
-                                        <Sparkles size={14} />
+                                    <div className="flex items-center gap-2 mb-2 text-blue-600 text-xs font-black uppercase tracking-wider">
+                                        <Sparkles size={12} />
                                         <span>Por que importa</span>
                                     </div>
-                                    <ul className="space-y-3">
+                                    <ul className="space-y-2">
                                         {content.bullets.map((p, i) => (
-                                            <li key={i} className="flex gap-3 text-white/80 text-lg font-medium leading-snug">
-                                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 bg-white/60" />
+                                            <li key={i} className="flex gap-2 text-slate-600 text-xs md:text-sm font-medium leading-snug">
+                                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 bg-blue-400" />
                                                 <span>{p}</span>
                                             </li>
                                         ))}
@@ -737,64 +740,64 @@ const Deliveries = () => {
                                 </div>
 
                                 <div>
-                                    <div className="flex items-center gap-2 mb-3 text-white/50 text-xs font-black uppercase tracking-wider">
-                                        <Users size={14} />
+                                    <div className="flex items-center gap-2 mb-2 text-blue-600 text-xs font-black uppercase tracking-wider">
+                                        <Users size={12} />
                                         <span>Uso prático</span>
                                     </div>
-                                    <ul className="space-y-3">
+                                    <ul className="space-y-2">
                                         {content.howToUse.map((p, i) => (
-                                            <li key={i} className="flex gap-3 text-white/80 text-lg font-medium leading-snug">
-                                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 bg-white/30" />
+                                            <li key={i} className="flex gap-2 text-slate-600 text-xs md:text-sm font-medium leading-snug">
+                                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 bg-teal-400" />
                                                 <span>{p}</span>
                                             </li>
                                         ))}
                                     </ul>
                                 </div>
-
-                                {/* CARD DE DESTAQUE REFINADO (Botão sobre a imagem) */}
-                                {content.highlight && (
-                                    <div className="mt-8 relative group/card">
-                                        <div className="flex items-center gap-2 mb-3 text-white/60 text-xs font-black uppercase tracking-wider">
-                                            <content.highlight.icon size={14} />
-                                            <span>{content.highlight.label}</span>
-                                        </div>
-
-                                        <a
-                                            href={content.highlight.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="block relative w-full h-48 md:h-56 rounded-[1.5rem] overflow-hidden border border-white/20 shadow-2xl transition-transform hover:scale-[1.02]"
-                                        >
-                                            {/* Imagem de Fundo */}
-                                            <img
-                                                src={content.highlight.img}
-                                                alt={content.highlight.title}
-                                                className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover/card:scale-110"
-                                            />
-
-                                            {/* Gradiente Overlay para Leitura */}
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover/card:opacity-90 transition-opacity" />
-
-                                            {/* Conteúdo Sobreposto */}
-                                            <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-col md:flex-row gap-4 items-start md:items-end justify-between">
-                                                <div className="max-w-[70%]">
-                                                    <h4 className="text-white font-bold leading-tight text-lg md:text-xl drop-shadow-md">
-                                                        {content.highlight.title}
-                                                    </h4>
-                                                </div>
-
-                                                {/* Botão "No Quadrado" (Overlay) */}
-                                                <div
-                                                    className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl backdrop-blur-md border border-white/30 bg-white/20 text-white text-xs md:text-sm font-black uppercase tracking-wide hover:bg-white hover:text-black transition-all shadow-lg"
-                                                >
-                                                    <span>{content.highlight.buttonText}</span>
-                                                    <ArrowRight size={16} />
-                                                </div>
-                                            </div>
-                                        </a>
-                                    </div>
-                                )}
                             </div>
+
+                            {/* CARD DE DESTAQUE COMPACTO */}
+                            {content.highlight && (
+                                <div className="mt-6 relative group/card">
+                                    <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-black uppercase tracking-wider">
+                                        <content.highlight.icon size={12} />
+                                        <span>{content.highlight.label}</span>
+                                    </div>
+
+                                    <a
+                                        href={content.highlight.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block relative w-full h-32 md:h-40 rounded-2xl overflow-hidden border-[4px] border-white shadow-xl transition-all hover:scale-[1.02] hover:shadow-2xl"
+                                    >
+                                        {/* Imagem de Fundo */}
+                                        <img
+                                            src={content.highlight.img}
+                                            alt={content.highlight.title}
+                                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover/card:scale-110"
+                                        />
+
+                                        {/* Gradiente Overlay para Leitura */}
+                                        <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/40 to-transparent opacity-90" />
+
+                                        {/* Conteúdo Sobreposto */}
+                                        <div className="absolute inset-0 p-4 flex flex-row items-center justify-between gap-4">
+                                            <div className="max-w-[65%]">
+                                                <h4 className="text-white font-bold leading-tight text-sm md:text-base drop-shadow-md line-clamp-3">
+                                                    {content.highlight.title}
+                                                </h4>
+                                            </div>
+
+                                            {/* Botão "No Quadrado" (Overlay) */}
+                                            <div
+                                                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg backdrop-blur-md border border-white/30 bg-white/10 text-white text-[10px] md:text-xs font-black uppercase tracking-wide hover:bg-white hover:text-black transition-all shadow-lg"
+                                            >
+                                                <span>{content.highlight.buttonText}</span>
+                                                <ArrowRight size={14} />
+                                            </div>
+                                        </div>
+                                    </a>
+                                </div>
+                            )}
 
                         </motion.div>
                     </div>
@@ -845,7 +848,7 @@ const WhyNow = () => {
                         {
                             icon: BarChart3,
                             title: "Do plano para o resultado",
-                            desc: "BI fecha o ciclo, mostra evolução e orienta correção de rota com dados.",
+                            desc: "Radar fecha o ciclo, mostra evolução e orienta correção de rota com dados.",
                         },
                     ].map((it, idx) => (
                         <motion.div
@@ -926,6 +929,10 @@ const FAQ = () => {
             a: "Que não é um sistema isolado. É um novo jeito de governar o cuidado e a gestão: padronizar informação, reduzir retrabalho, melhorar acesso, decidir com evidência e monitorar execução.",
         },
         {
+            q: "Por que o curso de Saúde Digital é importante?",
+            a: "Muitos gestores ainda veem 'digital' apenas como TI. O curso muda essa chave: ensina que saúde digital é estratégia de gestão. Sem entender isso, a equipe não usa as ferramentas, o dado não chega e o futuro da saúde não acontece.",
+        },
+        {
             q: "Onde o SUS Digital entra na história, para convencer quem está começando?",
             a: "Como o caminho estruturado para a transformação: formação, soluções e dados. Isso sinaliza prioridade nacional e ajuda a traduzir intenção em plano com cronograma e indicadores.",
         },
@@ -966,7 +973,7 @@ const FAQ = () => {
 
                 <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
                     <PrimaryButton href="https://www.saude.mg.gov.br/saudedigital/">Portal Saúde Digital MG</PrimaryButton>
-                    <SecondaryButton href="https://info.saude.mg.gov.br/15/paineis/72">Painéis e observatório</SecondaryButton>
+
                 </div>
             </div>
         </section>
@@ -984,8 +991,7 @@ const Footer = ({ onContinue }: { onContinue: () => void }) => (
                 <div>
                     <h3 className="text-3xl md:text-4xl font-black text-white tracking-tight">Radar Minas Digital</h3>
                     <p className="mt-4 text-white/70 text-lg font-semibold leading-relaxed max-w-xl">
-                        Primeiro acesso com narrativa de convencimento e foco nas entregas atuais:
-                        Planejamento Local, Curso, BI e o próprio Radar como motor de execução.
+                        Uma jornada integrada que une Planejamento Local, Capacitação e BI ao Radar, transformando estratégia em execução e resultados práticos.
                     </p>
                 </div>
 
@@ -1000,8 +1006,9 @@ const Footer = ({ onContinue }: { onContinue: () => void }) => (
                 </div>
             </div>
 
-            <div className="mt-8 text-center text-white/45 text-sm font-mono">
-                &copy; 2026 Governo do Estado de Minas Gerais. Todos os direitos reservados.
+            <div className="mt-8 text-center text-white/45 text-xs md:text-sm font-mono space-y-1">
+                <p>SES - Secretaria de Estado de Saúde</p>
+                <p>Núcleo de Saúde Digital – SES/GAB/ATI-NSDIGI</p>
             </div>
         </div>
     </footer>

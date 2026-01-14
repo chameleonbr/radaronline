@@ -337,7 +337,7 @@ export function ComparisonEngine({
                 <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-md rounded-xl border border-slate-200/60 dark:border-slate-700/60 p-6 shadow-sm transition-colors">
                     <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Distribuição de Status</h3>
                     <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#94a3b8" strokeOpacity={0.3} />
                                 <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -374,7 +374,7 @@ export function ComparisonEngine({
                 <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-md rounded-xl border border-slate-200/60 dark:border-slate-700/60 p-6 shadow-sm transition-colors">
                     <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Comparativo de Performance</h3>
                     <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                             <RadarChart data={radarData}>
                                 <PolarGrid stroke="#94a3b8" strokeOpacity={0.3} />
                                 <PolarAngleAxis dataKey="metric" tick={{ fill: '#64748b', fontSize: 12 }} />

@@ -8,7 +8,7 @@ import { RaciCompactPill } from '../../components/common';
 import { Tooltip } from '../../components/common/Tooltip';
 import { logError } from '../../lib/logger';
 
-const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, C: 2, I: 3 };
+const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, I: 2 };
 
 interface GanttChartProps {
   actions: Action[];

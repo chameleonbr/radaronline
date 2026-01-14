@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, X, Check, Clock, XCircle, MessageSquare, RotateCcw, AtSign, Shield, ChevronRight } from 'lucide-react';
+import { Bell, X, Check, Clock, XCircle, MessageSquare, RotateCcw, AtSign, Shield, ChevronRight, CheckCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { getMicroregiaoById } from '../../data/microregioes';
@@ -47,6 +47,9 @@ const saveReadNotifications = (ids: Set<string>) => {
     localStorage.setItem(READ_NOTIFICATIONS_KEY, JSON.stringify([...ids]));
 };
 
+// Tipo para controle de abas
+type NotificationTab = 'unread' | 'all';
+
 export function NotificationBell({ className = '', collapsed = false, onViewAllRequests }: NotificationBellProps) {
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
@@ -58,6 +61,7 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
     const buttonRef = useRef<HTMLButtonElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
     const [readIds, setReadIds] = useState<Set<string>>(getReadNotifications);
+    const [activeTab, setActiveTab] = useState<NotificationTab>('unread');
 
     const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
@@ -85,8 +89,21 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
         saveReadNotifications(newReadIds);
     };
 
+    // Marcar todas como lidas
+    const markAllAsRead = () => {
+        const unreadRequests = requests.filter(r => isUnread(r));
+        const newReadIds = new Set(readIds);
+        unreadRequests.forEach(r => newReadIds.add(r.id));
+        setReadIds(newReadIds);
+        saveReadNotifications(newReadIds);
+    };
+
     // Contagem de não lidas
-    const notificationCount = requests.filter(r => isUnread(r)).length;
+    const unreadRequests = requests.filter(r => isUnread(r));
+    const notificationCount = unreadRequests.length;
+
+    // Lista filtrada baseada na aba ativa
+    const filteredRequests = activeTab === 'unread' ? unreadRequests : requests;
 
     // Carregar solicitações
     const loadRequests = useCallback(async () => {
@@ -315,27 +332,74 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                         className="fixed top-0 right-0 h-full w-[420px] max-w-[90vw] bg-white dark:bg-slate-900 shadow-2xl z-[9999] animate-slide-in-right border-l border-slate-200 dark:border-slate-800 flex flex-col"
                     >
                         {/* Header do Painel */}
-                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 shrink-0">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-teal-50 dark:bg-teal-900/30 rounded-lg text-teal-600 dark:text-teal-400">
-                                    <Bell className="w-5 h-5" />
+                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-teal-50 dark:bg-teal-900/30 rounded-lg text-teal-600 dark:text-teal-400">
+                                        <Bell className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg leading-tight">
+                                            {isAdmin ? 'Solicitações' : 'Notificações'}
+                                        </h3>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                            {notificationCount > 0 ? `${notificationCount} não lidas` : 'Nenhuma nova notificação'}
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg leading-tight">
-                                        {isAdmin ? 'Solicitações' : 'Notificações'}
-                                    </h3>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                        {notificationCount > 0 ? `${notificationCount} novas` : 'Nenhuma nova notificação'}
-                                    </p>
-                                </div>
+
+                                <button
+                                    onClick={() => setIsOpen(false)}
+                                    className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
                             </div>
 
-                            <button
-                                onClick={() => setIsOpen(false)}
-                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
+                            {/* Abas e botão marcar todas como lidas */}
+                            <div className="flex items-center justify-between gap-2">
+                                {/* Abas */}
+                                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                                    <button
+                                        onClick={() => setActiveTab('unread')}
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'unread'
+                                            ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow-sm'
+                                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                            }`}
+                                    >
+                                        Não lidas
+                                        {notificationCount > 0 && (
+                                            <span className="ml-1.5 px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded-full">
+                                                {notificationCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('all')}
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${activeTab === 'all'
+                                            ? 'bg-white dark:bg-slate-700 text-teal-600 dark:text-teal-400 shadow-sm'
+                                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                                            }`}
+                                    >
+                                        Todas
+                                        <span className="ml-1.5 text-slate-400 dark:text-slate-500">
+                                            {requests.length}
+                                        </span>
+                                    </button>
+                                </div>
+
+                                {/* Botão Marcar Todas como Lidas */}
+                                {notificationCount > 0 && (
+                                    <button
+                                        onClick={markAllAsRead}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors"
+                                        title="Marcar todas como lidas"
+                                    >
+                                        <CheckCheck className="w-4 h-4" />
+                                        <span className="hidden sm:inline">Marcar lidas</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Área de Conteúdo Scrollável */}
@@ -495,18 +559,22 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                                                 <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-full mb-3" />
                                                 <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
                                             </div>
-                                        ) : requests.length === 0 ? (
+                                        ) : filteredRequests.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-20 text-center">
                                                 <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800/50 rounded-full flex items-center justify-center mb-4">
                                                     <Bell className="w-10 h-10 text-slate-300 dark:text-slate-600" />
                                                 </div>
-                                                <h4 className="text-slate-900 dark:text-slate-100 font-bold text-lg mb-1">Tudo limpo!</h4>
+                                                <h4 className="text-slate-900 dark:text-slate-100 font-bold text-lg mb-1">
+                                                    {activeTab === 'unread' ? 'Tudo em dia!' : 'Nenhuma notificação'}
+                                                </h4>
                                                 <p className="text-slate-500 dark:text-slate-400 text-sm max-w-[200px]">
-                                                    Você não tem novas notificações no momento.
+                                                    {activeTab === 'unread'
+                                                        ? 'Você não tem notificações não lidas.'
+                                                        : 'Você ainda não tem notificações.'}
                                                 </p>
                                             </div>
                                         ) : (
-                                            requests.slice(0, 10).map(request => {
+                                            filteredRequests.slice(0, 20).map(request => {
                                                 const unread = isUnread(request);
                                                 return (
                                                     <div

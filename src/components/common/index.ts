@@ -12,3 +12,4 @@ export { Breadcrumb, createBreadcrumbItems } from './Breadcrumb';
 export { LoadingSpinner, LoadingButton } from './LoadingSpinner';
 export { Tooltip } from './Tooltip';
 export { ZoomControl } from './ZoomControl';
+export { DemoBanner } from './DemoBanner';

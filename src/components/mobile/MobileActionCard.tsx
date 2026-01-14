@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence, PanInfo } from 'framer-motion';
-import { 
-  Calendar, Clock, Users, ChevronRight, 
+import {
+  Calendar, Clock, Users, ChevronRight,
   AlertTriangle, CheckCircle2, MoreHorizontal
 } from 'lucide-react';
 import { Action, Status, RaciRole } from '../../types';
@@ -21,34 +21,34 @@ interface MobileActionCardProps {
   isCompact?: boolean;
 }
 
-const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, C: 2, I: 3 };
+const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, I: 2 };
 
-const statusConfig: Record<Status, { 
-  color: string; 
-  bg: string; 
+const statusConfig: Record<Status, {
+  color: string;
+  bg: string;
   icon: React.ReactNode;
   borderColor: string;
 }> = {
-  'Não Iniciado': { 
-    color: 'text-slate-600 dark:text-slate-400', 
+  'Não Iniciado': {
+    color: 'text-slate-600 dark:text-slate-400',
     bg: 'bg-slate-100 dark:bg-slate-700',
     borderColor: 'border-l-slate-400',
     icon: <Clock size={12} className="text-slate-400" />
   },
-  'Em Andamento': { 
-    color: 'text-blue-700 dark:text-blue-300', 
+  'Em Andamento': {
+    color: 'text-blue-700 dark:text-blue-300',
     bg: 'bg-blue-100 dark:bg-blue-900/40',
     borderColor: 'border-l-blue-500',
     icon: <Clock size={12} className="text-blue-500" />
   },
-  'Concluído': { 
-    color: 'text-emerald-700 dark:text-emerald-300', 
+  'Concluído': {
+    color: 'text-emerald-700 dark:text-emerald-300',
     bg: 'bg-emerald-100 dark:bg-emerald-900/40',
     borderColor: 'border-l-emerald-500',
     icon: <CheckCircle2 size={12} className="text-emerald-500" />
   },
-  'Atrasado': { 
-    color: 'text-rose-700 dark:text-rose-300', 
+  'Atrasado': {
+    color: 'text-rose-700 dark:text-rose-300',
     bg: 'bg-rose-100 dark:bg-rose-900/40',
     borderColor: 'border-l-rose-500',
     icon: <AlertTriangle size={12} className="text-rose-500" />
@@ -64,12 +64,12 @@ export const MobileActionCard: React.FC<MobileActionCardProps> = ({
 }) => {
   const [isSwiped, setIsSwiped] = React.useState(false);
   const status = statusConfig[action.status] || statusConfig['Não Iniciado'];
-  
+
   const orderedRaci = [...action.raci]
     .sort((a, b) => rolePriority[a.role] - rolePriority[b.role]);
-  
+
   const responsaveis = orderedRaci.filter(r => r.role === 'R');
-  
+
   const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     if (info.offset.x < -100 && canDelete) {
       setIsSwiped(true);
@@ -84,11 +84,11 @@ export const MobileActionCard: React.FC<MobileActionCardProps> = ({
     }
   };
 
-  const progressColor = 
+  const progressColor =
     action.progress >= 100 ? 'bg-emerald-500' :
-    action.progress >= 50 ? 'bg-teal-500' :
-    action.progress >= 25 ? 'bg-amber-500' :
-    'bg-slate-300';
+      action.progress >= 50 ? 'bg-teal-500' :
+        action.progress >= 25 ? 'bg-amber-500' :
+          'bg-slate-300';
 
   return (
     <div className="relative overflow-hidden">
@@ -130,8 +130,8 @@ export const MobileActionCard: React.FC<MobileActionCardProps> = ({
               {action.status}
             </span>
           </div>
-          
-          <button 
+
+          <button
             onClick={(e) => { e.stopPropagation(); onClick(); }}
             className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           >
@@ -166,7 +166,7 @@ export const MobileActionCard: React.FC<MobileActionCardProps> = ({
             <Calendar size={12} />
             <span>{formatDateBr(action.plannedEndDate || action.endDate) || 'Sem prazo'}</span>
           </div>
-          
+
           <div className="flex items-center gap-1">
             {responsaveis.length > 0 ? (
               <div className="flex items-center gap-1">

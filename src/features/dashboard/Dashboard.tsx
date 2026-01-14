@@ -19,9 +19,8 @@ interface DashboardProps {
   team: TeamMember[];
   objectives: Objective[];
   activities: Record<number, Activity[]>;
-  onNavigate: (view: 'list', filters?: { status?: string; objectiveId?: number }) => void;
+  onNavigate: (view: 'list' | 'team', filters?: { status?: string; objectiveId?: number }) => void;
 }
-
 const COLORS = {
   concluido: '#10b981', // emerald-500
   emAndamento: '#3b82f6', // blue-500
@@ -134,11 +133,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return null;
   };
 
+  // Alerta de Membros Pendentes - Visível apenas para Admins e Gestores
+  const showPendingMembers = pendingMembers.length > 0 && (user?.role === 'admin' || user?.role === 'superadmin' || user?.role === 'gestor');
+
   return (
     <div className="space-y-6 pb-8 animate-fade-in">
       {/* Alerta de Membros Pendentes */}
-      {pendingMembers.length > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 flex items-start gap-3">
+      {showPendingMembers && (
+        <div
+          onClick={() => onNavigate('team')}
+          className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 flex items-start gap-3 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+          role="button"
+          tabIndex={0}
+          title="Clique para gerenciar a equipe"
+        >
           <div className="p-2 bg-amber-100 dark:bg-amber-800/50 rounded-lg shrink-0">
             <UserPlus className="w-5 h-5 text-amber-600 dark:text-amber-400" />
           </div>
@@ -150,8 +158,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {pendingMembers.map(m => m.name).slice(0, 3).join(', ')}
               {pendingMembers.length > 3 && ` e mais ${pendingMembers.length - 3}...`}
             </p>
-            <p className="text-amber-600 dark:text-amber-500 text-xs mt-1">
-              Contate um administrador para criar as contas de acesso.
+            <p className="text-amber-600 dark:text-amber-500 text-xs mt-1 font-medium">
+              Clique para gerenciar aprovações na aba Equipe.
             </p>
           </div>
         </div>
@@ -215,40 +223,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
       ) : (
         // Desktop: Grid original
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          title="Total de Ações"
-          value={metrics.total}
-          icon={<Target size={24} className="text-white" />}
-          gradient="from-slate-700 to-slate-800"
-          subtext="Nos objetivos"
-          onClick={() => onNavigate('list', {})}
-        />
-        <KpiCard
-          title="Conclusão Geral"
-          value={`${metrics.percentConcluido}%`}
-          icon={<ActivityIcon size={24} className="text-white" />}
-          gradient="from-teal-500 to-emerald-500"
-          subtext={`${metrics.concluidos} concluídas`}
-          trend="up"
-          onClick={() => handleCardClick('Concluído')}
-        />
-        <KpiCard
-          title="Em Execução"
-          value={metrics.emAndamento}
-          icon={<Clock size={24} className="text-white" />}
-          gradient="from-blue-500 to-indigo-500"
-          subtext="Ações ativas agora"
-          onClick={() => handleCardClick('Em Andamento')}
-        />
-        <KpiCard
-          title="Atenção Necessária"
-          value={metrics.atrasados}
-          icon={<AlertTriangle size={24} className="text-white" />}
-          gradient={metrics.atrasados > 0 ? "from-rose-500 to-red-600" : "from-slate-400 to-slate-500"}
-          subtext={metrics.atrasados > 0 ? "Ações atrasadas" : "Tudo dentro do prazo!"}
-          trend={metrics.atrasados > 0 ? "down" : "neutral"}
-          onClick={() => handleCardClick('Atrasado')}
-        />
+          <KpiCard
+            title="Total de Ações"
+            value={metrics.total}
+            icon={<Target size={24} className="text-white" />}
+            gradient="from-slate-700 to-slate-800"
+            subtext="Nos objetivos"
+            onClick={() => onNavigate('list', {})}
+          />
+          <KpiCard
+            title="Conclusão Geral"
+            value={`${metrics.percentConcluido}%`}
+            icon={<ActivityIcon size={24} className="text-white" />}
+            gradient="from-teal-500 to-emerald-500"
+            subtext={`${metrics.concluidos} concluídas`}
+            trend="up"
+            onClick={() => handleCardClick('Concluído')}
+          />
+          <KpiCard
+            title="Em Execução"
+            value={metrics.emAndamento}
+            icon={<Clock size={24} className="text-white" />}
+            gradient="from-blue-500 to-indigo-500"
+            subtext="Ações ativas agora"
+            onClick={() => handleCardClick('Em Andamento')}
+          />
+          <KpiCard
+            title="Atenção Necessária"
+            value={metrics.atrasados}
+            icon={<AlertTriangle size={24} className="text-white" />}
+            gradient={metrics.atrasados > 0 ? "from-rose-500 to-red-600" : "from-slate-400 to-slate-500"}
+            subtext={metrics.atrasados > 0 ? "Ações atrasadas" : "Tudo dentro do prazo!"}
+            trend={metrics.atrasados > 0 ? "down" : "neutral"}
+            onClick={() => handleCardClick('Atrasado')}
+          />
         </div>
       )}
 
@@ -299,101 +307,101 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       ) : (
-      // Desktop: Gráficos originais
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        // Desktop: Gráficos originais
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Status Chart (Donut) */}
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col items-center">
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-2 w-full flex items-center gap-2">
-            <PieChartIcon size={18} className="text-slate-400" />
-            Distribuição de Status
-          </h3>
-          <div className="w-full h-[250px] relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={metrics.statusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                  stroke="none"
-                  onClick={(data) => handleCardClick(data.name)}
+          {/* Status Chart (Donut) */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col items-center">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-2 w-full flex items-center gap-2">
+              <PieChartIcon size={18} className="text-slate-400" />
+              Distribuição de Status
+            </h3>
+            <div className="w-full h-[250px] relative">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <PieChart>
+                  <Pie
+                    data={metrics.statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                    stroke="none"
+                    onClick={(data) => handleCardClick(data.name)}
+                    className="cursor-pointer"
+                  >
+                    {metrics.statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} className="hover:opacity-80 transition-opacity cursor-pointer" />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip content={<CustomTooltip />} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Total Center Label */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{metrics.total}</span>
+                <span className="text-xs text-slate-400 font-medium uppercase">Ações</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Progresso por Objetivo (Bar Chart) */}
+          <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-6 w-full flex items-center gap-2">
+              <BarChart2 size={18} className="text-slate-400" />
+              Performance por Objetivo
+            </h3>
+            <div className="w-full h-[250px]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <BarChart
+                  data={metrics.progressoPorObjetivo}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  layout="vertical"
+                  onClick={(data: any) => {
+                    if (data && data.activePayload && data.activePayload.length > 0) {
+                      const objId = data.activePayload[0].payload.id;
+                      onNavigate('list', { objectiveId: objId });
+                    }
+                  }}
                   className="cursor-pointer"
                 >
-                  {metrics.statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} className="hover:opacity-80 transition-opacity cursor-pointer" />
-                  ))}
-                </Pie>
-                <RechartsTooltip content={<CustomTooltip />} />
-                <Legend verticalAlign="bottom" height={36} iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Total Center Label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-              <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{metrics.total}</span>
-              <span className="text-xs text-slate-400 font-medium uppercase">Ações</span>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(148, 163, 184, 0.2)" />
+                  <XAxis type="number" domain={[0, 100]} hide />
+                  <YAxis dataKey="name" type="category" width={50} tick={{ fontSize: 12, fill: '#64748b' }} />
+                  <RechartsTooltip
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                    content={({ active, payload }) => {
+                      if (active && payload?.[0]) {
+                        const data = payload[0].payload;
+                        return (
+                          <div className="bg-white dark:bg-slate-800 p-3 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg text-xs max-w-[200px]">
+                            <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">{data.fullName}</p>
+                            <div className="flex justify-between gap-4">
+                              <span>Progresso:</span>
+                              <span className="font-bold text-teal-600 dark:text-teal-400">{data.progress}%</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <span>Ações:</span>
+                              <span className="font-bold">{data.count}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="progress" radius={[0, 4, 4, 0]} barSize={20} className="cursor-pointer">
+                    {metrics.progressoPorObjetivo.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.progress === 100 ? COLORS.concluido : COLORS.teal} className="hover:opacity-80 transition-opacity" />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>
-
-        {/* Progresso por Objetivo (Bar Chart) */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-6 w-full flex items-center gap-2">
-            <BarChart2 size={18} className="text-slate-400" />
-            Performance por Objetivo
-          </h3>
-          <div className="w-full h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={metrics.progressoPorObjetivo}
-                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                layout="vertical"
-                onClick={(data: any) => {
-                  if (data && data.activePayload && data.activePayload.length > 0) {
-                    const objId = data.activePayload[0].payload.id;
-                    onNavigate('list', { objectiveId: objId });
-                  }
-                }}
-                className="cursor-pointer"
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(148, 163, 184, 0.2)" />
-                <XAxis type="number" domain={[0, 100]} hide />
-                <YAxis dataKey="name" type="category" width={50} tick={{ fontSize: 12, fill: '#64748b' }} />
-                <RechartsTooltip
-                  cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
-                  content={({ active, payload }) => {
-                    if (active && payload?.[0]) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-white dark:bg-slate-800 p-3 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg text-xs max-w-[200px]">
-                          <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">{data.fullName}</p>
-                          <div className="flex justify-between gap-4">
-                            <span>Progresso:</span>
-                            <span className="font-bold text-teal-600 dark:text-teal-400">{data.progress}%</span>
-                          </div>
-                          <div className="flex justify-between gap-4">
-                            <span>Ações:</span>
-                            <span className="font-bold">{data.count}</span>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Bar dataKey="progress" radius={[0, 4, 4, 0]} barSize={20} className="cursor-pointer">
-                  {metrics.progressoPorObjetivo.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.progress === 100 ? COLORS.concluido : COLORS.teal} className="hover:opacity-80 transition-opacity" />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
       )}
 
       {/* Linha Inferior: Equipe e Prazos */}

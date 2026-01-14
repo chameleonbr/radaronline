@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, ChevronRight, ChevronLeft, Target, Calendar, 
+import {
+  X, ChevronRight, ChevronLeft, Target, Calendar,
   Users, BarChart2, CheckCircle, Sparkles,
   Zap, MessageCircle, Menu, Rocket
 } from 'lucide-react';
@@ -64,7 +64,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: 'team',
     title: 'Gestão de Equipe',
-    description: 'Visualize sua equipe e atribua responsabilidades usando a matriz RACI (Responsável, Aprovador, Consultado, Informado).',
+    description: 'Visualize sua equipe e atribua responsabilidades usando a matriz RAI (Responsável, Aprovador, Informado).',
     icon: <Users className="text-purple-500" size={28} />,
     position: 'center',
   },
@@ -112,7 +112,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition>({ top: 0, left: 0, arrowPosition: 'none' });
   const tooltipRef = useRef<HTMLDivElement>(null);
-  
+
   const step = ONBOARDING_STEPS[currentStep];
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === ONBOARDING_STEPS.length - 1;
@@ -127,7 +127,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
 
     // Try multiple selectors separated by comma
     const selectors = step.targetSelector.split(',').map(s => s.trim());
-    
+
     for (const selector of selectors) {
       try {
         const element = document.querySelector(selector);
@@ -143,7 +143,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
         logWarn('OnboardingTour', `Invalid selector: ${selector}`);
       }
     }
-    
+
     setTargetRect(null);
     return null;
   }, [step.targetSelector]);
@@ -205,14 +205,14 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   // Update on step change
   useEffect(() => {
     if (!isOpen) return;
-    
+
     // Remove previous highlights
     document.querySelectorAll('.onboarding-highlight').forEach(el => {
       el.classList.remove('onboarding-highlight');
     });
 
     const element = findTargetElement();
-    
+
     // Add highlight class to element
     if (element) {
       element.classList.add('onboarding-highlight');
@@ -278,7 +278,7 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
-      
+
       if (e.key === 'ArrowRight' || e.key === 'Enter') {
         e.preventDefault();
         handleNext();
@@ -357,19 +357,19 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
         )}
 
         {/* Click blocker except on highlighted area */}
-        <div 
-          className="absolute inset-0" 
+        <div
+          className="absolute inset-0"
           onClick={(e) => {
             // Allow clicks on the highlighted element
             if (targetRect) {
               const x = e.clientX;
               const y = e.clientY;
-              const inSpotlight = 
-                x >= targetRect.left - 8 && 
-                x <= targetRect.right + 8 && 
-                y >= targetRect.top - 8 && 
+              const inSpotlight =
+                x >= targetRect.left - 8 &&
+                x <= targetRect.right + 8 &&
+                y >= targetRect.top - 8 &&
                 y <= targetRect.bottom + 8;
-              
+
               if (!inSpotlight) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -497,13 +497,12 @@ export const OnboardingTour: React.FC<OnboardingTourProps> = ({
                     <button
                       key={idx}
                       onClick={() => setCurrentStep(idx)}
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        idx === currentStep
+                      className={`h-2 rounded-full transition-all duration-300 ${idx === currentStep
                           ? 'w-6 bg-teal-500'
                           : idx < currentStep
-                          ? 'w-2 bg-teal-300 dark:bg-teal-700 hover:bg-teal-400'
-                          : 'w-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300'
-                      }`}
+                            ? 'w-2 bg-teal-300 dark:bg-teal-700 hover:bg-teal-400'
+                            : 'w-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300'
+                        }`}
                       aria-label={`Ir para passo ${idx + 1}`}
                     />
                   ))}

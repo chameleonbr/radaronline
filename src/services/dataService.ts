@@ -395,38 +395,53 @@ export async function upsertAction(action: Action): Promise<Action> {
         // ============================================
         // Sincronizar RACI (Criar/Atualizar)
         // ============================================
-        if (action.raci && action.raci.length > 0) {
-            // Verifica os membros atuais no banco
-            const { data: currentRaci } = await supabase
+        // ============================================
+        // Sincronizar RACI (FULL SYNC: Add & Remove)
+        // ============================================
+        if (action.raci) {
+            // 1. Buscar membros atuais no banco para essa ação
+            const { data: currentRaci, error: fetchRaciError } = await supabase
                 .from('action_raci')
-                .select('member_name')
+                .select('id, member_name')
                 .eq('action_id', actionDbId);
 
-            const currentNames = new Set((currentRaci || []).map(r => r.member_name));
+            if (fetchRaciError) {
+                logError('dataService', 'Erro ao buscar RACI atual:', fetchRaciError);
+            } else {
+                const currentMembers = currentRaci || [];
+                const currentNamesSet = new Set(currentMembers.map(r => r.member_name));
+                const newNamesSet = new Set(action.raci.map(r => r.name));
 
-            // Filtrar apenas novos membros que não estão no banco
-            const newMembers = action.raci.filter(m => !currentNames.has(m.name));
+                // A. Adicionar novos (que estão no action.raci mas não no banco)
+                const toAdd = action.raci.filter(m => !currentNamesSet.has(m.name));
+                if (toAdd.length > 0) {
+                    const raciInserts = toAdd.map(m => ({
+                        action_id: actionDbId,
+                        member_name: m.name,
+                        role: m.role
+                    }));
+                    const { error: insertError } = await supabase
+                        .from('action_raci')
+                        .insert(raciInserts);
 
-            if (newMembers.length > 0) {
-                const raciInserts = newMembers.map(m => ({
-                    action_id: actionDbId,
-                    member_name: m.name,
-                    role: m.role
-                }));
+                    if (insertError) logError('dataService', 'Erro ao inserir novos RACI:', insertError);
+                }
 
-                const { error: raciError } = await supabase
-                    .from('action_raci')
-                    .insert(raciInserts);
+                // B. Remover excluídos (que estão no banco mas não no action.raci)
+                const toRemove = currentMembers.filter(m => !newNamesSet.has(m.member_name));
+                if (toRemove.length > 0) {
+                    const idsToRemove = toRemove.map(m => m.id);
+                    const { error: deleteError } = await supabase
+                        .from('action_raci')
+                        .delete()
+                        .in('id', idsToRemove);
 
-                if (raciError) {
-                    logError('dataService', 'Erro ao salvar RACI no upsert:', raciError);
+                    if (deleteError) logError('dataService', 'Erro ao remover RACI antigo:', deleteError);
                 }
             }
         }
 
-        // Retorna a ação atualizada chamando loadActions (ou montando objeto)
-        // Para simplificar e garantir consistência, vamos retornar o objeto action com IDs corretos
-        // Mas o ideal carrega-la para confirmar
+        // Retorna a ação atualizada
         return action;
 
     } catch (error) {

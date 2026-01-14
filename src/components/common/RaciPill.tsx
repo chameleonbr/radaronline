@@ -7,7 +7,6 @@ import { getInitials } from '../../lib/text';
 const RACI_COLORS = {
   R: { bg: "bg-purple-600", text: "text-purple-800", border: "border-purple-200", label: "Responsável" },
   A: { bg: "bg-blue-600", text: "text-blue-800", border: "border-blue-200", label: "Aprovador" },
-  C: { bg: "bg-emerald-600", text: "text-emerald-800", border: "border-emerald-200", label: "Consultado" },
   I: { bg: "bg-amber-500", text: "text-amber-800", border: "border-amber-200", label: "Informado" },
 };
 

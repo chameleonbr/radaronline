@@ -46,7 +46,6 @@ const STATUSES: Status[] = ['Não Iniciado', 'Em Andamento', 'Concluído', 'Atra
 const RACI_ROLES: { role: RaciRole; label: string; color: string }[] = [
   { role: 'R', label: 'Responsável', color: 'bg-blue-500' },
   { role: 'A', label: 'Aprovador', color: 'bg-purple-500' },
-  { role: 'C', label: 'Consultado', color: 'bg-amber-500' },
   { role: 'I', label: 'Informado', color: 'bg-slate-400' },
 ];
 

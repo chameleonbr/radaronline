@@ -3,7 +3,7 @@ import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../auth';
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginAsDemo } = useAuth();
 
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -139,7 +139,7 @@ export function LoginPage() {
               </button>
 
               {/* Em vez de absoluto no rodapé, deixa no fluxo */}
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-4">
                 <button
                   type="button"
                   onClick={() => setIsForgotModalOpen(true)}
@@ -147,6 +147,26 @@ export function LoginPage() {
                 >
                   Esqueceu a senha?
                 </button>
+
+                {/* Separator */}
+                <div className="flex items-center gap-3 my-2">
+                  <div className="flex-1 h-px bg-white/20" />
+                  <span className="text-xs text-white/40 uppercase">ou</span>
+                  <div className="flex-1 h-px bg-white/20" />
+                </div>
+
+                {/* Demo Button */}
+                <button
+                  type="button"
+                  onClick={loginAsDemo}
+                  disabled={isSubmitting}
+                  className="w-full py-3 border border-white/30 text-white/80 font-semibold rounded-xl hover:bg-white/10 hover:border-white/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Entrar como Visitante
+                </button>
+                <p className="text-[10px] text-white/40 text-center -mt-2">
+                  Explore o sistema com dados fictícios — nada será salvo.
+                </p>
               </div>
             </form>
           </div>

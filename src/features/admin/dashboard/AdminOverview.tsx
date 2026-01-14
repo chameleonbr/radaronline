@@ -497,7 +497,7 @@ export function AdminOverview({ actions, users, teams: _teams, filters, children
             </div>
 
             <div className="flex-1 min-h-0 relative">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <PieChart>
                   <Pie
                     data={statusData}
@@ -552,7 +552,7 @@ export function AdminOverview({ actions, users, teams: _teams, filters, children
             </div>
 
             <div className="flex-1 mt-4">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={metrics.deadlineHorizon} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.1)" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} dy={10} />

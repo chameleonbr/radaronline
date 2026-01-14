@@ -46,10 +46,10 @@ export const Header: React.FC<HeaderProps> = ({
   const objective = objectives[objectiveIndex];
   const rawTitle = objective?.title || '';
   // Usa a posição sequencial (índice + 1) e remove o número do título se existir
-  const objectiveTitle = objectiveIndex >= 0 
+  const objectiveTitle = objectiveIndex >= 0
     ? `Obj. ${objectiveIndex + 1}. ${getObjectiveTitleWithoutNumber(rawTitle)}`
     : rawTitle;
-  
+
   // Título limpo (sem prefixo) para passar ao modal de edição
   const cleanTitleForEdit = getObjectiveTitleWithoutNumber(rawTitle);
 
@@ -127,25 +127,11 @@ export const Header: React.FC<HeaderProps> = ({
               icon={<BarChart2 size={14} />}
               label="Cronograma"
             />
-            {(userRole === 'admin' || userRole === 'superadmin' || userRole === 'gestor') && (
-              <TabButton
-                active={viewMode === 'team'}
-                onClick={() => setViewMode('team')}
-                icon={<Users size={14} />}
-                label="Equipe"
-              />
-            )}
             <TabButton
               active={viewMode === 'optimized'}
               onClick={() => setViewMode('optimized')}
               icon={<Zap size={14} />}
               label="Visão Rápida"
-            />
-            <TabButton
-              active={viewMode === 'calendar'}
-              onClick={() => setViewMode('calendar')}
-              icon={<Calendar size={14} />}
-              label="Agenda"
             />
           </div>
         )}
@@ -161,11 +147,6 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <option value="table">📋 Ações</option>
               <option value="gantt">📅 Cronograma</option>
-              {(userRole === 'admin' || userRole === 'superadmin' || userRole === 'gestor') && (
-                <option value="team">👥 Equipe</option>
-              )}
-              <option value="optimized">⚡ Rápida</option>
-              <option value="calendar">📆 Agenda</option>
               <option value="optimized">⚡ Rápida</option>
             </select>
           </div>
@@ -175,8 +156,8 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Notification Bell - Moves here when Microregion is selected */}
           {micro && <NotificationBell />}
 
-          {/* Edit Mode Toggle - Only shown in Table View */}
-          {(isAdmin || userRole === 'superadmin') && onToggleEditMode && viewMode === 'table' && (
+          {/* Edit Mode Toggle - Only shown in Table View AND Strategy Mode */}
+          {(isAdmin || userRole === 'superadmin') && currentNav === 'strategy' && onToggleEditMode && viewMode === 'table' && (
             <button
               onClick={onToggleEditMode}
               className={`

@@ -51,7 +51,7 @@ interface ActionTableProps {
   useModal?: boolean;
 }
 
-const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, C: 2, I: 3 };
+const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, I: 2 };
 
 // ✅ FASE 3: Mover formatRelativeTime para fora do componente (evita recriação)
 export const formatRelativeTime = (dateString: string) => {
@@ -503,7 +503,7 @@ export const ActionTable: React.FC<ActionTableProps> = ({
                                 {team.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                               </Select>
                               <Select className="w-16 text-xs" value={newRaciRole} onChange={e => setNewRaciRole(e.target.value as RaciRole)}>
-                                <option>R</option><option>A</option><option>C</option><option>I</option>
+                                <option>R</option><option>A</option><option>I</option>
                               </Select>
                               <Tooltip content="Adicionar membro à equipe">
                                 <button

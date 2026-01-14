@@ -34,12 +34,22 @@ interface DashboardFiltersProps {
 }
 
 export function DashboardFilters({ filters, onChange }: DashboardFiltersProps) {
-    // Cascading options
+    // Cascading options (sorted)
     const microOptions = useMemo(() => {
-        if (!filters.selectedMacroId) return MICROREGIOES;
-        const macro = MACRORREGIOES.find(m => m.id === filters.selectedMacroId);
-        return macro ? getMicroregioesByMacro(macro.nome) : MICROREGIOES;
+        let options = [];
+        if (!filters.selectedMacroId) {
+            options = [...MICROREGIOES];
+        } else {
+            const macro = MACRORREGIOES.find(m => m.id === filters.selectedMacroId);
+            options = macro ? getMicroregioesByMacro(macro.nome) : [...MICROREGIOES];
+        }
+        return options.sort((a, b) => a.nome.localeCompare(b.nome));
     }, [filters.selectedMacroId]);
+
+    // Sorted Macros to ensure alphabetical order
+    const sortedMacros = useMemo(() => {
+        return [...MACRORREGIOES].sort((a, b) => a.nome.localeCompare(b.nome));
+    }, []);
 
     const _municipioOptions = useMemo(() => {
         if (!filters.selectedMicroId) return [];
@@ -49,12 +59,12 @@ export function DashboardFilters({ filters, onChange }: DashboardFiltersProps) {
     // Entity options for comparison
     const entityOptions = useMemo(() => {
         if (filters.compareLevel === 'macro') {
-            return MACRORREGIOES.map(m => ({ id: m.id, label: m.nome }));
+            return sortedMacros.map(m => ({ id: m.id, label: m.nome }));
         } else {
             // Updated to use MICROREGIOES instead of MUNICIPIOS
             return MICROREGIOES.map(m => ({ id: m.id, label: m.nome })).sort((a, b) => a.label.localeCompare(b.label));
         }
-    }, [filters.compareLevel]);
+    }, [filters.compareLevel, sortedMacros]);
 
     const handleMacroChange = (macroId: string) => {
         onChange({
@@ -166,7 +176,7 @@ export function DashboardFilters({ filters, onChange }: DashboardFiltersProps) {
                                     className="w-full pl-9 pr-8 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent appearance-none cursor-pointer hover:border-teal-300 dark:hover:border-teal-700 transition-colors"
                                 >
                                     <option value="">Todas Macrorregiões</option>
-                                    {MACRORREGIOES.map(macro => (
+                                    {sortedMacros.map(macro => (
                                         <option key={macro.id} value={macro.id}>{macro.nome}</option>
                                     ))}
                                 </select>

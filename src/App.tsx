@@ -51,6 +51,7 @@ import {
   ConfirmModal,
   EditNameModal, // Added import
   ErrorBoundary,
+  DemoBanner,
 } from './components/common';
 
 // Feature Components
@@ -65,6 +66,9 @@ import { AdminPanel } from './features/admin';
 import { LinearCalendar } from './features/admin/dashboard/LinearCalendar';
 import { UserSettingsModal } from './features/settings/UserSettingsModal';
 import { MunicipalityOnboardingModal } from './components/auth/MunicipalityOnboardingModal';
+
+// Mock Data for Demo Mode
+import { DEMO_OBJECTIVES, DEMO_ACTIVITIES, DEMO_ACTIONS, DEMO_TEAM } from './data/mockData';
 
 // =====================================
 // COMPONENTE PRINCIPAL DO APP
@@ -84,6 +88,7 @@ function AppContent() {
   const currentMicrorregiao = authContext?.currentMicrorregiao ?? null;
   const logout = useMemo(() => authContext?.logout ?? (() => { }), [authContext?.logout]);
   const viewingMicroregiaoId = authContext?.viewingMicroregiaoId ?? null;
+  const isDemoMode = authContext?.isDemoMode ?? false;
   // ✅ isContextLoading removido - _isLoading já cobre o caso de contexto null
 
   // --- NAVIGATION STATE ---
@@ -98,6 +103,17 @@ function AppContent() {
   const [currentNav, setCurrentNav] = useState<'strategy' | 'home' | 'settings'>('strategy');
   // NOTA: showStickyActivity calculado mas não consumido na UI atual - mantido para uso futuro
   const [, setShowStickyActivity] = useState<boolean>(false);
+
+  // Reseta o estado da landing page quando o usuário faz logout
+  useEffect(() => {
+    if (!user) {
+      setHasViewedLanding(false);
+    }
+  }, [user]);
+
+  // =====================================
+  // NOTIFICATION STATE
+  // =====================================
   const [isEditMode, setIsEditMode] = useState(false); // New lifted state
   const activityTabsRef = useRef<HTMLDivElement | null>(null);
 
@@ -377,7 +393,23 @@ function AppContent() {
       setIsDataLoading(true);
       setDataError(null);
 
+      // Limpar dados imediatamente para evitar flash de dados antigos durante a transição
+      setObjectives([]);
+      setActivities({});
+
       try {
+        // ✅ DEMO MODE: Usar dados fictícios em vez de carregar do banco
+        if (isDemoMode) {
+          setActions(DEMO_ACTIONS);
+          setTeamsByMicro(DEMO_TEAM);
+          setObjectives(DEMO_OBJECTIVES);
+          setActivities(DEMO_ACTIVITIES);
+          setSelectedObjective(DEMO_OBJECTIVES[0]?.id || 1);
+          setSelectedActivity(DEMO_ACTIVITIES[1]?.[0]?.id || '1.1');
+          setIsDataLoading(false);
+          return;
+        }
+
         // Carregar ações (filtradas por micro se não for admin vendo todas)
         const microId = isViewingAllMicros ? undefined : currentMicroId;
 
@@ -409,14 +441,21 @@ function AppContent() {
 
           // Usar nextObjectiveId (variável local) para buscar atividades, não selectedObjective (state)
           const nextObjectiveActivities = activitiesData[nextObjectiveId] || [];
-          
+
           // Determinar próxima atividade selecionada
           if (nextObjectiveActivities.length > 0) {
             const activityStillExists = nextObjectiveActivities.some(a => a.id === selectedActivity);
             if (!activityStillExists) {
               setSelectedActivity(nextObjectiveActivities[0].id);
             }
+          } else {
+            // Se o objetivo não tem atividades, limpa a seleção
+            setSelectedActivity('');
           }
+        } else {
+          // Se não há objetivos, limpa tudo
+          setSelectedObjective(0);
+          setSelectedActivity('');
         }
       } catch (error: any) {
         logError('App', 'Erro ao carregar dados', error);
@@ -455,6 +494,9 @@ function AppContent() {
 
     const checkCanCreate = () => {
       if (!user) return false;
+      // Bloqueia se não há atividade selecionada (implica que não há objetivos)
+      // Mesmo admins precisam de atividades para criar ações
+      if (!selectedActivity) return false;
       if (isAdmin) return true;
       if (isViewingAllMicros) return false;
       if (!currentMicroId) return false;
@@ -470,7 +512,7 @@ function AppContent() {
     };
 
     return { checkCanEdit, checkCanDelete, checkCanCreate, checkCanManageTeam };
-  }, [user, isAdmin, isViewingAllMicros, currentMicroId]);
+  }, [user, isAdmin, isViewingAllMicros, currentMicroId, selectedActivity]);
 
   // Aliases para compatibilidade
   const checkCanEdit = permissions.checkCanEdit;
@@ -536,6 +578,13 @@ function AppContent() {
   }, [checkCanEdit, showToast, currentMicroId, isViewingAllMicros, isAdmin]);
 
   const handleSaveAction = useCallback(async (uid?: string) => {
+    // ✅ DEMO MODE: Bloquear salvar
+    if (isDemoMode) {
+      showToast('Modo Visualização: Alterações não são salvas. Faça login real para usar o sistema.', 'warning');
+      setExpandedActionUid(null);
+      return;
+    }
+
     if (!uid && !expandedActionUid) {
       showToast('Nenhuma ação selecionada', 'error');
       return;
@@ -642,6 +691,12 @@ function AppContent() {
       return;
     }
 
+    // ✅ DEMO MODE: Bloquear criar
+    if (isDemoMode) {
+      showToast('Modo Visualização: Não é possível criar ações. Faça login real para usar o sistema.', 'warning');
+      return;
+    }
+
     // Criar ação temporária local (não salva no banco ainda)
     const nextNum = getNextActionNumber(actions, selectedActivity, currentMicroId);
     const actionId = `${selectedActivity}.${nextNum}`;
@@ -706,6 +761,12 @@ function AppContent() {
   }, [actions, createActionMicroId, selectedActivity, viewMode, showToast]);
 
   const handleDeleteAction = useCallback((uid: string) => {
+    // ✅ DEMO MODE: Bloquear excluir
+    if (isDemoMode) {
+      showToast('Modo Visualização: Não é possível excluir ações. Faça login real para usar o sistema.', 'warning');
+      return;
+    }
+
     if (isViewingAllMicros && !isAdmin) {
       showToast('Selecione uma microrregião específica para excluir', 'error');
       return;
@@ -957,8 +1018,14 @@ function AppContent() {
   }, []);
 
   // Handler para navegação do Dashboard
-  const handleDashboardNavigate = useCallback((view: 'list', filters?: { status?: string; objectiveId?: number }) => {
+  const handleDashboardNavigate = useCallback((view: 'list' | 'team', filters?: { status?: string; objectiveId?: number }) => {
     setCurrentNav('strategy');
+
+    if (view === 'team') {
+      setViewMode('team');
+      return;
+    }
+
     setViewMode('table');
     if (filters?.status) {
       // Cast to match the expected specific string literals
@@ -995,12 +1062,25 @@ function AppContent() {
       // Salvar no banco
       const newObjective = await dataService.createObjective(newTitle, targetMicroId);
 
+      // Criar automaticamente a primeira atividade para este objetivo
+      const firstActivityId = `${targetMicroId}_${nextDisplayNumber}.1`;
+      const firstActivityTitle = 'Nova Atividade';
+      const firstActivityDescription = 'Descrição da atividade.';
+
+      const firstActivity = await dataService.createActivity(
+        newObjective.id,
+        firstActivityId,
+        firstActivityTitle,
+        targetMicroId,
+        firstActivityDescription
+      );
+
       setObjectives(prev => [...prev, newObjective]);
       setActivities(prev => ({
         ...prev,
-        [newObjective.id]: [], // Iniciar sem atividades
+        [newObjective.id]: [firstActivity], // Iniciar com a primeira atividade
       }));
-      showToast('Objetivo adicionado! Edite o título conforme necessário.', 'success');
+      showToast('Objetivo e atividade criados!', 'success');
     } catch (error: any) {
       logError('App', 'Erro ao criar objetivo', error);
       showToast(`Erro ao criar objetivo: ${error.message}`, 'error');
@@ -1385,6 +1465,11 @@ function AppContent() {
         @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .animate-pulse-soft { animation: pulse-soft 2s infinite; }
       `}</style>
+
+      {/* Demo Mode Banner */}
+      {isDemoMode && (
+        <DemoBanner onLoginClick={logout} />
+      )}
 
       {/* Municipality Onboarding Modal - REMOVIDO: estava duplicado */}
       {/* O modal de primeiro acesso com completeFirstAccess está no final do arquivo */}

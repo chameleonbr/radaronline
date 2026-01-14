@@ -6,7 +6,7 @@ export * from './types/auth.types';
 
 // --- STATUS E ROLES ---
 export type Status = 'Concluído' | 'Em Andamento' | 'Não Iniciado' | 'Atrasado';
-export type RaciRole = 'R' | 'A' | 'C' | 'I';
+export type RaciRole = 'R' | 'A' | 'I';
 
 // --- RACI ---
 export type RaciMember = {

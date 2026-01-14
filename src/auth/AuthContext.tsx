@@ -1,14 +1,18 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User, AuthContextType, Microrregiao } from '../types/auth.types';
 
-// Tipo estendido para incluir refreshUser
+// Tipo estendido para incluir refreshUser e Demo Mode
 interface ExtendedAuthContextType extends AuthContextType {
   refreshUser: () => Promise<void>;
+  // Demo Mode
+  isDemoMode: boolean;
+  loginAsDemo: () => void;
 }
 import { getMicroregiaoById } from '../data/microregioes';
 import { supabase } from '../lib/supabase';
 import * as authService from '../services/authService';
 import { loggingService } from '../services/loggingService';
+import { DEMO_USER } from '../data/mockData';
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -43,6 +47,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [viewingMicroregiaoId, setViewingMicroregiaoId] = useState<string | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   /**
    * Carrega perfil do usuário do Supabase com cache
@@ -335,12 +340,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Logout
   const logout = useCallback(async () => {
     try {
+      // Se estava em modo demo, apenas limpa o estado
+      if (isDemoMode) {
+        setUser(null);
+        setViewingMicroregiaoId(null);
+        setIsDemoMode(false);
+        return;
+      }
       await supabase.auth.signOut();
       setUser(null);
       setViewingMicroregiaoId(null);
     } catch {
       // Erro ao fazer logout - ignorado
     }
+  }, [isDemoMode]);
+
+  // Login como Visitante (Demo Mode)
+  const loginAsDemo = useCallback(() => {
+    setUser(DEMO_USER);
+    setIsDemoMode(true);
+    setViewingMicroregiaoId(DEMO_USER.microregiaoId);
+    setIsLoading(false);
   }, []);
 
   // Aceitar LGPD
@@ -350,13 +370,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return;
     }
 
+    // ✅ DEMO MODE: Apenas atualiza estado local, não salva no banco
+    if (isDemoMode) {
+      setUser(prev => prev ? {
+        ...prev,
+        lgpdConsentimento: true,
+        lgpdConsentimentoData: new Date().toISOString(),
+      } : null);
+      return;
+    }
+
     await authService.acceptLgpd(user.id);
     setUser(prev => prev ? {
       ...prev,
       lgpdConsentimento: true,
       lgpdConsentimentoData: new Date().toISOString(),
     } : null);
-  }, [user]);
+  }, [user, isDemoMode]);
 
   // Trocar microrregião visualizada (admin ou superadmin)
   const setViewingMicrorregiao = useCallback((microregiaoId: string) => {
@@ -394,6 +424,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setViewingMicrorregiao,
     viewingMicroregiaoId,
     refreshUser,
+    // Demo Mode
+    isDemoMode,
+    loginAsDemo,
   };
 
   return (

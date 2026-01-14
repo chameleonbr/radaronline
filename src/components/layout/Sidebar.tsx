@@ -489,7 +489,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {/* Lista de objetivos (expandido) */}
-                {isOpen && currentNav === 'strategy' && viewMode !== 'calendar' && (
+                {isOpen && currentNav === 'strategy' && viewMode !== 'calendar' && viewMode !== 'team' && (
                   <div className="ml-1 pl-3 border-l-2 border-emerald-500/20 space-y-2 mt-2 mb-4 animate-slide-down">
                     {objectives.map((obj, objIndex) => (
                       <div key={obj.id} className="group/obj">
@@ -614,13 +614,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 )}
 
+                {/* 3. Equipe (Team) - Only for admins and managers */}
+                {(userRole === 'admin' || userRole === 'superadmin' || userRole === 'gestor') && (
+                  <SidebarItem
+                    icon={Users}
+                    label="Equipe"
+                    isActive={currentNav === 'strategy' && viewMode === 'team'}
+                    onClick={() => { setCurrentNav('strategy'); setViewMode('team'); }}
+                    collapsed={!isOpen}
+                  />
+                )}
+
                 {/* 3. Agenda (Calendar) */}
-                <SidebarItem 
-                  icon={Calendar} 
-                  label="Agenda" 
-                  isActive={currentNav === 'strategy' && viewMode === 'calendar'} 
-                  onClick={() => { setCurrentNav('strategy'); setViewMode('calendar'); }} 
-                  collapsed={!isOpen} 
+                <SidebarItem
+                  icon={Calendar}
+                  label="Agenda"
+                  isActive={currentNav === 'strategy' && viewMode === 'calendar'}
+                  onClick={() => { setCurrentNav('strategy'); setViewMode('calendar'); }}
+                  collapsed={!isOpen}
                 />
 
                 {/* 4. Notificações (Notifications) - Moves below Objectives */}
@@ -660,20 +671,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {/* Avatar/Config */}
                 <button
                   onClick={() => onOpenSettings?.('avatar')}
-                  className="flex items-center gap-3 p-2 rounded-xl transition-colors hover:bg-white/10 cursor-pointer text-left flex-1 group"
+                  className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/10 cursor-pointer text-left flex-1 group contain-layout"
                   title="Meu Perfil"
                 >
                   <div className="relative shrink-0">
                     <img
                       src={getAvatarUrl(userAvatarId || 'zg10')}
                       alt="User"
-                      className="w-10 h-10 rounded-full bg-white border-2 border-white/30 group-hover:border-white shadow-md transition-all"
+                      className="w-10 h-10 rounded-full bg-white border-2 border-white/30 group-hover:border-white shadow-md"
                       loading="lazy"
                     />
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#047857] rounded-full shadow-sm"></div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold truncate text-white leading-tight group-hover:text-emerald-100 transition-colors">{userName || 'Usuário'}</div>
+                    <div className="text-sm font-bold truncate text-white leading-tight">{userName || 'Usuário'}</div>
                     <div className="text-[10px] font-medium opacity-70 truncate text-white/90 uppercase tracking-wider">{getRoleLabel(userRole)}</div>
                   </div>
                 </button>

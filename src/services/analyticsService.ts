@@ -100,6 +100,13 @@ export const analyticsService = {
      */
     async trackEvent(event: AnalyticsEvent): Promise<void> {
         try {
+            // Verificar se há sessão ativa antes de tentar registrar
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                // Silenciosamente ignora tentativas de analytics sem autenticação
+                return;
+            }
+
             const { error } = await supabase
                 .from('user_analytics')
                 .insert({
@@ -126,6 +133,13 @@ export const analyticsService = {
      */
     async trackEvents(events: AnalyticsEvent[]): Promise<void> {
         try {
+            // Verificar se há sessão ativa antes de tentar registrar
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                // Silenciosamente ignora tentativas de analytics sem autenticação
+                return;
+            }
+
             const records = events.map(event => ({
                 session_id: event.sessionId,
                 user_id: event.userId,

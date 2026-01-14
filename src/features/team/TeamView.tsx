@@ -9,11 +9,12 @@ import {
   ChevronDown, Filter, Loader2, AlertTriangle
 } from 'lucide-react';
 
+import { useToast } from '../../components/common';
+
 // Melhores Práticas: Definir papeis padrão para evitar "Lider", "Chefe", "Resp." misturados
 const ROLES_OPTIONS = [
   'Responsável',
   'Aprovador',
-  'Consultado',
   'Informado',
   'Membro'
 ];
@@ -51,8 +52,8 @@ type TeamViewProps = {
 type NewMember = Pick<TeamMember, 'name' | 'role' | 'email' | 'municipio'>;
 const emptyMember: NewMember = { name: '', role: '', email: '', municipio: '' };
 
-
 export function TeamView({ team, microId, onUpdateTeam, onAddMember, onRemoveMember, readOnly = false }: TeamViewProps) {
+  const { showToast } = useToast();
   const [isAddOpen, setIsAddOpen] = useState(false); // UI State: Controla visibilidade do form
   const [form, setForm] = useState<NewMember>(emptyMember);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -93,7 +94,19 @@ export function TeamView({ team, microId, onUpdateTeam, onAddMember, onRemoveMem
 
   const handleAdd = async () => {
     if (readOnly || !microId) return;
-    if (!form.name.trim()) return;
+
+    // Validação de Campos Obrigatórios
+    if (!form.name.trim() || !form.role.trim() || !form.email.trim()) {
+      showToast("Por favor, preencha todos os campos obrigatórios: Nome, Cargo e Email.", 'error');
+      return;
+    }
+
+    // Validação de Formato de Email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(form.email.trim())) {
+      showToast("Por favor, insira um endereço de email válido.", 'error');
+      return;
+    }
 
     setIsAdding(true);
     try {
@@ -109,6 +122,7 @@ export function TeamView({ team, microId, onUpdateTeam, onAddMember, onRemoveMem
         // O estado já é atualizado pelo App.tsx dentro do onAddMember
         // Apenas limpa o form se o membro foi criado com sucesso
         if (newMember) {
+          showToast("Membro adicionado com sucesso!", 'success');
           setForm(emptyMember);
           setIsAddOpen(false);
         }
@@ -250,61 +264,83 @@ export function TeamView({ team, microId, onUpdateTeam, onAddMember, onRemoveMem
 
       {/* Formulário de Adição (Colapsável) */}
       <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isAddOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-        <div className="bg-gradient-to-br from-teal-50 to-white dark:from-slate-800 dark:to-slate-900 border border-teal-100 dark:border-teal-800 rounded-2xl p-5 md:p-6 shadow-inner">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-teal-900 dark:text-teal-300 flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-teal-500"></div>
-              Adicionar Novo Colaborador
-            </h3>
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 border-l-4 border-l-teal-500 rounded-2xl p-6 shadow-xl mb-6 relative">
+
+          <button
+            onClick={() => setIsAddOpen(false)}
+            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+          >
+            <X size={20} />
+          </button>
+
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/40 flex items-center justify-center text-teal-600 dark:text-teal-400">
+              <Plus size={20} strokeWidth={2.5} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                Novo Colaborador
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Preencha os dados abaixo para adicionar um membro.
+              </p>
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-teal-900/60 dark:text-teal-400 ml-1">Nome Completo</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Nome Completo <span className="text-rose-500">*</span></label>
               <input
-                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-teal-200/60 dark:border-teal-700 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700 focus:border-teal-400 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-500"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400"
                 placeholder="Ex: Maria Silva"
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-teal-900/60 dark:text-teal-400 ml-1">Cargo / Função</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Cargo / Função <span className="text-rose-500">*</span></label>
               <input
-                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-teal-200/60 dark:border-teal-700 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700 focus:border-teal-400 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-500"
-                placeholder="Ex: Coordenador, Técnico, Gestor..."
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400"
+                placeholder="Ex: Gestor"
                 value={form.role}
                 onChange={e => setForm({ ...form, role: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-teal-900/60 dark:text-teal-400 ml-1">Email</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Email <span className="text-rose-500">*</span></label>
               <input
-                className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-teal-200/60 dark:border-teal-700 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700 focus:border-teal-400 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-500"
+                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400"
                 placeholder="maria@exemplo.com"
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-teal-900/60 dark:text-teal-400 ml-1">Município</label>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Município</label>
               <div className="relative">
                 <select
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-teal-200/60 dark:border-teal-700 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700 focus:border-teal-400 transition-all appearance-none cursor-pointer"
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all appearance-none cursor-pointer"
                   value={form.municipio}
                   onChange={e => setForm({ ...form, municipio: e.target.value })}
                 >
-                  <option value="">Selecione o município...</option>
+                  <option value="">Selecione...</option>
                   {municipiosOrdenados.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-teal-300 pointer-events-none" size={14} />
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
               </div>
             </div>
           </div>
-          <div className="flex justify-end mt-4">
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-700">
+            <button
+              onClick={() => setIsAddOpen(false)}
+              className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              Cancelar
+            </button>
             <button
               onClick={handleAdd}
-              disabled={!form.name.trim() || isAdding}
-              className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold rounded-lg shadow-sm shadow-teal-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              disabled={!form.name.trim() || !form.role.trim() || !form.email.trim() || isAdding}
+              className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-teal-500/20 hover:shadow-teal-500/40 transform active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
             >
               {isAdding && <Loader2 size={16} className="animate-spin" />}
               {isAdding ? 'Salvando...' : 'Confirmar Adição'}

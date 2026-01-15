@@ -120,13 +120,8 @@ export function applyActionRules(
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const isOverdue = !!planned && planned < today && !end && next.progress < 100;
 
-    // 7. Responsible Validation
-    // Check if there is at least one "Responsável" (R) in the RACI list
-    // logic: raci array exists AND has at least one item with role === 'R'
-    const hasResponsible = next.raci && next.raci.some(m => m.role === 'R');
-    if (!hasResponsible) {
-        errors.missingResponsible = "Defina pelo menos um Responsável.";
-    }
+    // 7. Responsible Validation (REMOVIDO - não é mais obrigatório)
+    // A validação de responsável foi removida para dar mais flexibilidade ao usuário
 
     return {
         next,

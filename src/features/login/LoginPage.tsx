@@ -202,9 +202,9 @@ export function LoginPage() {
             </p>
           </div>
 
-          <div className="absolute bottom-12 z-10">
+          <div className="absolute bottom-24 z-10">
             <img
-              src="/logos-sidebar.png"
+              src="/loginlogo2.png"
               alt="Logos SUS Digital e SES"
               className="w-[40rem] h-auto object-contain opacity-40 hover:opacity-60 transition-opacity duration-500"
               style={{ filter: 'brightness(0) invert(1)' }}

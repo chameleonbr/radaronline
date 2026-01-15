@@ -14,6 +14,13 @@ export type RaciMember = {
   role: RaciRole;
 };
 
+// --- TAG/CATEGORIA ---
+export type ActionTag = {
+  id: string;
+  name: string;
+  color: string;
+};
+
 // --- COMENTÁRIO (estilo Reddit/thread) ---
 export type ActionComment = {
   id: string;               // ID único do comentário
@@ -44,6 +51,7 @@ export type Action = {
   endDate: string;          // Data real de término
   progress: number;         // 0-100
   raci: RaciMember[];       // Equipe RACI desta ação
+  tags: ActionTag[];        // Categorias/Tags da ação
   notes: string;            // Campo legado (manter compatibilidade)
   comments: ActionComment[]; // Comentários estilo Reddit
 };
@@ -149,6 +157,7 @@ export function createAction(
     endDate: '',
     progress: 0,
     raci: [],
+    tags: [],
     notes: '',
     comments: [],
     ...overrides,

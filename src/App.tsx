@@ -427,7 +427,7 @@ function AppContent() {
         // ✅ CORREÇÃO DE INCONSISTÊNCIA: Filtrar ações órfãs (sem atividade válida)
         // Isso garante que a contagem seja consistente entre Dashboard, Objetivos e Agenda
         const validActions = filterOrphanedActions(actionsData, activitiesData);
-        
+
         // Log de diagnóstico se houver ações órfãs
         const orphanedCount = actionsData.length - validActions.length;
         if (orphanedCount > 0) {
@@ -728,6 +728,7 @@ function AppContent() {
       raci: [],
       notes: '',
       comments: [],
+      tags: [],
     };
 
     setActions(prev => [...prev, tempAction]);
@@ -762,6 +763,7 @@ function AppContent() {
       raci: [],
       notes: '',
       comments: [],
+      tags: [],
     };
 
     setActions(prev => [...prev, tempAction]);
@@ -1373,6 +1375,7 @@ function AppContent() {
         raci: [],
         notes: '',
         comments: [],
+        tags: [],
       };
 
       setActions(prev => [...prev, tempAction]);
@@ -1684,13 +1687,12 @@ function AppContent() {
 
         {/* SCROLLABLE AREA */}
         {/* Padding extra quando FAB está visível (mobile + strategy + table + canCreate) */}
-        <div className={`flex-1 overflow-y-auto overflow-x-hidden relative ${
-          isMobile 
-            ? (currentNav === 'strategy' && viewMode === 'table' && checkCanCreate() 
-                ? 'pb-mobile-nav-with-fab' 
-                : 'pb-mobile-nav')
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden relative ${isMobile
+            ? (currentNav === 'strategy' && viewMode === 'table' && checkCanCreate()
+              ? 'pb-mobile-nav-with-fab'
+              : 'pb-mobile-nav')
             : ''
-        }`}>
+          }`}>
 
           {/* Breadcrumb */}
           {/* Breadcrumb removido por redundância e estética */}

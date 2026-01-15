@@ -94,6 +94,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Ana Silva', role: 'R' }, { name: 'Carlos Souza', role: 'A' }],
         notes: 'Mapeamento concluído com sucesso.',
         comments: [],
+        tags: [],
     },
     {
         uid: 'MR070::1.1.2',
@@ -109,6 +110,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Ana Silva', role: 'R' }],
         notes: '',
         comments: [],
+        tags: [],
     },
     {
         uid: 'MR070::1.1.3',
@@ -124,6 +126,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [],
         notes: '',
         comments: [],
+        tags: [],
     },
     // Objetivo 1 - Atividade 1.2
     {
@@ -140,6 +143,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Maria Oliveira', role: 'R' }],
         notes: 'Novos fluxos implementados.',
         comments: [],
+        tags: [],
     },
     {
         uid: 'MR070::1.2.2',
@@ -155,6 +159,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Maria Oliveira', role: 'R' as const }, { name: 'Carlos Souza', role: 'I' as const }],
         notes: 'Aguardando material de treinamento.',
         comments: [],
+        tags: [],
     },
     // Objetivo 2 - Atividade 2.1
     {
@@ -171,6 +176,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Carlos Souza', role: 'R' }],
         notes: '',
         comments: [],
+        tags: [],
     },
     {
         uid: 'MR070::2.1.2',
@@ -186,6 +192,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Carlos Souza', role: 'R' }, { name: 'Ana Silva', role: 'A' }],
         notes: '',
         comments: [],
+        tags: [],
     },
     // Objetivo 3 - Atividade 3.1
     {
@@ -202,6 +209,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Ana Silva', role: 'R' }],
         notes: 'Processo licitatório em andamento.',
         comments: [],
+        tags: [],
     },
     {
         uid: 'MR070::3.1.2',
@@ -217,6 +225,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [],
         notes: '',
         comments: [],
+        tags: [],
     },
     // Objetivo 4 - Atividade 4.1
     {
@@ -233,6 +242,7 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Ana Silva', role: 'R' }],
         notes: '',
         comments: [],
+        tags: [],
     },
     {
         uid: 'MR070::4.1.2',
@@ -248,5 +258,6 @@ export const DEMO_ACTIONS: Action[] = [
         raci: [{ name: 'Maria Oliveira', role: 'R' }],
         notes: '15 gestores inscritos.',
         comments: [],
+        tags: [],
     },
 ];

@@ -1,11 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, differenceInDays, isToday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Action, Activity, Objective } from '../../../types';
 import { MICROREGIOES } from '../../../data/microregioes';
 import { getActionDisplayId } from '../../../lib/text';
 import { filterOrphanedActions, hasValidDate, createActivityToObjectiveMap } from '../../../lib/actionValidation';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ZoomIn, ZoomOut, Target, X, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ZoomIn, ZoomOut, Target, X, AlertCircle, CalendarDays, Clock, ArrowRight } from 'lucide-react';
 
 interface LinearCalendarProps {
     actions: Action[];
@@ -39,6 +39,8 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
     const [zoomLevel, setZoomLevel] = useState(1);
     const [hoveredActionId, setHoveredActionId] = useState<string | null>(null);
     const [selectedAction, setSelectedAction] = useState<Action | null>(null);
+    const [selectedDay, setSelectedDay] = useState<{ dateKey: string; dateObj: Date } | null>(null);
+    const [expandedActionId, setExpandedActionId] = useState<string | null>(null);
 
     useEffect(() => {
         if (microId !== undefined) setSelectedMicro(microId);
@@ -248,8 +250,19 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
         return { actionsPerDay: map, ganttSlotsMap: slots };
     }, [filteredActions, gridData]);
 
-    const getObjectiveForAction = (action: Action): number => {
-        return activityToObjective[action.activityId] || 1;
+    // Retorna o número sequencial do objetivo (1, 2, 3...) baseado na posição na lista
+    const getObjectiveDisplayNumber = (action: Action): number => {
+        const objectiveDbId = activityToObjective[action.activityId];
+        if (!objectiveDbId) return 1;
+
+        // Encontra a posição (índice + 1) do objetivo na lista
+        const index = objectives.findIndex(o => o.id === objectiveDbId);
+        return index >= 0 ? index + 1 : 1;
+    };
+
+    // Retorna o ID do banco do objetivo (para buscar dados)
+    const getObjectiveDbId = (action: Action): number => {
+        return activityToObjective[action.activityId] || objectives[0]?.id || 1;
     };
 
     const monthNamesShort = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
@@ -388,20 +401,20 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                         const count = dailyActions.length;
                         const isHighDensity = (viewType === 'year' || viewType === 'month') && count > 6;
                         const isDimmed = !day.isCurrentMonth && viewType === 'month';
+                        const isTodayCell = isToday(day.dateObj);
 
                         return (
                             <div
                                 key={day.dateKey}
                                 onClick={() => {
-                                    if (count > 0) {
-                                        setSelectedAction(dailyActions[0]);
-                                    }
+                                    setSelectedDay({ dateKey: day.dateKey, dateObj: day.dateObj });
                                 }}
                                 className={`
                                     relative ${getCellHeight()} p-1 flex flex-col group cursor-pointer transition-colors
                                     ${day.isWeekend ? 'bg-slate-50/60 dark:bg-slate-800/60' : 'bg-white dark:bg-slate-800'}
                                     ${day.isFirstDay && viewType !== 'week' && viewType !== 'day' ? 'border-l-2 border-slate-600 dark:border-slate-400' : ''}
                                     ${isDimmed ? 'opacity-40 bg-slate-100 dark:bg-slate-900' : 'hover:bg-indigo-50/20 dark:hover:bg-indigo-900/10'}
+                                    ${isTodayCell ? 'ring-2 ring-inset ring-indigo-500 bg-indigo-50/30 dark:bg-indigo-900/20' : ''}
                                 `}
                             >
                                 {/* Header da Célula */}
@@ -419,9 +432,15 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                                         {count > 0 && isHighDensity && (
                                             <span className="text-[9px] font-bold px-1 rounded-sm bg-indigo-600 text-white">{count}</span>
                                         )}
-                                        <span className={`text-sm font-bold mr-1 ${day.isFirstDay ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
-                                            {day.day}
-                                        </span>
+                                        {isTodayCell ? (
+                                            <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-sm font-bold flex items-center justify-center mr-0.5">
+                                                {day.day}
+                                            </span>
+                                        ) : (
+                                            <span className={`text-sm font-bold mr-1 ${day.isFirstDay ? 'text-slate-800 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
+                                                {day.day}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
@@ -430,7 +449,7 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                                     {isHighDensity ? (
                                         <div className="grid grid-cols-4 gap-1 p-1 content-start">
                                             {dailyActions.slice(0, 20).map(a => {
-                                                const objId = getObjectiveForAction(a);
+                                                const objId = getObjectiveDisplayNumber(a);
                                                 const objColors = OBJECTIVE_COLORS[objId] || OBJECTIVE_COLORS[1];
                                                 return (
                                                     <div
@@ -448,7 +467,7 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                                             const action = slots[i];
                                             if (!action) return null;
                                             const isHovered = hoveredActionId === action.uid;
-                                            const objId = getObjectiveForAction(action);
+                                            const objId = getObjectiveDisplayNumber(action);
                                             const objColors = OBJECTIVE_COLORS[objId] || OBJECTIVE_COLORS[1];
                                             const statusColor = STATUS_COLORS[action.status] || 'bg-slate-400';
 
@@ -494,10 +513,10 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                 <>
                     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" onClick={() => setSelectedAction(null)} />
                     <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-50 w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700">
-                        <div className={`px-5 py-4 ${OBJECTIVE_COLORS[getObjectiveForAction(selectedAction)]?.bg || 'bg-slate-50'} border-b ${OBJECTIVE_COLORS[getObjectiveForAction(selectedAction)]?.border || 'border-slate-200'} flex items-center justify-between`}>
+                        <div className={`px-5 py-4 ${OBJECTIVE_COLORS[getObjectiveDisplayNumber(selectedAction)]?.bg || 'bg-slate-50'} border-b ${OBJECTIVE_COLORS[getObjectiveDisplayNumber(selectedAction)]?.border || 'border-slate-200'} flex items-center justify-between`}>
                             <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${OBJECTIVE_COLORS[getObjectiveForAction(selectedAction)]?.bar || 'bg-slate-500'}`}>
-                                    {getObjectiveForAction(selectedAction)}
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold ${OBJECTIVE_COLORS[getObjectiveDisplayNumber(selectedAction)]?.bar || 'bg-slate-500'}`}>
+                                    {getObjectiveDisplayNumber(selectedAction)}
                                 </div>
                                 <div>
                                     <span className="text-xs font-mono text-slate-500 dark:text-slate-400">A{getActionDisplayId(selectedAction.id)}</span>
@@ -566,6 +585,259 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                     </div>
                 </>
             )}
+
+            {/* Day Detail Modal - Shows all actions for a selected day */}
+            {selectedDay && (() => {
+                // Normaliza "hoje" para meia-noite para comparação correta de dias
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                // Garante que a data selecionada também seja considerada meia-noite
+                const selectedDateNormalized = new Date(selectedDay.dateObj);
+                selectedDateNormalized.setHours(0, 0, 0, 0);
+
+                const dayDiff = differenceInDays(selectedDateNormalized, today);
+                const isTodaySelected = isToday(selectedDay.dateObj);
+                const dayActions = actionsPerDay[selectedDay.dateKey] || [];
+
+                // Group actions by objective
+                const actionsByObjective = dayActions.reduce((acc, action) => {
+                    const objId = getObjectiveDisplayNumber(action);
+                    if (!acc[objId]) acc[objId] = [];
+                    acc[objId].push(action);
+                    return acc;
+                }, {} as Record<number, Action[]>);
+
+                const getDayDiffText = () => {
+                    if (isTodaySelected) return 'Hoje';
+                    if (dayDiff === 1) return 'Amanhã';
+                    if (dayDiff === -1) return 'Ontem';
+                    if (dayDiff > 0) return `Daqui a ${dayDiff} dias`;
+                    return `Há ${Math.abs(dayDiff)} dias`;
+                };
+
+                const dayOfWeek = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][selectedDay.dateObj.getDay()];
+
+                return (
+                    <>
+                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setSelectedDay(null)} />
+                        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-50 w-full max-w-lg max-h-[85vh] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col">
+                            {/* Header with date info */}
+                            <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-4 text-white shrink-0">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                            <CalendarDays size={24} />
+                                        </div>
+                                        <div>
+                                            <p className="text-indigo-100 text-sm font-medium">{dayOfWeek}</p>
+                                            <h3 className="text-2xl font-bold leading-tight">
+                                                {format(selectedDay.dateObj, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                                            </h3>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setSelectedDay(null)}
+                                        className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+
+                                {/* Date comparison info */}
+                                <div className="mt-4 flex items-center gap-4 text-sm">
+                                    <div className="flex items-center gap-2 bg-white/15 rounded-lg px-3 py-2 backdrop-blur-sm">
+                                        <Clock size={14} />
+                                        <span>Hoje: {format(today, "dd/MM/yyyy")}</span>
+                                    </div>
+                                    <div className="flex items-center text-indigo-100">
+                                        <ArrowRight size={14} className="mx-2" />
+                                    </div>
+                                    <div className={`flex items-center gap-2 rounded-lg px-3 py-2 font-bold ${isTodaySelected ? 'bg-emerald-500/80' :
+                                        dayDiff > 0 ? 'bg-blue-500/80' : 'bg-amber-500/80'
+                                        }`}>
+                                        {getDayDiffText()}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Actions content - scrollable */}
+                            <div className="flex-1 overflow-y-auto p-5">
+                                {dayActions.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                                            <CalendarDays size={28} className="text-slate-400" />
+                                        </div>
+                                        <h4 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                                            Nenhuma ação programada
+                                        </h4>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                            Não há ações previstas para este dia.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+                                            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                                                {dayActions.length} {dayActions.length === 1 ? 'ação' : 'ações'} neste dia
+                                            </span>
+                                        </div>
+
+                                        {/* Actions grouped by objective */}
+                                        {Object.entries(actionsByObjective)
+                                            .sort(([a], [b]) => Number(a) - Number(b))
+                                            .map(([objId, objActions]) => {
+                                                const numObjId = Number(objId);
+                                                const colors = OBJECTIVE_COLORS[numObjId] || OBJECTIVE_COLORS[1];
+                                                const objective = objectives.find((o, idx) => (idx + 1) === numObjId);
+
+                                                return (
+                                                    <div key={objId} className={`rounded-xl border ${colors.border} ${colors.bg} overflow-hidden`}>
+                                                        {/* Objective header */}
+                                                        <div className={`px-4 py-3 flex items-center gap-3 border-b ${colors.border}`}>
+                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm ${colors.bar}`}>
+                                                                {numObjId}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <span className={`text-xs font-bold uppercase tracking-wide ${colors.text}`}>
+                                                                    Objetivo {numObjId}
+                                                                </span>
+                                                                {objective && (
+                                                                    <p className="text-sm text-slate-600 dark:text-slate-300 truncate">
+                                                                        {objective.title.replace(/^\d+\.\s*/, '')}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <span className={`text-xs font-bold px-2 py-1 rounded-full ${colors.bar} text-white`}>
+                                                                {objActions.length}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Actions list */}
+                                                        <div className="divide-y divide-slate-200/50 dark:divide-slate-700/50">
+                                                            {objActions.map((action) => {
+                                                                const isExpanded = expandedActionId === action.uid;
+                                                                return (
+                                                                    <div
+                                                                        key={action.uid}
+                                                                        className={`transition-colors ${isExpanded ? 'bg-slate-50 dark:bg-slate-800/80' : 'hover:bg-white/50 dark:hover:bg-slate-700/30'}`}
+                                                                    >
+                                                                        {/* Header da Ação (Clicável) */}
+                                                                        <div
+                                                                            className="px-4 py-3 cursor-pointer select-none"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setExpandedActionId(isExpanded ? null : action.uid);
+                                                                            }}
+                                                                        >
+                                                                            <div className="flex items-start gap-3">
+                                                                                <div className={`w-2 h-2 mt-2 rounded-full shrink-0 ${STATUS_COLORS[action.status]}`} />
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                                        <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
+                                                                                            A{getActionDisplayId(action.id)}
+                                                                                        </span>
+                                                                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${action.status === 'Concluído' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                                                            action.status === 'Em Andamento' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                                                                action.status === 'Atrasado' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' :
+                                                                                                    'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
+                                                                                            }`}>
+                                                                                            {action.status}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <h5 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1 line-clamp-2">
+                                                                                        {action.title}
+                                                                                    </h5>
+                                                                                    {!isExpanded && (
+                                                                                        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                                                                                            <span className="flex items-center gap-1">
+                                                                                                <div className="w-20 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                                                                                                    <div
+                                                                                                        className={`h-full ${action.progress >= 100 ? 'bg-emerald-500' : action.progress >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`}
+                                                                                                        style={{ width: `${action.progress}%` }}
+                                                                                                    />
+                                                                                                </div>
+                                                                                                <span className="font-medium">{action.progress}%</span>
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Detalhes Expandidos */}
+                                                                        {isExpanded && (
+                                                                            <div className="px-4 pb-4 pl-9 animate-in slide-in-from-top-2 duration-200">
+                                                                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                                                                    <div>
+                                                                                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Início</label>
+                                                                                        <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                                                            {action.startDate ? format(new Date(action.startDate), 'dd/MM/yyyy') : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Previsão</label>
+                                                                                        <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                                                            {action.plannedEndDate ? format(new Date(action.plannedEndDate), 'dd/MM/yyyy') : '-'}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                <div className="mb-4">
+                                                                                    <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Progresso</label>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                                                            <div
+                                                                                                className={`h-full ${action.progress >= 100 ? 'bg-emerald-500' : action.progress >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`}
+                                                                                                style={{ width: `${action.progress}%` }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{action.progress}%</span>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {action.raci && action.raci.length > 0 && (
+                                                                                    <div>
+                                                                                        <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Equipe RACI</label>
+                                                                                        <div className="flex flex-wrap gap-2">
+                                                                                            {action.raci.map((member, idx) => (
+                                                                                                <span key={idx} className="inline-flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs">
+                                                                                                    <span className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center text-white ${member.role === 'R' ? 'bg-blue-500' : member.role === 'A' ? 'bg-purple-500' : 'bg-slate-400'}`}>
+                                                                                                        {member.role}
+                                                                                                    </span>
+                                                                                                    <span className="text-slate-700 dark:text-slate-300">{member.name}</span>
+                                                                                                </span>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        }
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex justify-end shrink-0">
+                                <button
+                                    onClick={() => setSelectedDay(null)}
+                                    className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                                >
+                                    Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                );
+            })()}
         </div>
     );
 }

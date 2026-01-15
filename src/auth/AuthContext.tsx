@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { User, AuthContextType, Microrregiao } from '../types/auth.types';
 
 // Tipo estendido para incluir refreshUser e Demo Mode
@@ -48,6 +48,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [viewingMicroregiaoId, setViewingMicroregiaoId] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
+
+  // ✅ CORREÇÃO: Ref para indicar que um login está em andamento
+  // Isso evita race condition entre login() e onAuthStateChange
+  const loginLockRef = useRef(false);
 
   /**
    * Carrega perfil do usuário do Supabase com cache
@@ -234,10 +238,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      // ✅ CORREÇÃO: Ignorar eventos durante inicialização inicial
-      // O getSession já processa a sessão inicial
-      if (!isInitialized && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
-        // Ignorando evento durante inicialização
+      // ✅ CORREÇÃO: Ignorar INITIAL_SESSION durante inicialização (tratado por getSession)
+      if (!isInitialized && event === 'INITIAL_SESSION') {
+        return;
+      }
+
+      // ✅ CORREÇÃO: Se um login() está em andamento, ignorar evento SIGNED_IN
+      // O login() já faz todo o trabalho necessário - evita race condition
+      if (loginLockRef.current && event === 'SIGNED_IN') {
         return;
       }
 
@@ -289,6 +297,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Login
   const login = useCallback(async (email: string, senha: string) => {
+    // ✅ CORREÇÃO: Ativa lock para evitar que onAuthStateChange processe SIGNED_IN
+    loginLockRef.current = true;
     setIsLoading(true);
 
     try {
@@ -299,6 +309,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (error) {
         // Erro no login tratado
+        console.error('[AuthContext] Erro de login:', {
+          message: error.message,
+          status: error.status,
+          code: error.code,
+          email: email // para debug
+        });
         return {
           success: false,
           error: error.message === 'Invalid login credentials'
@@ -334,6 +350,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
+      // ✅ CORREÇÃO: Libera lock após conclusão do login (com delay para garantir)
+      setTimeout(() => {
+        loginLockRef.current = false;
+      }, 100);
     }
   }, [loadUserProfile]);
 

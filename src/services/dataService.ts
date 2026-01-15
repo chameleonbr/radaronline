@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { Action, ActionComment, TeamMember, RaciMember, ProfileDTO } from '../types';
+import type { Action, ActionComment, TeamMember, RaciMember, ProfileDTO, ActionTag } from '../types';
 import { generateActionUid } from '../types';
 import { loggingService } from './loggingService';
 import { log, logWarn, logError } from '../lib/logger';
@@ -63,6 +63,21 @@ interface TeamDTO {
     updated_at: string;
 }
 
+interface ActionTagDTO {
+    id: string;
+    name: string;
+    color: string;
+    created_at: string;
+    created_by: string | null;
+}
+
+interface ActionTagAssignmentDTO {
+    id: string;
+    action_uid: string;
+    tag_id: string;
+    created_at: string;
+}
+
 // =====================================
 // HELPERS DE CONVERSÃO
 // =====================================
@@ -70,7 +85,8 @@ interface TeamDTO {
 function mapActionDTOToAction(
     dto: ActionDTO,
     raci: ActionRaciDTO[],
-    comments: ActionCommentDTO[]
+    comments: ActionCommentDTO[],
+    tags: ActionTagDTO[] = []
 ): Action {
     return {
         uid: dto.uid,
@@ -86,6 +102,11 @@ function mapActionDTOToAction(
         raci: raci.map(r => ({
             name: r.member_name,
             role: r.role as RaciMember['role'],
+        })),
+        tags: tags.map(t => ({
+            id: t.id,
+            name: t.name,
+            color: t.color,
         })),
         notes: dto.notes || '',
         comments: comments.map(c => ({
@@ -170,6 +191,20 @@ export async function loadActions(microregiaoId?: string): Promise<Action[]> {
             logError('dataService', 'Erro ao carregar comentários:', commentsError);
         }
 
+        // Buscar TAGS para todas as ações (usa action_uid, não action_id)
+        const actionUids = actionsData.map(a => a.uid);
+        const { data: tagsData, error: tagsError } = await supabase
+            .from('action_tag_assignments')
+            .select(`
+                action_uid,
+                tag:action_tags (id, name, color)
+            `)
+            .in('action_uid', actionUids);
+
+        if (tagsError) {
+            logError('dataService', 'Erro ao carregar tags:', tagsError);
+        }
+
         // Mapear para formato da aplicação
         const raciByAction = new Map<string, ActionRaciDTO[]>();
         (raciData || []).forEach(r => {
@@ -185,11 +220,22 @@ export async function loadActions(microregiaoId?: string): Promise<Action[]> {
             commentsByAction.set(c.action_id, existing);
         });
 
+        const tagsByAction = new Map<string, ActionTagDTO[]>();
+        (tagsData || []).forEach((t: any) => {
+            if (t.tag) {
+                const existing = tagsByAction.get(t.action_uid) || [];
+                existing.push(t.tag);
+                tagsByAction.set(t.action_uid, existing);
+            }
+        });
+
+        // Combinar tudo
         return actionsData.map(action =>
             mapActionDTOToAction(
                 action as ActionDTO,
                 raciByAction.get(action.id) || [],
-                commentsByAction.get(action.id) || []
+                commentsByAction.get(action.id) || [],
+                tagsByAction.get(action.uid) || []
             )
         );
     } catch (error) {
@@ -437,6 +483,51 @@ export async function upsertAction(action: Action): Promise<Action> {
                         .in('id', idsToRemove);
 
                     if (deleteError) logError('dataService', 'Erro ao remover RACI antigo:', deleteError);
+                }
+            }
+        }
+
+        // ============================================
+        // Sincronizar TAGS (FULL SYNC: Add & Remove)
+        // ============================================
+        if (action.tags) {
+            // 1. Buscar assignments atuais
+            // Usa action.uid (não actionDbId) pois a tabela usa action_uid
+            const { data: currentAssignments, error: fetchTagsError } = await supabase
+                .from('action_tag_assignments')
+                .select('id, tag_id')
+                .eq('action_uid', action.uid);
+
+            if (fetchTagsError) {
+                logError('dataService', 'Erro ao buscar tags atuais:', fetchTagsError);
+            } else {
+                const currentTagIds = new Set((currentAssignments || []).map(a => a.tag_id));
+                const newTagIds = new Set(action.tags.map(t => t.id));
+
+                // A. Adicionar novas associações
+                const toAdd = action.tags.filter(t => !currentTagIds.has(t.id));
+                if (toAdd.length > 0) {
+                    const tagInserts = toAdd.map(t => ({
+                        action_uid: action.uid,
+                        tag_id: t.id
+                    }));
+                    const { error: insertError } = await supabase
+                        .from('action_tag_assignments')
+                        .insert(tagInserts);
+
+                    if (insertError) logError('dataService', 'Erro ao associar novas tags:', insertError);
+                }
+
+                // B. Remover associações antigas
+                const toRemove = (currentAssignments || []).filter(a => !newTagIds.has(a.tag_id));
+                if (toRemove.length > 0) {
+                    const idsToRemove = toRemove.map(a => a.id);
+                    const { error: deleteError } = await supabase
+                        .from('action_tag_assignments')
+                        .delete()
+                        .in('id', idsToRemove);
+
+                    if (deleteError) logError('dataService', 'Erro ao remover tags antigas:', deleteError);
                 }
             }
         }
@@ -1304,5 +1395,177 @@ export async function deleteActivity(id: string): Promise<void> {
     if (error) {
         logError('dataService', 'Erro ao excluir activity:', error);
         throw new Error(`Erro ao excluir atividade: ${error.message}`);
+    }
+}
+
+// =====================================
+// TAGS - CRUD
+// =====================================
+
+/**
+ * Gera uma cor automática baseada no nome da tag (hash → HSL)
+ */
+function generateTagColor(name: string): string {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash % 360);
+    return `hsl(${hue}, 70%, 45%)`;
+}
+
+/**
+ * Carrega todas as tags disponíveis
+ */
+export async function loadTags(): Promise<ActionTag[]> {
+    try {
+        const { data, error } = await supabase
+            .from('action_tags')
+            .select('*')
+            .order('name', { ascending: true });
+
+        if (error) {
+            logError('dataService', 'Erro ao carregar tags:', error);
+            throw new Error(`Erro ao carregar tags: ${error.message}`);
+        }
+
+        return (data || []).map((t: ActionTagDTO) => ({
+            id: t.id,
+            name: t.name,
+            color: t.color,
+        }));
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao carregar tags:', error);
+        throw error;
+    }
+}
+
+/**
+ * Cria uma nova tag
+ */
+export async function createTag(name: string): Promise<ActionTag> {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+
+        const { data, error } = await supabase
+            .from('action_tags')
+            .insert({
+                name: name.toUpperCase(),
+                color: generateTagColor(name),
+                created_by: user?.id || null,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            logError('dataService', 'Erro ao criar tag:', error);
+            throw new Error(`Erro ao criar tag: ${error.message}`);
+        }
+
+        return {
+            id: data.id,
+            name: data.name,
+            color: data.color,
+        };
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao criar tag:', error);
+        throw error;
+    }
+}
+
+/**
+ * Adiciona uma tag a uma ação
+ */
+export async function addTagToAction(actionUid: string, tagId: string): Promise<void> {
+    try {
+        const { error } = await supabase
+            .from('action_tag_assignments')
+            .insert({
+                action_uid: actionUid,
+                tag_id: tagId,
+            });
+
+        if (error) {
+            // Ignora erro de duplicidade
+            if (!error.message.includes('duplicate')) {
+                logError('dataService', 'Erro ao adicionar tag à ação:', error);
+                throw new Error(`Erro ao adicionar tag: ${error.message}`);
+            }
+        }
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao adicionar tag:', error);
+        throw error;
+    }
+}
+
+/**
+ * Remove uma tag de uma ação
+ */
+export async function removeTagFromAction(actionUid: string, tagId: string): Promise<void> {
+    try {
+        const { error } = await supabase
+            .from('action_tag_assignments')
+            .delete()
+            .eq('action_uid', actionUid)
+            .eq('tag_id', tagId);
+
+        if (error) {
+            logError('dataService', 'Erro ao remover tag da ação:', error);
+            throw new Error(`Erro ao remover tag: ${error.message}`);
+        }
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao remover tag:', error);
+        throw error;
+    }
+}
+
+/**
+ * Carrega tags de uma ação específica (helper interno)
+ */
+export async function loadTagsForAction(actionUid: string): Promise<ActionTag[]> {
+    try {
+        const { data, error } = await supabase
+            .from('action_tag_assignments')
+            .select(`
+                tag_id,
+                tag:action_tags(id, name, color)
+            `)
+            .eq('action_uid', actionUid);
+
+        if (error) {
+            logError('dataService', 'Erro ao carregar tags da ação:', error);
+            return [];
+        }
+
+        return (data || [])
+            .filter(d => d.tag)
+            .map(d => ({
+                id: (d.tag as any).id,
+                name: (d.tag as any).name,
+                color: (d.tag as any).color,
+            }));
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao carregar tags da ação:', error);
+        return [];
+    }
+}
+
+/**
+ * Exclui uma tag do sistema (remove de todas as ações também via CASCADE)
+ */
+export async function deleteTag(tagId: string): Promise<void> {
+    try {
+        const { error } = await supabase
+            .from('action_tags')
+            .delete()
+            .eq('id', tagId);
+
+        if (error) {
+            logError('dataService', 'Erro ao excluir tag:', error);
+            throw new Error(`Erro ao excluir tag: ${error.message}`);
+        }
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao excluir tag:', error);
+        throw error;
     }
 }

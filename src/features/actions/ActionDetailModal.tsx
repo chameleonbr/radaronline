@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     X, Save, Trash2, Calendar, MessageCircle, Send,
-    Users, Target, Clock, ChevronDown, Plus, Lock, Eye, Reply, CornerDownRight, Pencil, Check, ChevronUp
+    Users, Target, Clock, ChevronDown, Plus, Lock, Eye, Reply, CornerDownRight, Pencil, Check, ChevronUp, Tag, Hash
 } from 'lucide-react';
-import { Action, Status, RaciRole, TeamMember, ActionComment } from '../../types';
+import { Action, Status, RaciRole, TeamMember, ActionComment, ActionTag } from '../../types';
 import { LoadingButton } from '../../components/common/LoadingSpinner';
 import { Tooltip } from '../../components/common/Tooltip';
 import { useAuth } from '../../auth/AuthContext';
@@ -14,6 +14,7 @@ import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useResponsive } from '../../hooks/useResponsive';
 import { getActionDisplayId } from '../../lib/text';
 import { applyActionRules, canSaveAction, ActionRuleErrors } from '../../lib/actionRules';
+import { loadTags, createTag, addTagToAction, removeTagFromAction, deleteTag } from '../../services/dataService';
 
 // =====================================
 // PROPS DO COMPONENTE
@@ -271,6 +272,14 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     const [newRaciRole, setNewRaciRole] = useState<RaciRole>('R');
     const [showRaciPopover, setShowRaciPopover] = useState(false);
 
+    // Tags state
+    const [showTagPopover, setShowTagPopover] = useState(false);
+    const [availableTags, setAvailableTags] = useState<ActionTag[]>([]);
+    const [newTagName, setNewTagName] = useState('');
+    const [isLoadingTags, setIsLoadingTags] = useState(false);
+    const [tagToDelete, setTagToDelete] = useState<ActionTag | null>(null);
+    const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+
     // Mention autocomplete states
     const [showMentions, setShowMentions] = useState(false);
     const [mentionSearch, setMentionSearch] = useState('');
@@ -312,6 +321,132 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         setCommentDraft(`@${authorName} `);
         commentInputRef.current?.focus();
     }, []);
+
+    // =================================================================================
+    // TAGS HANDLERS
+    // =================================================================================
+
+    // Carregar tags disponíveis quando o popover abrir
+    useEffect(() => {
+        if (showTagPopover) {
+            setIsLoadingTags(true);
+            loadTags()
+                .then(tags => setAvailableTags(tags))
+                .catch(() => setAvailableTags([]))
+                .finally(() => setIsLoadingTags(false));
+
+            // Inicializa seleção com tags já na ação
+            if (draftAction?.tags) {
+                setSelectedTagIds(new Set(draftAction.tags.map(t => t.id)));
+            }
+        } else {
+            // Limpa seleção ao fechar
+            setSelectedTagIds(new Set());
+            setTagToDelete(null);
+        }
+    }, [showTagPopover, draftAction?.tags]);
+
+    // Toggle tag - adiciona ou remove imediatamente da ação
+    const toggleTagSelection = useCallback((tag: ActionTag) => {
+        if (!draftAction) return;
+
+        const hasTag = draftAction.tags.some(t => t.id === tag.id);
+
+        if (hasTag) {
+            // Remove
+            setDraftAction(prev => {
+                if (!prev) return null;
+                return { ...prev, tags: prev.tags.filter(t => t.id !== tag.id) };
+            });
+        } else {
+            // Adiciona
+            setDraftAction(prev => {
+                if (!prev) return null;
+                return { ...prev, tags: [...prev.tags, tag] };
+            });
+        }
+        setIsDirty(true);
+    }, [draftAction]);
+
+    // Adicionar tag existente à ação (mantém compatibilidade)
+    const handleAddTag = useCallback((tag: ActionTag) => {
+        if (!draftAction) return;
+
+        // Verifica se já existe
+        if (draftAction.tags.some(t => t.id === tag.id)) return;
+
+        setDraftAction(prev => {
+            if (!prev) return null;
+            return { ...prev, tags: [...prev.tags, tag] };
+        });
+        setIsDirty(true);
+        setShowTagPopover(false);
+    }, [draftAction]);
+
+    // Remover tag da ação
+    const handleRemoveTag = useCallback((tagId: string) => {
+        setDraftAction(prev => {
+            if (!prev) return null;
+            return { ...prev, tags: prev.tags.filter(t => t.id !== tagId) };
+        });
+        setIsDirty(true);
+    }, []);
+
+    // Criar nova tag e selecioná-la
+    const handleCreateTag = useCallback(async () => {
+        if (!newTagName.trim()) return;
+
+        try {
+            const newTag = await createTag(newTagName.trim());
+            setNewTagName('');
+            setAvailableTags(prev => [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name)));
+            // Já seleciona a tag criada
+            setSelectedTagIds(prev => new Set([...prev, newTag.id]));
+        } catch (error) {
+            console.error('Erro ao criar tag:', error);
+        }
+    }, [newTagName]);
+
+    // Apenas salvar tag para uso futuro (não adiciona à ação atual)
+    const handleSaveTagOnly = useCallback(async () => {
+        if (!newTagName.trim()) return;
+
+        try {
+            const newTag = await createTag(newTagName.trim());
+            setNewTagName('');
+            setAvailableTags(prev => [...prev, newTag].sort((a, b) => a.name.localeCompare(b.name)));
+        } catch (error) {
+            console.error('Erro ao salvar tag:', error);
+        }
+    }, [newTagName]);
+
+    // Solicitar confirmação para excluir tag
+    const handleDeleteTag = useCallback((tag: ActionTag) => {
+        setTagToDelete(tag);
+    }, []);
+
+    // Confirmar exclusão de tag
+    const confirmDeleteTag = useCallback(async () => {
+        if (!tagToDelete) return;
+
+        try {
+            await deleteTag(tagToDelete.id);
+            setAvailableTags(prev => prev.filter(t => t.id !== tagToDelete.id));
+            // Remove da ação atual também se estiver
+            setDraftAction(prev => {
+                if (!prev) return null;
+                const hadTag = prev.tags.some(t => t.id === tagToDelete.id);
+                if (hadTag) {
+                    return { ...prev, tags: prev.tags.filter(t => t.id !== tagToDelete.id) };
+                }
+                return prev;
+            });
+        } catch (error) {
+            console.error('Erro ao excluir tag:', error);
+        } finally {
+            setTagToDelete(null);
+        }
+    }, [tagToDelete]);
 
     // =================================================================================
     // LOCAL HANDLERS (ATUALIZAM O DRAFT)
@@ -951,19 +1086,15 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                 </span>
                                 <div className="flex items-center">
                                     {[...action.raci].sort((a, b) => rolePriority[a.role] - rolePriority[b.role]).slice(0, 5).map((m, i) => (
-                                        <Tooltip key={i} content={`${m.name} (${roleLabels[m.role].label}) - Clique para remover`}>
-                                            <button
-                                                onClick={() => userCanEdit && handleRemoveRaci(i)}
-                                                disabled={!userCanEdit}
-                                                className={`relative -ml-1.5 first:ml-0 hover:z-10 transition-transform hover:-translate-y-0.5 ${userCanEdit ? 'hover:ring-2 hover:ring-red-300 hover:ring-offset-1 rounded-full' : ''}`}
-                                            >
+                                        <Tooltip key={i} content={`${m.name} (${roleLabels[m.role].label})`}>
+                                            <div className="relative -ml-1.5 first:ml-0">
                                                 <div className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-bold shadow-sm ${roleLabels[m.role].color}`}>
                                                     {m.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                                                 </div>
                                                 <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white text-[5px] font-bold flex items-center justify-center ${roleLabels[m.role].color} text-white`}>
                                                     {m.role}
                                                 </div>
-                                            </button>
+                                            </div>
                                         </Tooltip>
                                     ))}
                                     {action.raci.length > 5 && (
@@ -983,8 +1114,132 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                     )}
                                 </div>
                             </div>
+
+                            {/* Seção de Tags */}
+                            <div className="flex items-center gap-2 ml-4 pl-4 border-l border-slate-200 dark:border-slate-700">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
+                                    <Hash size={10} /> Áreas Envolvidas
+                                </span>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                    {action.tags?.map(tag => (
+                                        <div
+                                            key={tag.id}
+                                            className="flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+                                            style={{ backgroundColor: tag.color }}
+                                        >
+                                            <Check size={8} className="mr-0.5 text-green-300" />
+                                            #{tag.name}
+                                        </div>
+                                    ))}
+                                    {userCanEdit && (
+                                        <Tooltip content="Adicionar área">
+                                            <button
+                                                onClick={() => setShowTagPopover(!showTagPopover)}
+                                                className="w-6 h-6 rounded-full bg-white dark:bg-slate-700 border-2 border-dashed border-slate-300 dark:border-slate-500 hover:border-teal-500 dark:hover:border-teal-400 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 flex items-center justify-center transition-all"
+                                            >
+                                                <Plus size={12} />
+                                            </button>
+                                        </Tooltip>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
+                        {/* Popover para adicionar tag */}
+                        {showTagPopover && userCanEdit && (
+                            <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-3 z-40 animate-fade-in">
+                                <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">Gerenciar Áreas Envolvidas</h4>
+                                    <button onClick={() => setShowTagPopover(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+
+                                {/* Criar nova tag */}
+                                <div className="flex gap-2 mb-3">
+                                    <input
+                                        type="text"
+                                        value={newTagName}
+                                        onChange={e => setNewTagName(e.target.value.toUpperCase())}
+                                        placeholder="Nova área..."
+                                        className="flex-1 text-xs border border-slate-200 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                                        onKeyDown={e => e.key === 'Enter' && handleCreateTag()}
+                                    />
+                                    <button
+                                        onClick={handleCreateTag}
+                                        disabled={!newTagName.trim()}
+                                        className="px-3 py-1 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 disabled:opacity-50"
+                                    >
+                                        Criar
+                                    </button>
+                                </div>
+
+                                {/* Tags disponíveis - clique para adicionar/remover */}
+                                <div className="max-h-40 overflow-y-auto">
+                                    {isLoadingTags ? (
+                                        <p className="text-xs text-slate-400 text-center py-2">Carregando...</p>
+                                    ) : availableTags.length === 0 ? (
+                                        <p className="text-xs text-slate-400 text-center py-2">Nenhuma área salva</p>
+                                    ) : (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {availableTags.map(tag => {
+                                                const isOnAction = action.tags?.some(at => at.id === tag.id);
+                                                return (
+                                                    <div key={tag.id} className="flex items-center">
+                                                        {/* Tag principal - clique para adicionar/remover */}
+                                                        <button
+                                                            onClick={() => toggleTagSelection(tag)}
+                                                            className={`relative px-2 py-0.5 rounded-l-full text-[10px] font-bold text-white transition-all hover:brightness-110`}
+                                                            style={{ backgroundColor: tag.color }}
+                                                        >
+                                                            {isOnAction && (
+                                                                <Check size={8} className="inline mr-0.5 -mt-0.5 text-green-300" />
+                                                            )}
+                                                            #{tag.name}
+                                                        </button>
+                                                        {/* Botão X com cor mais clara */}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag); }}
+                                                            className="px-1 py-0.5 rounded-r-full text-[10px] hover:bg-red-500 transition-colors"
+                                                            style={{
+                                                                backgroundColor: `color-mix(in srgb, ${tag.color} 60%, white)`,
+                                                                color: tag.color
+                                                            }}
+                                                            title="Excluir área"
+                                                        >
+                                                            <X size={10} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Mini modal de confirmação de exclusão */}
+                                {tagToDelete && (
+                                    <div className="mt-3 p-2 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800">
+                                        <p className="text-xs text-red-700 dark:text-red-300 mb-2">
+                                            Excluir área <strong>#{tagToDelete.name}</strong>?
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setTagToDelete(null)}
+                                                className="px-2 py-1 text-xs bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 rounded hover:bg-slate-300"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={confirmDeleteTag}
+                                                className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+                                            >
+                                                Excluir
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         {/* Popover para adicionar membro */}
                         {showRaciPopover && userCanEdit && (
                             <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-4 z-30 animate-fade-in">

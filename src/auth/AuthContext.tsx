@@ -347,22 +347,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log('[AuthContext] 📂 Carregando perfil do usuário...');
 
         const profile = await loadUserProfile(data.user.id);
-        console.log('[AuthContext] 📋 Perfil carregado:', profile ? profile.nome : 'NULL');
 
         if (!profile) {
           console.log('[AuthContext] ❌ Perfil não encontrado ou inativo, fazendo logout...');
           await supabase.auth.signOut();
           return {
             success: false,
-            error: 'Conta desativada. Entre em contato com o administrador.'
+            error: 'Não foi possível carregar seu perfil após o login. Verifique sua conexão ou se a conta está ativa.'
           };
         }
 
-        console.log('[AuthContext] 🎉 Setando usuário no contexto...');
+        console.log('[AuthContext] 🎉 Perfil carregado com sucesso:', profile.nome);
         setUser(profile);
         const microId = profile.microregiaoId === 'all' ? null : profile.microregiaoId;
         setViewingMicroregiaoId(microId);
-        console.log('[AuthContext] ✅ Usuário setado! isAuthenticated deveria ser true agora.');
 
         // Registrar login no log de atividades
         loggingService.logActivity('login', 'auth', profile.id, { name: profile.nome });

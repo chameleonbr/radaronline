@@ -17,6 +17,7 @@ import { staggerContainer, staggerItem, cardHover } from '../../../lib/motion';
 interface RankingPanelProps {
   actions: Action[];
   onViewMicrorregiao: (microId: string) => void;
+  compact?: boolean;
 }
 
 type SortBy = 'progresso' | 'concluidas' | 'atraso';
@@ -33,9 +34,12 @@ interface MicroRanking {
   taxaConclusao: number;
 }
 
-export function RankingPanel({ actions, onViewMicrorregiao }: RankingPanelProps) {
+export function RankingPanel({ actions, onViewMicrorregiao, compact = false }: RankingPanelProps) {
   const [sortBy, setSortBy] = useState<SortBy>('progresso');
   const [showAll, setShowAll] = useState(false);
+
+  // In compact mode, only show top 5
+  const maxItems = compact ? 5 : (showAll ? undefined : 10);
 
   const rankings = useMemo(() => {
     const microStats: MicroRanking[] = MICROREGIOES.map(micro => {
@@ -98,8 +102,43 @@ export function RankingPanel({ actions, onViewMicrorregiao }: RankingPanelProps)
     );
   }
 
-  const topRankings = showAll ? rankings : rankings.slice(0, 10);
+  const topRankings = maxItems ? rankings.slice(0, maxItems) : (showAll ? rankings : rankings.slice(0, 10));
   const bottomRankings = rankings.slice(-5).reverse();
+
+  // Compact mode - simplified list
+  if (compact) {
+    return (
+      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+        {topRankings.map((micro, index) => (
+          <div
+            key={micro.id}
+            className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+            onClick={() => onViewMicrorregiao(micro.id)}
+          >
+            <span className={`text-sm font-bold w-5 ${
+              index === 0 ? 'text-yellow-500' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-600' : 'text-slate-400'
+            }`}>
+              {index + 1}º
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{micro.nome}</p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-teal-500 rounded-full"
+                  style={{ width: `${micro.progressoMedio}%` }}
+                />
+              </div>
+              <span className="text-xs font-medium text-slate-600 dark:text-slate-400 w-8 text-right">
+                {Math.round(micro.progressoMedio)}%
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const getMedalColor = (position: number) => {
     if (position === 0) return 'text-yellow-500';

@@ -19,14 +19,24 @@ import {
   Maximize,
   Minimize,
   CalendarRange,
+  Menu,
+  X,
+  ChevronRight,
+  Settings,
+  Bell,
+  MapPin,
+  Target,
+  TrendingUp,
+  UserPlus,
 } from 'lucide-react';
 import { NotificationBell } from '../../components/common/NotificationBell';
 import { ZoomControl } from '../../components/common/ZoomControl';
+import { MicroregionSelector } from '../../components/common/MicroregionSelector';
 import { useAuth } from '../../auth';
 import { User } from '../../types/auth.types';
 import { Action, TeamMember, Objective, Activity as ActivityType } from '../../types';
 import { Sidebar } from '../../components/layout/Sidebar';
-import { MICROREGIOES, getMicroregiaoById, getMacrorregioes } from '../../data/microregioes';
+import { MICROREGIOES, getMicroregiaoById, getMacrorregioes, getMicroregioesByMacro } from '../../data/microregioes';
 import * as authService from '../../services/authService';
 import { saveUserMunicipality, loadPendingRegistrations, deletePendingRegistration, PendingRegistration } from '../../services/dataService';
 import { UserFormModal } from './UserFormModal';
@@ -44,11 +54,13 @@ import {
   PendingRegistrationsPanel,
   RequestsManagement,
 } from './dashboard';
+import MicroDetailModal from './dashboard/MicroDetailModal';
 import { AnalyticsDashboard } from './dashboard/AnalyticsDashboard';
 import { UserSettingsModal } from '../settings/UserSettingsModal';
 import { ConfirmModal, useToast } from '../../components/common';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
 import { log, logError } from '../../lib/logger';
+import { useResponsive } from '../../hooks/useResponsive';
 
 type TabType = 'dashboard' | 'usuarios' | 'microregioes' | 'ranking' | 'atividades' | 'requests';
 
@@ -64,8 +76,11 @@ export function AdminPanel(props: AdminPanelProps) {
   const { onBack, actions = [], teams = {}, objectives = [], activities = {} } = props;
   const { user: currentUser, setViewingMicrorregiao, isAdmin, isSuperAdmin, logout } = useAuth();
   const { showToast } = useToast();
+  const { isMobile, isTablet } = useResponsive();
 
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showMicroSelector, setShowMicroSelector] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,6 +111,7 @@ export function AdminPanel(props: AdminPanelProps) {
   } | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedMobileMicroId, setSelectedMobileMicroId] = useState<string | null>(null);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -353,6 +369,525 @@ export function AdminPanel(props: AdminPanelProps) {
     );
   }
 
+  // ========== MOBILE ADMIN TABS CONFIG ==========
+  const mobileAdminTabs = [
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { id: 'usuarios', icon: Users, label: 'Usuários' },
+    { id: 'ranking', icon: Trophy, label: 'Ranking' },
+    { id: 'atividades', icon: Activity, label: 'Atividades' },
+    { id: 'requests', icon: Bell, label: 'Pedidos' },
+  ] as const;
+
+  // ========== MOBILE LAYOUT ==========
+  if (isMobile || isTablet) {
+    return (
+      <div className="flex flex-col h-screen w-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
+        {/* Mobile Header - Limpo e compacto */}
+        <header className="bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 safe-area-top">
+          <div className="flex items-center justify-between px-4 py-3">
+            {/* Logo + Título */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-teal-500/20">
+                <Shield className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                  Painel Admin
+                </h1>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  isSuperAdmin
+                    ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300'
+                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                }`}>
+                  {isSuperAdmin ? 'Super Admin' : 'Admin'}
+                </span>
+              </div>
+            </div>
+
+            {/* Ações rápidas */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={loadUsers}
+                className="p-2.5 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
+              <NotificationBell />
+              <ThemeToggle />
+            </div>
+          </div>
+        </header>
+
+        {/* Mobile Content - Com padding para bottom nav */}
+        <main className="flex-1 overflow-y-auto pb-20">
+          <div className="px-3 py-4 space-y-4">
+            
+            {/* Tab: Dashboard Mobile - REDESIGNED */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-4">
+                
+                {/* Botão de Selecionar Microrregião - PRINCIPAL */}
+                <button
+                  onClick={() => setShowMicroSelector(true)}
+                  className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 text-white rounded-2xl p-4 shadow-lg shadow-teal-500/20 active:scale-[0.98] transition-transform"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                      <MapPin className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="text-sm text-white/80">Acessar microrregião</p>
+                      <p className="text-lg font-bold">Selecionar Micro →</p>
+                    </div>
+                    <Target className="w-6 h-6 text-white/60" />
+                  </div>
+                </button>
+
+                {/* KPIs Resumidos */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs mb-1">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Usuários</span>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{users.length}</p>
+                    <p className="text-xs text-slate-400 mt-1">{users.filter(u => u.ativo !== false).length} ativos</p>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs mb-1">
+                      <Activity className="w-3.5 h-3.5" />
+                      <span>Ações</span>
+                    </div>
+                    <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{actions.length}</p>
+                    <p className="text-xs text-emerald-500 mt-1">
+                      {actions.filter(a => a.status === 'Concluído').length} concluídas
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pendentes (se houver) */}
+                {pendingRegistrations.length > 0 && (
+                  <button
+                    onClick={() => setActiveTab('usuarios')}
+                    className="w-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-amber-100 dark:bg-amber-800/50 rounded-lg flex items-center justify-center">
+                        <Bell className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-amber-800 dark:text-amber-200">
+                          {pendingRegistrations.length} solicitação{pendingRegistrations.length > 1 ? 'ões' : ''} pendente{pendingRegistrations.length > 1 ? 's' : ''}
+                        </p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                          Toque para revisar
+                        </p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-amber-500" />
+                    </div>
+                  </button>
+                )}
+                {/* Mapa interativo (mobile) */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="p-3">
+                    <MinasMicroMap
+                      actions={actions}
+                      onMacroSelect={(macroId) => setDashboardFilters(prev => ({
+                        ...prev,
+                        selectedMacroId: macroId,
+                        selectedMicroId: null,
+                        selectedMunicipioCode: null
+                      }))}
+                      onMicroSelect={(microId) => {
+                        if (isMobile || isTablet) {
+                          setSelectedMobileMicroId(microId as string);
+                        } else {
+                          handleViewMicrorregiao(microId as string);
+                        }
+                      }}
+                      onNavigateToObjectives={handleViewMicrorregiao}
+                      selectedMacroId={dashboardFilters.selectedMacroId}
+                      selectedMicroId={dashboardFilters.selectedMicroId}
+                    />
+                  </div>
+                </div>
+
+                {/* Ranking resumido */}
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-amber-500" />
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Top Microrregiões</span>
+                    </div>
+                    <button
+                      onClick={() => setActiveTab('ranking')}
+                      className="text-xs text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1"
+                    >
+                      Ver tudo
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <RankingPanel actions={actions} onViewMicrorregiao={handleViewMicrorregiao} compact />
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Usuários Mobile */}
+            {activeTab === 'usuarios' && (
+              <div className="space-y-4">
+                {/* Cadastros Pendentes de Aprovação - Mobile */}
+                {pendingRegistrations.length > 0 && (
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border border-amber-200 dark:border-amber-700 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center">
+                        <UserPlus className="w-4 h-4 text-white" />
+                      </div>
+                      <div>
+                        <span className="font-bold text-amber-800 dark:text-amber-200 text-sm">
+                          {pendingRegistrations.length} Cadastro{pendingRegistrations.length > 1 ? 's' : ''} Pendente{pendingRegistrations.length > 1 ? 's' : ''}
+                        </span>
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          Aguardando criação pelo admin
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {pendingRegistrations.slice(0, 3).map(pending => {
+                        const micro = getMicroregiaoById(pending.microregiaoId);
+                        return (
+                          <div 
+                            key={pending.id}
+                            className="bg-white dark:bg-slate-800 rounded-lg p-3 flex items-center gap-3 shadow-sm"
+                          >
+                            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-300 font-bold text-sm">
+                              {pending.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate">
+                                {pending.name}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                {micro?.nome || 'Sem micro'}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setPendingUserData({
+                                  nome: pending.name,
+                                  email: pending.email || '',
+                                  microregiaoId: pending.microregiaoId,
+                                  municipio: pending.municipio || '',
+                                });
+                                setEditingUser(null);
+                                setShowUserModal(true);
+                              }}
+                              className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs font-medium"
+                            >
+                              Criar
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {pendingRegistrations.length > 3 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 text-center pt-1">
+                          +{pendingRegistrations.length - 3} mais...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* LGPD Pendente - Minimalista */}
+                {(() => {
+                  const lgpdPendingCount = users.filter(u => u.ativo && !u.lgpdConsentimento).length;
+                  return lgpdPendingCount > 0 ? (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                      <Shield className="w-4 h-4 text-purple-500" />
+                      <span className="text-xs text-purple-700 dark:text-purple-300">
+                        <strong>{lgpdPendingCount}</strong> sem LGPD
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar usuário..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Filtros */}
+                <div className="flex gap-2">
+                  <select
+                    value={userFilterMacro}
+                    onChange={(e) => {
+                      setUserFilterMacro(e.target.value);
+                      setUserFilterMicro('all');
+                    }}
+                    className="flex-1 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                  >
+                    <option value="all">Todas Macros</option>
+                    {getMacrorregioes().map(macro => (
+                      <option key={macro} value={macro}>{macro}</option>
+                    ))}
+                  </select>
+                  
+                  {isSuperAdmin && (
+                    <button
+                      onClick={() => { setEditingUser(null); setShowUserModal(true); }}
+                      className="px-3 py-2 bg-teal-500 text-white rounded-lg text-sm font-medium flex items-center gap-1.5 shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Novo
+                    </button>
+                  )}
+                </div>
+
+                {/* Lista de usuários mobile */}
+                <div className="space-y-2">
+                  {filteredUsers.map(user => {
+                    const micro = getMicroregiaoById(user.microregiaoId);
+                    return (
+                      <div
+                        key={user.id}
+                        className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                            {user.nome?.charAt(0).toUpperCase() || '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-slate-800 dark:text-slate-100 text-sm truncate">
+                                {user.nome}
+                              </span>
+                              {getRoleBadge(user.role)}
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                              {user.email}
+                            </p>
+                            {micro && (
+                              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                                {micro.nome}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* LGPD pendente - ícone minimalista */}
+                            {user.ativo && !user.lgpdConsentimento && (
+                              <span title="LGPD pendente">
+                                <Shield className="w-3.5 h-3.5 text-purple-400" />
+                              </span>
+                            )}
+                            <span className={`w-2 h-2 rounded-full ${user.ativo !== false ? 'bg-green-500' : 'bg-red-500'}`} />
+                            <button
+                              onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
+                              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Menu expandido */}
+                        {expandedUserId === user.id && (
+                          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex gap-2">
+                            <button
+                              onClick={() => { setEditingUser(user); setShowUserModal(true); setExpandedUserId(null); }}
+                              className="flex-1 py-2 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => { setConfirmToggle({ open: true, user, nextStatus: user.ativo === false }); setExpandedUserId(null); }}
+                              className={`flex-1 py-2 text-xs font-medium rounded-lg ${
+                                user.ativo !== false
+                                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                  : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                              }`}
+                            >
+                              {user.ativo !== false ? 'Desativar' : 'Ativar'}
+                            </button>
+                            {isSuperAdmin && (
+                              <button
+                                onClick={() => { setConfirmDelete({ open: true, user }); setExpandedUserId(null); }}
+                                className="px-3 py-2 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg"
+                              >
+                                Excluir
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  
+                  {filteredUsers.length === 0 && (
+                    <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
+                      Nenhum usuário encontrado
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Ranking Mobile */}
+            {activeTab === 'ranking' && (
+              <RankingPanel actions={actions} onViewMicrorregiao={handleViewMicrorregiao} />
+            )}
+
+            {/* Tab: Atividades Mobile */}
+            {activeTab === 'atividades' && (
+              <ActivityCenter />
+            )}
+
+            {/* Tab: Solicitações Mobile */}
+            {activeTab === 'requests' && (
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[60vh]">
+                <RequestsManagement />
+              </div>
+            )}
+
+          </div>
+        </main>
+
+        {/* Modals */}
+        {showUserModal && (
+          <UserFormModal
+            user={editingUser}
+            onClose={() => { setShowUserModal(false); setEditingUser(null); setPendingUserData(null); }}
+            onSave={handleSaveUser}
+            isSaving={isLoading}
+            fullScreen={isMobile || isTablet}
+            initialData={pendingUserData || undefined}
+          />
+        )}
+
+        <ConfirmModal
+          isOpen={confirmToggle.open}
+          onClose={() => setConfirmToggle({ open: false })}
+          onConfirm={async () => {
+            if (!confirmToggle.user) return;
+            setActionLoadingId(confirmToggle.user.id);
+            setConfirmToggle({ open: false });
+            try {
+              await authService.updateUser(confirmToggle.user.id, { ativo: confirmToggle.nextStatus });
+              showToast(`Usuário ${confirmToggle.nextStatus ? 'ativado' : 'desativado'}`, 'success');
+              loadUsers();
+            } catch (error) {
+              showToast('Erro ao alterar status', 'error');
+            } finally {
+              setActionLoadingId(null);
+            }
+          }}
+          title={`${confirmToggle.nextStatus ? 'Ativar' : 'Desativar'} usuário`}
+          message={confirmToggle.user ? `Deseja ${confirmToggle.nextStatus ? 'ativar' : 'desativar'} "${confirmToggle.user.nome}"?` : ''}
+          confirmText={confirmToggle.nextStatus ? 'Ativar' : 'Desativar'}
+          confirmType={confirmToggle.nextStatus ? 'info' : 'warning'}
+        />
+
+        <MicroDetailModal
+          isOpen={!!selectedMobileMicroId}
+          microId={selectedMobileMicroId}
+          onClose={() => setSelectedMobileMicroId(null)}
+          onOpenPanel={(microId) => {
+            handleViewMicrorregiao(microId);
+            setSelectedMobileMicroId(null);
+          }}
+          actions={actions}
+          users={users}
+        />
+
+        <ConfirmModal
+          isOpen={confirmDelete.open}
+          onClose={() => setConfirmDelete({ open: false })}
+          onConfirm={async () => {
+            if (!confirmDelete.user) return;
+            setActionLoadingId(confirmDelete.user.id);
+            setConfirmDelete({ open: false });
+            try {
+              await authService.deleteUser(confirmDelete.user.id);
+              showToast('Usuário excluído', 'success');
+              loadUsers();
+            } catch (error) {
+              showToast('Erro ao excluir usuário', 'error');
+            } finally {
+              setActionLoadingId(null);
+            }
+          }}
+          title="Excluir usuário"
+          message={confirmDelete.user ? `Excluir "${confirmDelete.user.nome}" permanentemente?` : ''}
+          confirmText="Excluir"
+          confirmType="danger"
+        />
+
+        <UserSettingsModal
+          isOpen={isSettingsModalOpen}
+          onClose={() => setIsSettingsModalOpen(false)}
+          initialTab={settingsInitialTab}
+          mode={settingsMode}
+        />
+
+        {/* Seletor de Microrregião Mobile */}
+        <MicroregionSelector
+          selectedMicroId={dashboardFilters.selectedMicroId}
+          onSelect={(microId) => {
+            handleViewMicrorregiao(microId);
+          }}
+          actions={actions}
+          isOpen={showMicroSelector}
+          onClose={() => setShowMicroSelector(false)}
+        />
+
+        {/* Bottom Navigation - Mobile */}
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-800/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-700 safe-area-bottom">
+          <div className="flex items-stretch justify-around max-w-lg mx-auto">
+            {mobileAdminTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              const hasBadge = tab.id === 'requests' && pendingRegistrations.length > 0;
+              
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as TabType)}
+                  className={`flex-1 flex flex-col items-center justify-center py-2 px-1 min-h-[56px] transition-all ${
+                    isActive
+                      ? 'text-teal-600 dark:text-teal-400'
+                      : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                >
+                  <div className="relative">
+                    {isActive && (
+                      <div className="absolute -inset-2 bg-teal-100 dark:bg-teal-900/40 rounded-xl" />
+                    )}
+                    <Icon className={`relative w-5 h-5 ${isActive ? 'scale-110' : ''} transition-transform`} />
+                    {hasBadge && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                        {pendingRegistrations.length > 9 ? '9+' : pendingRegistrations.length}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`text-[10px] mt-1 font-medium ${isActive ? 'font-semibold' : ''}`}>
+                    {tab.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+    );
+  }
+
+  // ========== DESKTOP LAYOUT ==========
   return (
     <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 overflow-hidden transition-colors duration-200">
       {/* Sidebar */}
@@ -990,6 +1525,7 @@ export function AdminPanel(props: AdminPanelProps) {
                 await loadPending(); // Recarrega lista de pendentes
               }}
               isSaving={actionLoadingId === 'save-user'}
+              fullScreen={isMobile || isTablet}
               initialData={pendingUserData || undefined}
             />
           )

@@ -17,6 +17,7 @@ import {
 import { formatISODate, parseDateLocal } from './lib/date';
 import { clampProgress } from './lib/validation';
 import { log, logError } from './lib/logger';
+import { filterOrphanedActions } from './lib/actionValidation';
 
 // Data - Apenas constantes de configuração, sem mocks
 import { MICROREGIOES } from './data/microregioes';
@@ -38,7 +39,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 
 // Mobile Components
-import { MobileBottomNav, MobileFab } from './components/mobile';
+import { MobileBottomNav, MobileFab, MobileDrawer } from './components/mobile';
 
 // Onboarding
 import { OnboardingTour } from './components/onboarding';
@@ -100,6 +101,7 @@ function AppContent() {
   const [viewMode, setViewMode] = useState<'table' | 'gantt' | 'team' | 'optimized' | 'calendar'>('table');
   const [ganttRange, setGanttRange] = useState<GanttRange>('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(!isMobile);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false); // Drawer mobile para hierarquia
   const [currentNav, setCurrentNav] = useState<'strategy' | 'home' | 'settings'>('strategy');
   // NOTA: showStickyActivity calculado mas não consumido na UI atual - mantido para uso futuro
   const [, setShowStickyActivity] = useState<boolean>(false);
@@ -286,7 +288,7 @@ function AppContent() {
     // NOTA: A lógica de LGPD é tratada diretamente no render condicional,
     // não precisamos setar currentPage para 'lgpd'
 
-    // Administrador entra direto no painel admin após login
+    // Admin vai direto para o painel administrativo ao logar
     if (isAuthenticated && isAdmin && !didAutoOpenAdmin) {
       setCurrentPage('admin');
       setDidAutoOpenAdmin(true);
@@ -422,7 +424,17 @@ function AppContent() {
           dataService.loadActivities(microId),
         ]);
 
-        setActions(actionsData);
+        // ✅ CORREÇÃO DE INCONSISTÊNCIA: Filtrar ações órfãs (sem atividade válida)
+        // Isso garante que a contagem seja consistente entre Dashboard, Objetivos e Agenda
+        const validActions = filterOrphanedActions(actionsData, activitiesData);
+        
+        // Log de diagnóstico se houver ações órfãs
+        const orphanedCount = actionsData.length - validActions.length;
+        if (orphanedCount > 0) {
+          log('App', `Removidas ${orphanedCount} ações órfãs (sem atividade válida)`);
+        }
+
+        setActions(validActions);
         setTeamsByMicro(teamsData);
         setObjectives(objectivesData);
         setActivities(activitiesData);
@@ -1559,45 +1571,78 @@ function AppContent() {
         </div>
       )}
 
-      {/* SIDEBAR */}
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
-        currentNav={currentNav}
-        setCurrentNav={(nav: string) => setCurrentNav(nav as 'strategy' | 'home' | 'settings')}
-        selectedObjective={selectedObjective}
-        setSelectedObjective={setSelectedObjective}
-        selectedActivity={selectedActivity}
-        setSelectedActivity={setSelectedActivity}
-        viewMode={viewMode}
-        setViewMode={setViewMode}
-        objectives={objectives}
-        activities={activities}
-        onProfileClick={handleProfileClick}
-        isMobile={isMobile}
-        userName={user?.nome}
-        userRole={user?.role}
-        userAvatarId={user?.avatarId}
-        onLogout={handleLogout}
-        isAdmin={isAdmin}
-        onAdminClick={() => setCurrentPage('admin')}
-        onOpenSettings={handleOpenSettings}
-        onAddObjective={handleAddObjective}
-        onDeleteObjective={handleDeleteObjective}
-        onUpdateObjective={handleUpdateObjective}
-        onAddActivity={handleAddActivity}
-        onDeleteActivity={handleDeleteActivity}
-        onUpdateActivity={(objectiveId, activityId, field, value) => handleUpdateActivity(objectiveId, activityId, field as 'title' | 'description', String(value))}
-        // NOTE: Sidebar currently manages its own Edit/Delete modals internally or we need to pass the generic open handler?
-        // The user asked to fix prefixes in sidebar. Now refactoring editing.
-        // If we want Sidebar to use the NEW modal, we should pass onEditObjective and onEditActivity to it.
-        // For now, let's keep sidebar as is or update it later (STEP 19).
-        // Let's first wire up Main Content (Header/Tabs).
-        // Edit Mode Props
-        isEditMode={isEditMode}
-        onToggleEditMode={() => setIsEditMode(!isEditMode)}
-        showNotifications={!viewingMicroregiaoId} // Hides bell when in Micro view (moves to Header)
-      />
+      {/* SIDEBAR - Desktop only when micro selected, or anytime on mobile without micro */}
+      {/* No mobile com micro selecionada, usamos o MobileDrawer ao invés da Sidebar */}
+      {!(isMobile && viewingMicroregiaoId) && (
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+          currentNav={currentNav}
+          setCurrentNav={(nav: string) => setCurrentNav(nav as 'strategy' | 'home' | 'settings')}
+          selectedObjective={selectedObjective}
+          setSelectedObjective={setSelectedObjective}
+          selectedActivity={selectedActivity}
+          setSelectedActivity={setSelectedActivity}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          objectives={objectives}
+          activities={activities}
+          onProfileClick={handleProfileClick}
+          isMobile={isMobile}
+          userName={user?.nome}
+          userRole={user?.role}
+          userAvatarId={user?.avatarId}
+          onLogout={handleLogout}
+          isAdmin={isAdmin}
+          onAdminClick={() => setCurrentPage('admin')}
+          onOpenSettings={handleOpenSettings}
+          onAddObjective={handleAddObjective}
+          onDeleteObjective={handleDeleteObjective}
+          onUpdateObjective={handleUpdateObjective}
+          onAddActivity={handleAddActivity}
+          onDeleteActivity={handleDeleteActivity}
+          onUpdateActivity={(objectiveId, activityId, field, value) => handleUpdateActivity(objectiveId, activityId, field as 'title' | 'description', String(value))}
+          // NOTE: Sidebar currently manages its own Edit/Delete modals internally or we need to pass the generic open handler?
+          // The user asked to fix prefixes in sidebar. Now refactoring editing.
+          // If we want Sidebar to use the NEW modal, we should pass onEditObjective and onEditActivity to it.
+          // For now, let's keep sidebar as is or update it later (STEP 19).
+          // Let's first wire up Main Content (Header/Tabs).
+          // Edit Mode Props
+          isEditMode={isEditMode}
+          onToggleEditMode={() => setIsEditMode(!isEditMode)}
+          showNotifications={!viewingMicroregiaoId} // Hides bell when in Micro view (moves to Header)
+        />
+      )}
+
+      {/* MOBILE DRAWER - Para hierarquia de objetivos no mobile quando micro selecionada */}
+      {isMobile && viewingMicroregiaoId && (
+        <MobileDrawer
+          isOpen={isMobileDrawerOpen}
+          onClose={() => setIsMobileDrawerOpen(false)}
+          objectives={objectives}
+          activities={activities}
+          selectedObjective={selectedObjective}
+          selectedActivity={selectedActivity}
+          onSelectObjective={setSelectedObjective}
+          onSelectActivity={setSelectedActivity}
+          onGoToStrategy={() => {
+            setCurrentNav('strategy');
+            setViewMode('table');
+          }}
+          userName={user?.nome}
+          userRole={user?.role}
+          userAvatarId={user?.avatarId}
+          isAdmin={isAdmin}
+          onAdminClick={() => setCurrentPage('admin')}
+          onSettingsClick={() => handleOpenSettings('settings')}
+          onAvatarClick={() => handleOpenSettings('avatar')}
+          onCalendarClick={() => {
+            setCurrentNav('strategy');
+            setViewMode('calendar');
+          }}
+          onLogout={handleLogout}
+        />
+      )}
 
       {/* USER SETTINGS MODAL */}
       <UserSettingsModal
@@ -1617,7 +1662,15 @@ function AppContent() {
           objectives={objectives}
           viewMode={viewMode}
           setViewMode={setViewMode}
-          onMenuClick={() => setIsSidebarOpen(true)}
+          onMenuClick={() => {
+            // No mobile com micro selecionada, abre o MobileDrawer
+            // Caso contrário, abre a Sidebar tradicional
+            if (isMobile && viewingMicroregiaoId) {
+              setIsMobileDrawerOpen(true);
+            } else {
+              setIsSidebarOpen(true);
+            }
+          }}
           isMobile={isMobile}
           isAdmin={isAdmin}
           userRole={user?.role}
@@ -1630,7 +1683,14 @@ function AppContent() {
         />
 
         {/* SCROLLABLE AREA */}
-        <div className={`flex-1 overflow-y-auto overflow-x-hidden relative ${isMobile ? 'pb-mobile-nav' : ''}`}>
+        {/* Padding extra quando FAB está visível (mobile + strategy + table + canCreate) */}
+        <div className={`flex-1 overflow-y-auto overflow-x-hidden relative ${
+          isMobile 
+            ? (currentNav === 'strategy' && viewMode === 'table' && checkCanCreate() 
+                ? 'pb-mobile-nav-with-fab' 
+                : 'pb-mobile-nav')
+            : ''
+        }`}>
 
           {/* Breadcrumb */}
           {/* Breadcrumb removido por redundância e estética */}
@@ -1750,12 +1810,11 @@ function AppContent() {
                       }
                     });
                   }}
+                  onSaveAction={handleSaveAction}
                   onDeleteAction={handleDeleteAction}
                   onAddRaci={handleAddRaci}
                   onRemoveRaci={handleRemoveRaci}
                   onAddComment={handleAddComment}
-                  onEditComment={handleEditComment}
-                  onDeleteComment={handleDeleteComment}
                   readOnly={isViewingAllMicros && !isAdmin}
                 />
               </ErrorBoundary>

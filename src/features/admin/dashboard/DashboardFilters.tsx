@@ -26,6 +26,8 @@ export interface DashboardFiltersState {
     compareLevel: CompareLevel;
     entityA: string | null;
     entityB: string | null;
+    // Time range (optional)
+    dateRange?: 'week' | 'month' | 'quarter' | 'year' | 'all';
 }
 
 interface DashboardFiltersProps {

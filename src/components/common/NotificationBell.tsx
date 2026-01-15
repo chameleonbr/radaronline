@@ -54,6 +54,7 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [requests, setRequests] = useState<UserRequest[]>([]);
+    const [pendingCount, setPendingCount] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState<UserRequest | null>(null);
     const [adminNote, setAdminNote] = useState('');
@@ -100,7 +101,8 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
 
     // Contagem de não lidas
     const unreadRequests = requests.filter(r => isUnread(r));
-    const notificationCount = unreadRequests.length;
+    // Para admins, preferimos usar a contagem exata de pendentes do servidor (pode haver mais de 20)
+    const notificationCount = isAdmin ? (pendingCount ?? unreadRequests.length) : unreadRequests.length;
 
     // Lista filtrada baseada na aba ativa
     const filteredRequests = activeTab === 'unread' ? unreadRequests : requests;
@@ -175,6 +177,28 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
         }
     }, [user, isAdmin]);
 
+    // Fetch pending count (accurate) for admins (or for user-specific pending)
+    const loadPendingCount = useCallback(async () => {
+        if (!user) return;
+        try {
+            let countQuery = supabase
+                .from('user_requests')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'pending');
+
+            if (!isAdmin) {
+                countQuery = countQuery.eq('user_id', user.id);
+            }
+
+            const { count, error } = await countQuery;
+            if (!error) {
+                setPendingCount(count || 0);
+            }
+        } catch (err) {
+            // ignore silently
+        }
+    }, [user, isAdmin]);
+
     // Atualizar solicitação com resposta
     const handleUpdate = async (requestId: string, status: 'pending' | 'resolved' | 'rejected', note?: string) => {
         setSaving(true);
@@ -239,6 +263,7 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
     useEffect(() => {
         if (user) {
             loadRequests();
+            loadPendingCount();
         }
     }, [user, loadRequests]);
 
@@ -259,6 +284,7 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                 () => {
                     // Recarrega a lista quando houver mudanças
                     loadRequests();
+                    loadPendingCount();
                 }
             )
             .subscribe();

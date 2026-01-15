@@ -451,7 +451,14 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
         setDraftAction(prev => {
             if (!prev) return null;
             const newRaci = [...prev.raci, { name: member.name, role: newRaciRole }];
-            return { ...prev, raci: newRaci };
+            const nextAction = { ...prev, raci: newRaci };
+
+            // Re-validate immediately
+            const { errors, ui } = applyActionRules(nextAction, {});
+            setRuleErrors(errors);
+            setUiState(ui);
+
+            return nextAction;
         });
         setIsDirty(true);
         setSelectedRaciMemberId('');
@@ -465,7 +472,14 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             if (!prev) return null;
             const newRaci = [...prev.raci];
             newRaci.splice(index, 1);
-            return { ...prev, raci: newRaci };
+            const nextAction = { ...prev, raci: newRaci };
+
+            // Re-validate immediately
+            const { errors, ui } = applyActionRules(nextAction, {});
+            setRuleErrors(errors);
+            setUiState(ui);
+
+            return nextAction;
         });
         setIsDirty(true);
     }, []);

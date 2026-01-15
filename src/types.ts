@@ -1,5 +1,5 @@
 // =====================================
-// TIPOS PRINCIPAIS DO SISTEMA RADAR 2.0
+// TIPOS PRINCIPAIS DO SISTEMA RADAR MINAS DIGITAL
 // =====================================
 
 export * from './types/auth.types';

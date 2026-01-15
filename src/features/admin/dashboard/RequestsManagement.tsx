@@ -304,7 +304,7 @@ export function RequestsManagement() {
                             <ClipboardList size={24} />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Central de Solicitações</h1>
+                            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">Central de Solicitações</h1>
                             <p className="text-sm text-slate-500 dark:text-slate-400">
                                 Gerencie todas as solicitações dos usuários
                             </p>

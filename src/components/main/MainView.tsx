@@ -174,6 +174,7 @@ export function MainView({
                   }
                 });
               }}
+              onSaveAction={onSaveAction}
               onDeleteAction={onDeleteAction}
               onAddRaci={onAddRaci}
               onRemoveRaci={onRemoveRaci}

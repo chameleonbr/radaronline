@@ -91,13 +91,13 @@ export const MobileActionCard: React.FC<MobileActionCardProps> = ({
           'bg-slate-300';
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-hidden rounded-lg mx-2 my-1.5 shadow-sm">
       {/* Delete action revealed on swipe */}
       {canDelete && (
-        <div className="absolute inset-y-0 right-0 w-20 bg-rose-500 flex items-center justify-center">
+        <div className="absolute inset-y-0 right-0 w-20 bg-gradient-to-l from-rose-500 to-rose-600 flex items-center justify-center rounded-r-lg">
           <button
             onClick={handleDelete}
-            className="w-full h-full flex items-center justify-center text-white"
+            className="w-full h-full flex items-center justify-center text-white active:bg-rose-600"
           >
             <span className="text-xs font-bold">Excluir</span>
           </button>
@@ -115,8 +115,9 @@ export const MobileActionCard: React.FC<MobileActionCardProps> = ({
           relative bg-white dark:bg-slate-800 
           border-l-4 ${status.borderColor}
           ${isCompact ? 'p-3' : 'p-4'}
-          active:bg-slate-50 dark:active:bg-slate-700
-          touch-pan-y cursor-pointer
+          active:bg-slate-50/80 dark:active:bg-slate-700/80
+          touch-pan-y cursor-pointer rounded-lg
+          transition-colors duration-100
         `}
       >
         {/* Top row: ID, Status, More */}
@@ -208,28 +209,29 @@ export const MobileActionList: React.FC<MobileActionListProps> = ({
   emptyMessage = "Nenhuma ação encontrada"
 }) => {
   return (
-    <div className="touch-scroll divide-y divide-slate-100 dark:divide-slate-700">
+    <div className="touch-scroll space-y-0 bg-slate-50 dark:bg-slate-900/50 py-2">
       <AnimatePresence mode="popLayout">
         {actions.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center py-12 px-4 text-center"
+            className="flex flex-col items-center justify-center py-16 px-4 text-center"
           >
-            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-2xl flex items-center justify-center mb-4">
-              <CheckCircle2 size={28} className="text-slate-400" />
+            <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+              <CheckCircle2 size={32} className="text-slate-400 dark:text-slate-500" />
             </div>
-            <p className="text-slate-500 dark:text-slate-400 font-medium">{emptyMessage}</p>
+            <p className="text-slate-500 dark:text-slate-400 font-semibold text-base">{emptyMessage}</p>
+            <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Use o botão + para criar uma nova ação</p>
           </motion.div>
         ) : (
           actions.map((action, idx) => (
             <motion.div
               key={action.uid}
               layout
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, x: -100 }}
-              transition={{ delay: idx * 0.03 }}
+              exit={{ opacity: 0, x: -100, scale: 0.95 }}
+              transition={{ delay: idx * 0.025, duration: 0.2 }}
             >
               <MobileActionCard
                 action={action}
@@ -257,9 +259,9 @@ interface MobileFabProps {
 }
 
 const fabColors = {
-  teal: 'from-teal-500 to-emerald-500 shadow-teal-500/30',
-  blue: 'from-blue-500 to-indigo-500 shadow-blue-500/30',
-  rose: 'from-rose-500 to-pink-500 shadow-rose-500/30',
+  teal: 'from-teal-500 to-emerald-600 shadow-teal-500/40',
+  blue: 'from-blue-500 to-indigo-600 shadow-blue-500/40',
+  rose: 'from-rose-500 to-pink-600 shadow-rose-500/40',
 };
 
 export const MobileFab: React.FC<MobileFabProps> = ({
@@ -271,12 +273,16 @@ export const MobileFab: React.FC<MobileFabProps> = ({
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ scale: 0.95 }}
+      whileTap={{ scale: 0.9 }}
+      whileHover={{ scale: 1.05 }}
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
       className={`
         fab bg-gradient-to-br ${fabColors[color]}
-        text-white shadow-lg
+        text-white shadow-xl
+        active:shadow-md
       `}
       aria-label={label || "Ação"}
     >

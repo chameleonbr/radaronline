@@ -63,7 +63,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         initial="initial"
         animate="animate"
         exit="exit"
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+        className="fixed inset-0 z-[100] flex items-start justify-start p-0 sm:items-center sm:justify-center sm:p-4"
       >
         {/* Backdrop */}
         <motion.div
@@ -77,7 +77,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           initial="initial"
           animate="animate"
           exit="exit"
-          className="relative w-full max-w-md bg-white dark:bg-slate-800 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700"
+          className="relative w-full h-full sm:h-auto sm:max-w-md bg-white dark:bg-slate-800 rounded-none sm:rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-700"
+          style={{ maxHeight: '100dvh' }}
         >
           <div className="p-6">
             <div className="flex items-start gap-4">

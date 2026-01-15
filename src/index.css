@@ -377,7 +377,21 @@ button:active {
 
 /* Mobile bottom navigation spacing */
 .pb-mobile-nav {
-  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+}
+
+/* Espaçamento extra para quando FAB está visível */
+.pb-mobile-nav-with-fab {
+  padding-bottom: calc(150px + env(safe-area-inset-bottom, 0));
+}
+
+/* Simple safe area padding */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 16px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0);
 }
 
 /* Mobile-only visibility */
@@ -490,22 +504,38 @@ button:active {
 /* Floating action button */
 .fab {
   position: fixed;
+  /* Posiciona acima da bottom nav (56px) + safe area + margem */
   bottom: calc(72px + env(safe-area-inset-bottom, 0));
   right: 16px;
-  z-index: 30;
+  z-index: 35; /* Acima da bottom nav (z-40) mas abaixo de modais */
   width: 56px;
   height: 56px;
   border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, opacity 0.2s ease-out;
+  /* Garante que seja vis\u00edvel sobre fundos claros e escuros */
+  backdrop-filter: none;
 }
 
 .fab:active {
-  transform: scale(0.95);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transform: scale(0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Quando a bottom nav est\u00e1 vis\u00edvel, ajusta posi\u00e7\u00e3o */
+@media (max-width: 639px) {
+  .fab {
+    bottom: calc(80px + env(safe-area-inset-bottom, 0));
+    right: 20px;
+  }
 }
 
 /* Mobile-specific spacing adjustments */

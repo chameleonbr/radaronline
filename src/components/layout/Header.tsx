@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, BarChart2, Users, Menu, Shield, MapPin, Zap, ChevronRight, Pencil, Calendar } from 'lucide-react';
+import { List, BarChart2, Menu, Shield, MapPin, Zap, Pencil } from 'lucide-react';
 import { Objective } from '../../types';
 import { UserRole } from '../../types/auth.types';
 import { ThemeToggle } from '../common/ThemeToggle';
@@ -53,26 +53,94 @@ export const Header: React.FC<HeaderProps> = ({
   // Título limpo (sem prefixo) para passar ao modal de edição
   const cleanTitleForEdit = getObjectiveTitleWithoutNumber(rawTitle);
 
-  // State de edição inline removido em favor do modal centralizado
+  // =============================================
+  // HEADER MOBILE - Layout simplificado e limpo
+  // =============================================
+  if (isMobile) {
+    return (
+      <header 
+        data-tour="header" 
+        className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-3 py-2.5 shrink-0 z-30 sticky top-0 safe-area-top"
+      >
+        {/* Linha 1: Menu + Localização + Ações rápidas */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Lado esquerdo: Menu + Badge de localização */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {onMenuClick && (
+              <button
+                onClick={onMenuClick}
+                className="p-2 -ml-1 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg shrink-0 transition-colors"
+                aria-label="Abrir menu"
+              >
+                <Menu size={20} />
+              </button>
+            )}
+            
+            {/* Badge de localização compacto */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-700/80 min-w-0 flex-1">
+              <MapPin size={12} className="text-teal-500 shrink-0" />
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
+                {micro || macro || 'Minas Gerais'}
+              </span>
+            </div>
+          </div>
 
+          {/* Lado direito: Ações compactas */}
+          <div className="flex items-center gap-1 shrink-0">
+            <NotificationBell />
+            <ZoomControl />
+            <ThemeToggle size="sm" />
+          </div>
+        </div>
 
+        {/* Linha 2: Título da página/objetivo (apenas no modo estratégia) */}
+        {currentNav === 'strategy' && (
+          <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+            <h1 
+              className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate flex-1"
+              title={objectiveTitle}
+            >
+              {objectiveTitle || 'Selecione um objetivo'}
+            </h1>
+            
+            {/* Edit mode toggle para admin */}
+            {(isAdmin || userRole === 'superadmin') && onToggleEditMode && viewMode === 'table' && (
+              <button
+                onClick={onToggleEditMode}
+                className={`
+                  p-1.5 rounded-lg transition-all shrink-0
+                  ${isEditMode
+                    ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/50 dark:text-amber-400'
+                    : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'}
+                `}
+                title={isEditMode ? "Modo de edição ativo" : "Ativar modo de edição"}
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Título para outras páginas */}
+        {currentNav === 'home' && (
+          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+            <h1 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+              Dashboard
+            </h1>
+          </div>
+        )}
+      </header>
+    );
+  }
+
+  // =============================================
+  // HEADER DESKTOP - Layout completo
+  // =============================================
   return (
     <header data-tour="header" className="bg-white/95 dark:bg-slate-800/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 h-16 flex justify-between items-center shrink-0 z-30 sticky top-0 transition-all duration-200 shadow-sm">
       <div className="flex items-center gap-4 flex-1 min-w-0 pr-4">
-        {/* Menu hamburger mobile */}
-        {isMobile && onMenuClick && (
-          <button
-            onClick={onMenuClick}
-            className="p-2 -ml-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg shrink-0 transition-colors"
-            aria-label="Abrir menu"
-          >
-            <Menu size={18} />
-          </button>
-        )}
-
         <div className="flex-1 min-w-0">
-          {/* Breadcrumb de Localização */}
-          {/* Badge de Localização Moderno */}
+          {/* Badge de Localização */}
           <div className="flex items-center gap-2 mb-1">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 dark:bg-slate-700 border border-slate-200/60 dark:border-slate-600 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-600 hover:shadow-sm transition-all group cursor-default">
               <div className="p-0.5 rounded-full bg-teal-100 dark:bg-teal-900 text-teal-600 dark:text-teal-400 group-hover:bg-teal-500 group-hover:text-white transition-colors">
@@ -81,7 +149,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-slate-500 dark:text-slate-400 uppercase tracking-wide text-[10px]">{macro}</span>
               {micro && (
                 <>
-                  <ChevronRight size={10} className="text-slate-300 dark:text-slate-500" />
+                  <span className="text-slate-300 dark:text-slate-500 mx-0.5">›</span>
                   <span className="text-slate-800 dark:text-slate-100 font-bold">{micro}</span>
                 </>
               )}
@@ -89,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {currentNav === 'strategy' ? (
-            isEditMode && currentNav === 'strategy' ? (
+            isEditMode ? (
               <h1
                 className="text-base font-bold text-slate-900 dark:text-slate-100 leading-tight truncate cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 px-2 py-1 rounded -ml-2 border border-transparent hover:border-slate-200 dark:hover:border-slate-600 transition-all flex items-center gap-2"
                 title="Clique para editar"
@@ -112,8 +180,8 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-6 shrink-0">
-        {/* Navigation Tabs - Desktop Style */}
-        {currentNav === 'strategy' && !isMobile && (
+        {/* Navigation Tabs - Desktop */}
+        {currentNav === 'strategy' && (
           <div data-tour="view-mode" className="flex bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700/50">
             <TabButton
               active={viewMode === 'table'}
@@ -136,27 +204,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* View mode dropdown mobile - Simplificado */}
-        {isMobile && currentNav === 'strategy' && (
-          <div className="flex items-center gap-2">
-            {/* Selector de modo compacto */}
-            <select
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as 'table' | 'gantt' | 'team' | 'optimized' | 'calendar')}
-              className="appearance-none bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold px-3 py-2 rounded-lg border-0 focus:ring-2 focus:ring-teal-500 cursor-pointer"
-            >
-              <option value="table">📋 Ações</option>
-              <option value="gantt">📅 Cronograma</option>
-              <option value="optimized">⚡ Rápida</option>
-            </select>
-          </div>
-        )}
-
         <div className="flex items-center gap-3">
-          {/* Notification Bell - Moves here when Microregion is selected */}
+          {/* Notification Bell */}
           {micro && <NotificationBell />}
 
-          {/* Edit Mode Toggle - Only shown in Table View AND Strategy Mode */}
+          {/* Edit Mode Toggle */}
           {(isAdmin || userRole === 'superadmin') && currentNav === 'strategy' && onToggleEditMode && viewMode === 'table' && (
             <button
               onClick={onToggleEditMode}
@@ -174,7 +226,7 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Botão Admin */}
-          {isAdmin && !isMobile && onAdminClick && (
+          {isAdmin && onAdminClick && (
             <button
               onClick={onAdminClick}
               className="flex items-center gap-1.5 px-2.5 py-1.5 bg-purple-50 dark:bg-purple-900/40 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 rounded-lg text-[10px] font-bold transition-colors border border-purple-100/50 dark:border-purple-800/50"

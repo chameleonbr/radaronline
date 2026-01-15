@@ -16,9 +16,10 @@ type UserFormModalProps = {
     microregiaoId?: string;
     municipio?: string;
   };
+  fullScreen?: boolean; // quando true, usa layout full-screen em mobile
 };
 
-export function UserFormModal({ user, onClose, onSave, isSaving = false, initialData }: UserFormModalProps) {
+export function UserFormModal({ user, onClose, onSave, isSaving = false, initialData, fullScreen = false }: UserFormModalProps) {
   const isEditing = user !== null;
 
   const [formData, setFormData] = useState({
@@ -197,8 +198,8 @@ export function UserFormModal({ user, onClose, onSave, isSaving = false, initial
       )}
 
       {/* Modal principal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden">
+      <div className={`fixed inset-0 z-50 flex ${fullScreen ? 'items-start justify-start p-0' : 'items-center justify-center p-4'} bg-black/50 backdrop-blur-sm`}>
+        <div className={`bg-white dark:bg-slate-800 ${fullScreen ? 'w-full h-full rounded-none' : 'w-full max-w-lg max-h-[90vh] rounded-2xl'} overflow-hidden shadow-2xl`}>
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
             <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">

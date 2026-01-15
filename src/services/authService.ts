@@ -79,7 +79,7 @@ export async function listUsers(): Promise<User[]> {
     // ✅ FASE 1: Select específico - apenas campos necessários
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, created_by, created_at, municipio')
+      .select('id, nome, email, role, microregiao_id, ativo, lgpd_consentimento, lgpd_consentimento_data, created_by, created_at, municipio, first_access, avatar_id')
       .order('created_at', { ascending: false });
 
     if (error) {

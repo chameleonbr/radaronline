@@ -9,7 +9,7 @@ interface LgpdConsentProps {
 export function LgpdConsent(props: LgpdConsentProps) {
   const { onAccepted } = props;
   const { user, acceptLgpd, logout } = useAuth();
-  
+
   const [hasScrolledTerms, setHasScrolledTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showRejectWarning, setShowRejectWarning] = useState(false);
@@ -56,24 +56,24 @@ export function LgpdConsent(props: LgpdConsentProps) {
             Termo de Uso e Responsabilidade
           </h1>
           <p className="text-slate-400">
-            Olá, <span className="text-teal-400 font-medium">{user?.nome || 'Usuário'}</span>! 
-            Para utilizar o sistema RADAR 2.0, leia e aceite os termos abaixo.
+            Olá, <span className="text-teal-400 font-medium">{user?.nome || 'Usuário'}</span>!
+            Para utilizar o sistema Radar Minas Digital, leia e aceite os termos abaixo.
           </p>
         </div>
 
         {/* Card Principal */}
         <div className="bg-white/10 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-          
+
           {/* Conteúdo dos Termos - Scrollável */}
-          <div 
+          <div
             className="p-6 max-h-[50vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent"
             onScroll={handleTermsScroll}
           >
             {/* Introdução */}
             <div className="mb-6">
               <p className="text-slate-300 text-sm leading-relaxed">
-                O <strong className="text-white">RADAR 2.0</strong> é um sistema de gestão estratégica da 
-                Secretaria de Estado de Saúde de Minas Gerais (SES-MG). Ao acessar e utilizar este sistema, 
+                O <strong className="text-white">Radar Minas Digital</strong> é um sistema de gestão estratégica da
+                Secretaria de Estado de Saúde de Minas Gerais (SES-MG). Ao acessar e utilizar este sistema,
                 você declara estar ciente e de acordo com os seguintes termos:
               </p>
             </div>
@@ -194,7 +194,7 @@ export function LgpdConsent(props: LgpdConsentProps) {
                 <div>
                   <p className="text-sm text-amber-200 font-medium">Tem certeza?</p>
                   <p className="text-xs text-amber-300/70 mt-1">
-                    Ao recusar os termos, você será desconectado e não poderá utilizar o sistema RADAR 2.0.
+                    Ao recusar os termos, você será desconectado e não poderá utilizar o sistema Radar Minas Digital.
                   </p>
                 </div>
               </div>
@@ -202,7 +202,7 @@ export function LgpdConsent(props: LgpdConsentProps) {
 
             {/* Texto de concordância */}
             <p className="text-sm text-slate-400 text-center mb-4">
-              Ao clicar em <strong className="text-teal-400">"Aceitar e Continuar"</strong>, declaro que li, compreendi e aceito 
+              Ao clicar em <strong className="text-teal-400">"Aceitar e Continuar"</strong>, declaro que li, compreendi e aceito
               integralmente os <strong className="text-white">Termos de Uso</strong> e a <strong className="text-white">Política de Privacidade</strong> acima.
             </p>
 
@@ -210,11 +210,10 @@ export function LgpdConsent(props: LgpdConsentProps) {
             <div className="flex gap-3">
               <button
                 onClick={handleReject}
-                className={`flex-shrink-0 py-3 px-6 font-medium rounded-xl transition-all ${
-                  showRejectWarning 
-                    ? 'bg-red-600 hover:bg-red-700 text-white' 
+                className={`flex-shrink-0 py-3 px-6 font-medium rounded-xl transition-all ${showRejectWarning
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
                     : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                }`}
+                  }`}
               >
                 {showRejectWarning ? 'Confirmar Saída' : 'Recusar'}
               </button>
@@ -241,7 +240,7 @@ export function LgpdConsent(props: LgpdConsentProps) {
 
         {/* Rodapé */}
         <p className="mt-4 text-center text-slate-500 text-xs">
-          Versão 2.0 • Última atualização: Janeiro/2026
+          Radar Minas Digital • Última atualização: Janeiro/2026
         </p>
       </div>
     </div>

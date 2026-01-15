@@ -4,7 +4,8 @@ import { ptBR } from 'date-fns/locale';
 import { Action, Activity, Objective } from '../../../types';
 import { MICROREGIOES } from '../../../data/microregioes';
 import { getActionDisplayId } from '../../../lib/text';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ZoomIn, ZoomOut, Target, X } from 'lucide-react';
+import { filterOrphanedActions, hasValidDate, createActivityToObjectiveMap } from '../../../lib/actionValidation';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ZoomIn, ZoomOut, Target, X, AlertCircle } from 'lucide-react';
 
 interface LinearCalendarProps {
     actions: Action[];
@@ -45,34 +46,44 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
 
     // Build activity to objective mapping
     const activityToObjective = useMemo(() => {
-        const map: Record<string, number> = {};
-        Object.entries(activities).forEach(([objId, acts]) => {
-            acts.forEach(act => {
-                map[act.id] = Number(objId);
-            });
-        });
-        return map;
+        return createActivityToObjectiveMap(activities);
     }, [activities]);
 
-    // Filter actions
-    const filteredActions = useMemo(() => {
-        let filtered = actions;
+    // Filtrar ações válidas (não órfãs) primeiro
+    const validActions = useMemo(() => {
+        return filterOrphanedActions(actions, activities);
+    }, [actions, activities]);
+
+    // Ações filtradas por microrregião e objetivo (todas válidas)
+    const microFilteredActions = useMemo(() => {
+        let filtered = validActions;
         if (selectedMicro && selectedMicro !== 'all') {
             filtered = filtered.filter(a => a.microregiaoId === selectedMicro);
         }
         if (selectedObjective !== 'all') {
             filtered = filtered.filter(a => activityToObjective[a.activityId] === selectedObjective);
         }
-        return filtered.filter(a => {
-            const startStr = a.startDate || a.plannedEndDate;
-            if (!startStr) return false;
-            return !isNaN(new Date(startStr).getTime());
-        }).sort((a, b) => {
-            const startA = new Date(a.startDate || a.plannedEndDate).getTime();
-            const startB = new Date(b.startDate || b.plannedEndDate).getTime();
-            return startA - startB;
-        });
-    }, [actions, selectedMicro, selectedObjective, activityToObjective]);
+        return filtered;
+    }, [validActions, selectedMicro, selectedObjective, activityToObjective]);
+
+    // Estatísticas de ações
+    const actionStats = useMemo(() => {
+        const total = microFilteredActions.length;
+        const withDate = microFilteredActions.filter(hasValidDate).length;
+        const withoutDate = total - withDate;
+        return { total, withDate, withoutDate };
+    }, [microFilteredActions]);
+
+    // Filter actions para a agenda (apenas com data válida)
+    const filteredActions = useMemo(() => {
+        return microFilteredActions
+            .filter(hasValidDate)
+            .sort((a, b) => {
+                const startA = new Date(a.startDate || a.plannedEndDate).getTime();
+                const startB = new Date(b.startDate || b.plannedEndDate).getTime();
+                return startA - startB;
+            });
+    }, [microFilteredActions]);
 
     const microName = useMemo(() => {
         if (!selectedMicro || selectedMicro === 'all') return 'Todas as Microrregiões';
@@ -263,7 +274,14 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 leading-none">Agenda de Ações</h2>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{microName} • {filteredActions.length} ações</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                {microName} • {actionStats.total} ações
+                                {actionStats.withoutDate > 0 && (
+                                    <span className="text-amber-500 dark:text-amber-400 ml-1">
+                                        ({actionStats.withoutDate} sem data)
+                                    </span>
+                                )}
+                            </p>
                         </div>
                     </div>
 

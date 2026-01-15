@@ -60,9 +60,11 @@ export const ActivityTabs: React.FC<ActivityTabsProps> = ({
     }
   };
 
+  // Altura do header: mobile = ~90px (duas linhas), desktop = 64px
+  const stickyTop = isMobile ? 'top-[90px]' : 'top-16';
 
   return (
-    <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-[72px] z-20 shadow-[0_4px_20px_-12px_rgba(0,0,0,0.1)] flex flex-col">
+    <div className={`bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky ${stickyTop} z-20 shadow-[0_4px_20px_-12px_rgba(0,0,0,0.08)] flex flex-col`}>
       {/* Barra de Abas */}
       <div className="relative flex items-center">
         {/* Left scroll indicator/button */}

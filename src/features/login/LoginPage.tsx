@@ -23,11 +23,23 @@ export function LoginPage() {
       return;
     }
 
-    const result = await login(email, senha);
+    console.log('[LoginPage] 🔐 Iniciando login para:', email);
 
-    if (!result.success) {
-      setError(result.error || 'Erro ao fazer login');
+    try {
+      const result = await login(email, senha);
+      console.log('[LoginPage] 📬 Resultado do login:', result);
+
+      if (!result.success) {
+        console.log('[LoginPage] ❌ Login falhou:', result.error);
+        setError(result.error || 'Erro ao fazer login');
+      } else {
+        console.log('[LoginPage] ✅ Login bem-sucedido! Aguardando redirecionamento...');
+      }
+    } catch (err) {
+      console.error('[LoginPage] 💥 Erro inesperado no login:', err);
+      setError('Erro inesperado ao fazer login');
     }
+
     setIsSubmitting(false);
   };
 

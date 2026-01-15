@@ -297,19 +297,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Login
   const login = useCallback(async (email: string, senha: string) => {
+    console.log('[AuthContext] 🔐 Login iniciado para:', email);
+
     // ✅ CORREÇÃO: Ativa lock para evitar que onAuthStateChange processe SIGNED_IN
     loginLockRef.current = true;
     setIsLoading(true);
 
     try {
+      console.log('[AuthContext] 📡 Chamando supabase.auth.signInWithPassword...');
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password: senha,
       });
+      console.log('[AuthContext] 📬 Resposta do Supabase:', { data: data?.user?.email, error: error?.message });
 
       if (error) {
         // Erro no login tratado
-        console.error('[AuthContext] Erro de login:', {
+        console.error('[AuthContext] ❌ Erro de login:', {
           message: error.message,
           status: error.status,
           code: error.code,
@@ -324,9 +328,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data.user) {
+        console.log('[AuthContext] ✅ Usuário autenticado:', data.user.email);
+        console.log('[AuthContext] 📂 Carregando perfil do usuário...');
+
         const profile = await loadUserProfile(data.user.id);
+        console.log('[AuthContext] 📋 Perfil carregado:', profile ? profile.nome : 'NULL');
 
         if (!profile) {
+          console.log('[AuthContext] ❌ Perfil não encontrado ou inativo, fazendo logout...');
           await supabase.auth.signOut();
           return {
             success: false,
@@ -334,9 +343,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
           };
         }
 
+        console.log('[AuthContext] 🎉 Setando usuário no contexto...');
         setUser(profile);
         const microId = profile.microregiaoId === 'all' ? null : profile.microregiaoId;
         setViewingMicroregiaoId(microId);
+        console.log('[AuthContext] ✅ Usuário setado! isAuthenticated deveria ser true agora.');
 
         // Registrar login no log de atividades
         loggingService.logActivity('login', 'auth', profile.id, { name: profile.nome });
@@ -344,18 +355,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: true };
       }
 
+      console.log('[AuthContext] ⚠️ data.user é null/undefined');
       return { success: false, error: 'Erro ao fazer login' };
     } catch (error: unknown) {
+      console.error('[AuthContext] 💥 Erro inesperado:', error);
       const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer login';
       return { success: false, error: errorMessage };
     } finally {
+      console.log('[AuthContext] 🔓 Finalizando login, setIsLoading(false)');
       setIsLoading(false);
       // ✅ CORREÇÃO: Libera lock após conclusão do login (com delay para garantir)
       setTimeout(() => {
         loginLockRef.current = false;
+        console.log('[AuthContext] 🔓 Lock liberado');
       }, 100);
     }
   }, [loadUserProfile]);
+
 
   // Logout
   const logout = useCallback(async () => {

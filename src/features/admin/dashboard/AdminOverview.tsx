@@ -83,7 +83,7 @@ function MetricCard({ title, value, subtitle, icon, trend, onClick, variant = 'd
     >
       {/* Background Decor */}
       {isSolid && (
-        <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/10 blur-2xl pointer-events-none" />
       )}
 
       <div className="flex justify-between items-start mb-4">

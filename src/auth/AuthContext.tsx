@@ -20,15 +20,13 @@ type AuthProviderProps = {
   children: ReactNode;
 };
 
-// ✅ CORREÇÃO: Cache de perfis movido para fora do componente (module-level)
-// Isso garante que o cache persista entre renders
+// ✅ CACHE: Mantido fora para persistência, mas agora gerenciado com mais rigor
 const profileCache = new Map<string, { profile: User; timestamp: number }>();
 const CACHE_TTL = 60000; // 1 minuto
 
-// ✅ CORREÇÃO: Função para limpar sessão corrompida do localStorage
+// ✅ FUNÇÃO: Limpar sessão corrompida
 const clearCorruptedSession = () => {
   try {
-    // Remove todos os itens do Supabase do localStorage
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -37,9 +35,9 @@ const clearCorruptedSession = () => {
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
-    // Sessão corrompida limpa do localStorage
+    console.log('[AuthContext] 🧹 Sessão corrompida limpa do localStorage');
   } catch {
-    // Erro ao limpar sessão - ignorado silenciosamente
+    // Ignora erro silenciosamente
   }
 };
 
@@ -49,32 +47,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [viewingMicroregiaoId, setViewingMicroregiaoId] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // ✅ CORREÇÃO: Ref para indicar que um login está em andamento
-  // Isso evita race condition entre login() e onAuthStateChange
+  // ✅ REF: Lock para evitar conflito entre login() manual e onAuthStateChange
   const loginLockRef = useRef(false);
+
+  // ✅ REFs: Para controle de inicialização (substitui state para evitar rerenders e cleanups errados)
+  const initializedRef = useRef(false);
+  const hasResolvedSessionRef = useRef(false);
+
+  // ✅ REF: Para isDemoMode no listener (evita deps extras no effect)
+  const isDemoModeRef = useRef(false);
+  useEffect(() => {
+    isDemoModeRef.current = isDemoMode;
+  }, [isDemoMode]);
 
   /**
    * Carrega perfil do usuário do Supabase com cache
-   * Retorna null se usuário não encontrado ou inativo
-   * 
-   * PADRÃO: Converte null do DB para 'all' no app (consistência)
    */
   const loadUserProfile = useCallback(async (userId: string, useCache = true): Promise<User | null> => {
-    console.log('[AuthContext] 🔍 loadUserProfile chamado para userId:', userId);
+    console.log('[AuthContext] 🔍 loadUserProfile:', userId, 'UseCache:', useCache);
 
-    // ✅ FASE 1: Verificar cache primeiro
+    // ✅ FASE 1: Verificar cache
     if (useCache) {
       const cached = profileCache.get(userId);
       if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        console.log('[AuthContext] 📦 Cache HIT para userId:', userId);
+        console.log('[AuthContext] 📦 Cache HIT');
         return cached.profile;
       }
     }
 
     try {
-      console.log('[AuthContext] 📡 Buscando perfil no Supabase...');
-
-      // ✅ CORREÇÃO: Adicionar timeout para evitar travamento indefinido
+      // ✅ Timeout de segurança para evitar travamento infinito
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Timeout ao carregar perfil (10s)')), 10000);
       });
@@ -87,147 +89,147 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
 
-      console.log('[AuthContext] 📬 Resposta do profiles:', { data: data?.email, error: error?.message });
-
       if (error) {
-        console.error('[AuthContext] ❌ Erro ao carregar perfil:', error);
+        console.error('[AuthContext] ❌ Erro ao carregar perfil:', error.message);
         return null;
       }
 
       if (!data) {
-        console.log('[AuthContext] ⚠️ Perfil não encontrado');
+        console.warn('[AuthContext] ⚠️ Perfil não encontrado no banco.');
         return null;
       }
 
       if (!data.ativo) {
-        console.log('[AuthContext] ⚠️ Usuário inativo');
+        console.warn('[AuthContext] ⛔ Usuário inativo.');
         return null;
       }
 
-      // Converter snake_case para camelCase
-      // ✅ PADRÃO: null do DB vira 'all' no app
+      // ✅ Mapeamento: null do DB vira 'all' no app
       const profile: User = {
         id: data.id,
         nome: data.nome,
         email: data.email,
         role: data.role,
-        microregiaoId: data.microregiao_id || 'all', // null → 'all'
+        microregiaoId: data.microregiao_id || 'all',
         ativo: data.ativo,
         lgpdConsentimento: data.lgpd_consentimento,
         lgpdConsentimentoData: data.lgpd_consentimento_data || undefined,
-        avatarId: data.avatar_id || 'zg10', // Default avatar
+        avatarId: data.avatar_id || 'zg10',
         createdBy: data.created_by || undefined,
-        firstAccess: data.first_access ?? true, // Se não existir, assume primeiro acesso
+        firstAccess: data.first_access ?? true,
         createdAt: data.created_at,
       };
 
-      console.log('[AuthContext] ✅ Perfil montado:', profile.nome);
-
-      // ✅ FASE 1: Salvar no cache
+      // ✅ Salvar no cache
       if (useCache) {
         profileCache.set(userId, { profile, timestamp: Date.now() });
       }
 
+      console.log('[AuthContext] ✅ Perfil carregado:', profile.nome);
       return profile;
     } catch (err) {
-      console.error('[AuthContext] 💥 Erro inesperado ao carregar perfil:', err);
+      console.error('[AuthContext] 💥 Erro crítico ao carregar perfil:', err);
       return null;
     }
   }, []);
 
-  // ✅ FUNÇÃO: Refresh do usuário (atualiza perfil sem reload da página)
+  // ✅ Refresh do usuário (atualiza sem reload)
   const refreshUser = useCallback(async (): Promise<void> => {
     if (!user) return;
-
-    // Invalida o cache primeiro
-    profileCache.delete(user.id);
-    // Cache invalidado, recarregando perfil
-
-    // Recarrega o perfil do banco
+    profileCache.delete(user.id); // Invalida cache específico
     const profile = await loadUserProfile(user.id, false);
-
     if (profile) {
       setUser(profile);
-      // Perfil atualizado com sucesso
     }
   }, [user, loadUserProfile]);
 
-  // ✅ CORREÇÃO: Flag para evitar processamento duplo
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Inicializa sessão ao montar componente
+  // =====================================
+  // EFFECT 1: Inicialização Única via getSession (roda uma vez só)
+  // =====================================
   useEffect(() => {
-    // ✅ CORREÇÃO: Evita re-execução se já inicializou
-    if (isInitialized) return;
+    // ✅ BUG FIX 3: Reset refs para HMR/dev (evita estado residual)
+    hasResolvedSessionRef.current = false;
+    initializedRef.current = false;
 
     let mounted = true;
-    let timeoutId: NodeJS.Timeout | null = null;
-    let hasResolvedSession = false; // Flag para evitar processamento duplo
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    // ✅ CORREÇÃO: Helper para resetar loading e limpar timeout (DRY)
     const resetLoading = () => {
       if (timeoutId) clearTimeout(timeoutId);
       if (mounted) setIsLoading(false);
     };
 
-    // ✅ CORREÇÃO: Timeout de segurança INTELIGENTE - não limpa sessão válida
+    // ✅ Timeout de segurança (8s)
     timeoutId = setTimeout(() => {
-      if (hasResolvedSession) return; // Já resolveu, não fazer nada
+      if (hasResolvedSessionRef.current) return;
 
-      // Timeout ao carregar sessão - verificando cache
+      // ✅ BUG FIX 1: Marcar como resolvido para evitar que getSession sobrescreva depois
+      hasResolvedSessionRef.current = true;
+      console.log('[AuthContext] ⏰ Timeout ao carregar sessão - verificando cache');
 
-      // ✅ CORREÇÃO: Tentar usar cache antigo antes de desistir
       const cachedProfiles = Array.from(profileCache.values());
       if (cachedProfiles.length > 0) {
         const mostRecent = cachedProfiles.sort((a, b) => b.timestamp - a.timestamp)[0];
-        // Usando cache antigo como fallback
+        console.log('[AuthContext] 📦 Usando cache antigo como fallback');
         if (mounted) {
           setUser(mostRecent.profile);
           const microId = mostRecent.profile.microregiaoId === 'all' ? null : mostRecent.profile.microregiaoId;
           setViewingMicroregiaoId(microId);
           setIsLoading(false);
         }
+        // ✅ BUG FIX 1: Marcar init completa no timeout com cache
+        initializedRef.current = true;
         return;
       }
 
-      // ✅ CORREÇÃO: Só limpa sessão se realmente não tiver dados
-      // Sem cache disponível - redirecionando para login
+      console.log('[AuthContext] 🚪 Sem cache disponível - redirecionando para login');
       if (mounted) {
         setUser(null);
         setIsLoading(false);
       }
-    }, 8000); // Reduzido para 8s
+      // ✅ BUG FIX 1: Marcar init completa no timeout sem cache
+      initializedRef.current = true;
+    }, 8000);
 
     // Verifica sessão atual
     supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      if (!mounted || hasResolvedSession) return;
-      hasResolvedSession = true; // ✅ CORREÇÃO: Marca como resolvido
+      if (!mounted || hasResolvedSessionRef.current) {
+        // ✅ BUG FIX 2: Garantir init completa mesmo se mounted for false
+        initializedRef.current = true;
+        return;
+      }
+      hasResolvedSessionRef.current = true; // Marca como resolvido
 
       if (error) {
-        // Erro ao obter sessão
-        // ✅ CORREÇÃO: Só limpa se for erro de token inválido
+        console.error('[AuthContext] ❌ Erro ao obter sessão:', error.message);
         if (error.message?.includes('invalid') || error.message?.includes('expired')) {
           clearCorruptedSession();
         }
         resetLoading();
+        // ✅ BUG FIX 1: Marcar init completa em erro
+        initializedRef.current = true;
         return;
       }
 
       if (session?.user) {
+        console.log('[AuthContext] 🔓 Sessão encontrada para:', session.user.email);
         const profile = await loadUserProfile(session.user.id);
 
         if (!mounted) {
+          // ✅ BUG FIX 2: Garantir init completa mesmo se desmontou
+          initializedRef.current = true;
           resetLoading();
           return;
         }
 
-        // ✅ CORREÇÃO: Se perfil não encontrado ou inativo, fazer logout automático
         if (!profile || !profile.ativo) {
-          // Sessão encontrada mas perfil inválido/inativo - fazendo logout
+          console.log('[AuthContext] ⛔ Perfil inválido/inativo - fazendo logout');
           await supabase.auth.signOut();
+          clearCorruptedSession();
           setUser(null);
           setViewingMicroregiaoId(null);
           resetLoading();
+          initializedRef.current = true;
           return;
         }
 
@@ -235,84 +237,116 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const microId = profile.microregiaoId === 'all' ? null : profile.microregiaoId;
         setViewingMicroregiaoId(microId);
         resetLoading();
-        setIsInitialized(true); // ✅ CORREÇÃO: Marca como inicializado
       } else {
+        console.log('[AuthContext] 🚪 Nenhuma sessão ativa');
         resetLoading();
-        setIsInitialized(true); // ✅ CORREÇÃO: Marca como inicializado
       }
+      // ✅ BUG FIX 1: Marcar init completa no sucesso
+      initializedRef.current = true;
     }).catch((_error) => {
-      if (!mounted) return;
-      // Erro inesperado ao obter sessão
+      if (!mounted) {
+        // ✅ BUG FIX 2: Garantir init completa mesmo em catch com unmount
+        initializedRef.current = true;
+        return;
+      }
+      console.error('[AuthContext] 💥 Erro inesperado ao obter sessão');
       resetLoading();
-      setIsInitialized(true);
-    });
-
-    // Escuta mudanças de autenticação
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
-      // ✅ CORREÇÃO: Ignorar INITIAL_SESSION durante inicialização (tratado por getSession)
-      if (!isInitialized && event === 'INITIAL_SESSION') {
-        return;
-      }
-
-      // ✅ CORREÇÃO: Se um login() está em andamento, ignorar evento SIGNED_IN
-      // O login() já faz todo o trabalho necessário - evita race condition
-      if (loginLockRef.current && event === 'SIGNED_IN') {
-        return;
-      }
-
-      // Evento de auth processado
-
-      if (event === 'SIGNED_IN' && session?.user) {
-        setIsLoading(true);
-        const profile = await loadUserProfile(session.user.id);
-
-        // Verifica se está ativo antes de permitir login
-        if (!profile || !profile.ativo) {
-          // Tentativa de login com usuário inativo ou não encontrado
-          await supabase.auth.signOut();
-          setIsLoading(false);
-          return;
-        }
-
-        setUser(profile);
-        const microId = profile.microregiaoId === 'all' ? null : profile.microregiaoId;
-        setViewingMicroregiaoId(microId);
-        setIsLoading(false);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setViewingMicroregiaoId(null);
-        setIsLoading(false);
-        profileCache.clear(); // ✅ CORREÇÃO: Limpa cache no logout
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        // ✅ CORREÇÃO: Refresh silencioso, sem loading visual
-        const profile = await loadUserProfile(session.user.id, false);
-
-        if (!profile || !profile.ativo) {
-          // Perfil inválido após refresh - fazendo logout
-          await supabase.auth.signOut();
-          setUser(null);
-          setViewingMicroregiaoId(null);
-        } else {
-          setUser(profile);
-        }
-        // ✅ CORREÇÃO: NÃO resetar loading em TOKEN_REFRESHED
-      }
+      // ✅ BUG FIX 1: Marcar init completa em catch
+      initializedRef.current = true;
     });
 
     return () => {
       mounted = false;
       if (timeoutId) clearTimeout(timeoutId);
+      // ✅ BUG FIX 2: Garantir init completa no cleanup (para HMR)
+      initializedRef.current = true;
+    };
+  }, [loadUserProfile]); // Dependências mínimas: roda uma vez só
+
+  // =====================================
+  // EFFECT 2: Listener de Auth Sempre Ativo
+  // =====================================
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[AuthContext] 📡 Auth event:', event);
+
+      // ✅ BUG FIX 4: Bloquear eventos em demo mode (evita overwrite do estado demo)
+      if (isDemoModeRef.current) {
+        console.log('[AuthContext] 🎭 Demo mode ativo - ignorando evento');
+        return;
+      }
+
+      // ✅ Ignora INITIAL_SESSION se ainda não inicializado (tratado pelo effect 1)
+      if (!initializedRef.current && event === 'INITIAL_SESSION') {
+        console.log('[AuthContext] ⏳ Ignorando INITIAL_SESSION (init em progresso)');
+        return;
+      }
+
+      // ✅ CORREÇÃO: Se um login() está em andamento, ignorar evento SIGNED_IN
+      if (loginLockRef.current && event === 'SIGNED_IN') {
+        console.log('[AuthContext] 🔒 Login lock ativo - ignorando SIGNED_IN');
+        return;
+      }
+
+      if (event === 'SIGNED_IN' && session?.user) {
+        console.log('[AuthContext] 🔐 Evento SIGNED_IN recebido');
+        setIsLoading(true);
+        try {
+          // ✅ MELHORIA 4: Forçar sem cache no listener SIGNED_IN
+          const profile = await loadUserProfile(session.user.id, false);
+
+          if (!profile || !profile.ativo) {
+            console.log('[AuthContext] ⛔ Perfil inválido no SIGNED_IN - fazendo logout');
+            await supabase.auth.signOut();
+            clearCorruptedSession();
+            return;
+          }
+
+          setUser(profile);
+          const microId = profile.microregiaoId === 'all' ? null : profile.microregiaoId;
+          setViewingMicroregiaoId(microId);
+        } finally {
+          // ✅ BUG FIX 5: Finally para garantir loading reset
+          setIsLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        console.log('[AuthContext] 🚪 Evento SIGNED_OUT recebido');
+        setUser(null);
+        setViewingMicroregiaoId(null);
+        setIsLoading(false);
+        profileCache.clear();
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        console.log('[AuthContext] 🔄 Token refreshed');
+        // Refresh silencioso, sem loading visual
+        const profile = await loadUserProfile(session.user.id, false);
+
+        if (!profile || !profile.ativo) {
+          console.log('[AuthContext] ⛔ Perfil inválido após refresh - fazendo logout');
+          await supabase.auth.signOut();
+          clearCorruptedSession();
+          setUser(null);
+          setViewingMicroregiaoId(null);
+        } else {
+          setUser(profile);
+        }
+        // NÃO resetar loading em TOKEN_REFRESHED (pode estar no meio de outra operação)
+      }
+    });
+
+    return () => {
       subscription.unsubscribe();
     };
-  }, [loadUserProfile, isInitialized]);
+  }, [loadUserProfile]); // Dependências mínimas: sempre ativo
 
   // Login
   const login = useCallback(async (email: string, senha: string) => {
     console.log('[AuthContext] 🔐 Login iniciado para:', email);
+
+    // ✅ CORREÇÃO: Limpar cache de perfis no início do login para evitar dados stale
+    profileCache.clear();
+    console.log('[AuthContext] 📤 Cache de perfis limpo antes do login');
 
     // ✅ CORREÇÃO: Ativa lock para evitar que onAuthStateChange processe SIGNED_IN
     loginLockRef.current = true;
@@ -324,16 +358,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email,
         password: senha,
       });
-      console.log('[AuthContext] 📬 Resposta do Supabase:', { data: data?.user?.email, error: error?.message });
+      console.log('[AuthContext] 📬 Resposta do Supabase:', { user: data?.user?.email, error: error?.message });
 
       if (error) {
-        // Erro no login tratado
-        console.error('[AuthContext] ❌ Erro de login:', {
-          message: error.message,
-          status: error.status,
-          code: error.code,
-          email: email // para debug
-        });
+        console.error('[AuthContext] ❌ Erro de login:', error.message);
         return {
           success: false,
           error: error.message === 'Invalid login credentials'
@@ -343,26 +371,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (data.user) {
-        console.log('[AuthContext] ✅ Usuário autenticado:', data.user.email);
-        console.log('[AuthContext] 📂 Carregando perfil do usuário...');
+        console.log('[AuthContext] ✅ Usuário autenticado, carregando perfil...');
 
-        const profile = await loadUserProfile(data.user.id);
+        // ✅ Forçar sem cache no login
+        const profile = await loadUserProfile(data.user.id, false);
 
         if (!profile) {
           console.log('[AuthContext] ❌ Perfil não encontrado ou inativo, fazendo logout...');
           await supabase.auth.signOut();
+          clearCorruptedSession();
           return {
             success: false,
-            error: 'Não foi possível carregar seu perfil após o login. Verifique sua conexão ou se a conta está ativa.'
+            error: 'Não foi possível carregar seu perfil. Verifique se a conta está ativa.'
           };
         }
 
-        console.log('[AuthContext] 🎉 Perfil carregado com sucesso:', profile.nome);
+        console.log('[AuthContext] 🎉 Login bem-sucedido:', profile.nome);
         setUser(profile);
         const microId = profile.microregiaoId === 'all' ? null : profile.microregiaoId;
         setViewingMicroregiaoId(microId);
 
-        // Registrar login no log de atividades
         loggingService.logActivity('login', 'auth', profile.id, { name: profile.nome });
 
         return { success: true };
@@ -375,51 +403,63 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer login';
       return { success: false, error: errorMessage };
     } finally {
-      console.log('[AuthContext] 🔓 Finalizando login, setIsLoading(false)');
+      console.log('[AuthContext] 🔓 Finalizando login');
       setIsLoading(false);
-      // ✅ CORREÇÃO: Libera lock após conclusão do login (com delay para garantir)
+      // ✅ CORREÇÃO: Libera lock após conclusão (delay aumentado para 1000ms)
       setTimeout(() => {
         loginLockRef.current = false;
-        console.log('[AuthContext] 🔓 Lock liberado');
-      }, 100);
+        console.log('[AuthContext] 🔓 Login lock liberado');
+      }, 1000);
     }
   }, [loadUserProfile]);
 
-
   // Logout
   const logout = useCallback(async () => {
+    console.log('[AuthContext] 🚪 Logout iniciado');
     try {
       // Se estava em modo demo, apenas limpa o estado
       if (isDemoMode) {
+        console.log('[AuthContext] 🎭 Saindo do modo demo');
+        profileCache.clear(); // ✅ MELHORIA 3: Limpar cache no demo também
         setUser(null);
         setViewingMicroregiaoId(null);
         setIsDemoMode(false);
         return;
       }
+
+      // ✅ MELHORIA 6: Limpar cache e sessão no logout
+      profileCache.clear();
       await supabase.auth.signOut();
+      // Limpar sessão apenas se signOut funcionou (evita limpar em casos válidos)
       setUser(null);
       setViewingMicroregiaoId(null);
-    } catch {
-      // Erro ao fazer logout - ignorado
+      console.log('[AuthContext] ✅ Logout completo');
+    } catch (err) {
+      console.error('[AuthContext] ❌ Erro no logout:', err);
+      // Em caso de erro, forçar limpeza total
+      clearCorruptedSession();
+      setUser(null);
+      setViewingMicroregiaoId(null);
     }
   }, [isDemoMode]);
 
   // Login como Visitante (Demo Mode)
   const loginAsDemo = useCallback(() => {
+    console.log('[AuthContext] 🎭 Entrando em modo demo');
+    // ✅ MELHORIA 3: Limpar cache ao entrar no demo
+    profileCache.clear();
     setUser(DEMO_USER);
     setIsDemoMode(true);
-    setViewingMicroregiaoId(DEMO_USER.microregiaoId);
+    // ✅ MELHORIA 3: Tratar microregiaoId corretamente
+    setViewingMicroregiaoId(DEMO_USER.microregiaoId === 'all' ? null : DEMO_USER.microregiaoId);
     setIsLoading(false);
   }, []);
 
   // Aceitar LGPD
   const acceptLgpd = useCallback(async () => {
-    if (!user) {
-      // Tentativa de aceitar LGPD sem usuário logado
-      return;
-    }
+    if (!user) return;
 
-    // ✅ DEMO MODE: Apenas atualiza estado local, não salva no banco
+    // DEMO MODE: Apenas atualiza estado local
     if (isDemoMode) {
       setUser(prev => prev ? {
         ...prev,
@@ -439,10 +479,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Trocar microrregião visualizada (admin ou superadmin)
   const setViewingMicrorregiao = useCallback((microregiaoId: string) => {
-    if (user?.role !== 'admin' && user?.role !== 'superadmin') {
-      // Apenas admins podem trocar microrregião visualizada
-      return;
-    }
+    if (user?.role !== 'admin' && user?.role !== 'superadmin') return;
     setViewingMicroregiaoId(microregiaoId === 'all' ? null : microregiaoId);
   }, [user]);
 
@@ -451,15 +488,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const isSuperAdmin = user?.role === 'superadmin';
   const isAdmin = user?.role === 'admin' || isSuperAdmin;
 
-  // Microrregião atual (a que está sendo visualizada)
-  // Verifica se existe no array de microrregiões antes de retornar
+  // Microrregião atual
   const currentMicrorregiao: Microrregiao | null = viewingMicroregiaoId
     ? getMicroregiaoById(viewingMicroregiaoId) || null
     : user?.microregiaoId && user.microregiaoId !== 'all'
       ? getMicroregiaoById(user.microregiaoId) || null
       : null;
 
-  // ✅ CORREÇÃO: Sempre fornecer um contexto válido para evitar loops de renderização
   const value: ExtendedAuthContextType = {
     user,
     isLoading,
@@ -473,7 +508,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setViewingMicrorregiao,
     viewingMicroregiaoId,
     refreshUser,
-    // Demo Mode
     isDemoMode,
     loginAsDemo,
   };
@@ -487,15 +521,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
 export function useAuth(): ExtendedAuthContextType {
   const context = useContext(AuthContext);
-
   if (!context) {
     throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   }
-
   return context as ExtendedAuthContextType;
 }
 
-// ✅ CORREÇÃO: Hook de emergência para casos onde o contexto falha
 export function useAuthSafe(): ExtendedAuthContextType | null {
   const context = useContext(AuthContext);
   return context as ExtendedAuthContextType | null;

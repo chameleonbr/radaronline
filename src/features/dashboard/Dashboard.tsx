@@ -317,33 +317,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
               Distribuição de Status
             </h3>
             <div className="w-full h-[250px] relative">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <PieChart>
-                  <Pie
-                    data={metrics.statusData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                    stroke="none"
-                    onClick={(data) => handleCardClick(data.name)}
-                    className="cursor-pointer"
-                  >
-                    {metrics.statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} className="hover:opacity-80 transition-opacity cursor-pointer" />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip content={<CustomTooltip />} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                </PieChart>
-              </ResponsiveContainer>
+              {metrics.statusData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={metrics.statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                      onClick={(data) => handleCardClick(data.name)}
+                      className="cursor-pointer"
+                    >
+                      {metrics.statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} className="hover:opacity-80 transition-opacity cursor-pointer" />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-400 text-sm">
+                  Sem dados para exibir
+                </div>
+              )}
               {/* Total Center Label */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-                <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{metrics.total}</span>
-                <span className="text-xs text-slate-400 font-medium uppercase">Ações</span>
-              </div>
+              {metrics.statusData.length > 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                  <span className="text-3xl font-bold text-slate-800 dark:text-slate-100">{metrics.total}</span>
+                  <span className="text-xs text-slate-400 font-medium uppercase">Ações</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -354,51 +362,57 @@ export const Dashboard: React.FC<DashboardProps> = ({
               Performance por Objetivo
             </h3>
             <div className="w-full h-[250px]">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <BarChart
-                  data={metrics.progressoPorObjetivo}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                  layout="vertical"
-                  onClick={(data: any) => {
-                    if (data && data.activePayload && data.activePayload.length > 0) {
-                      const objId = data.activePayload[0].payload.id;
-                      onNavigate('list', { objectiveId: objId });
-                    }
-                  }}
-                  className="cursor-pointer"
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(148, 163, 184, 0.2)" />
-                  <XAxis type="number" domain={[0, 100]} hide />
-                  <YAxis dataKey="name" type="category" width={50} tick={{ fontSize: 12, fill: '#64748b' }} />
-                  <RechartsTooltip
-                    cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
-                    content={({ active, payload }) => {
-                      if (active && payload?.[0]) {
-                        const data = payload[0].payload;
-                        return (
-                          <div className="bg-white dark:bg-slate-800 p-3 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg text-xs max-w-[200px]">
-                            <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">{data.fullName}</p>
-                            <div className="flex justify-between gap-4">
-                              <span>Progresso:</span>
-                              <span className="font-bold text-teal-600 dark:text-teal-400">{data.progress}%</span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                              <span>Ações:</span>
-                              <span className="font-bold">{data.count}</span>
-                            </div>
-                          </div>
-                        );
+              {metrics.progressoPorObjetivo.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={metrics.progressoPorObjetivo}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    layout="vertical"
+                    onClick={(data: any) => {
+                      if (data && data.activePayload && data.activePayload.length > 0) {
+                        const objId = data.activePayload[0].payload.id;
+                        onNavigate('list', { objectiveId: objId });
                       }
-                      return null;
                     }}
-                  />
-                  <Bar dataKey="progress" radius={[0, 4, 4, 0]} barSize={20} className="cursor-pointer">
-                    {metrics.progressoPorObjetivo.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.progress === 100 ? COLORS.concluido : COLORS.teal} className="hover:opacity-80 transition-opacity" />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                    className="cursor-pointer"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(148, 163, 184, 0.2)" />
+                    <XAxis type="number" domain={[0, 100]} hide />
+                    <YAxis dataKey="name" type="category" width={50} tick={{ fontSize: 12, fill: '#64748b' }} />
+                    <RechartsTooltip
+                      cursor={{ fill: 'rgba(148, 163, 184, 0.1)' }}
+                      content={({ active, payload }) => {
+                        if (active && payload?.[0]) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white dark:bg-slate-800 p-3 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg text-xs max-w-[200px]">
+                              <p className="font-bold text-slate-800 dark:text-slate-100 mb-1">{data.fullName}</p>
+                              <div className="flex justify-between gap-4">
+                                <span>Progresso:</span>
+                                <span className="font-bold text-teal-600 dark:text-teal-400">{data.progress}%</span>
+                              </div>
+                              <div className="flex justify-between gap-4">
+                                <span>Ações:</span>
+                                <span className="font-bold">{data.count}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Bar dataKey="progress" radius={[0, 4, 4, 0]} barSize={20} className="cursor-pointer">
+                      {metrics.progressoPorObjetivo.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.progress === 100 ? COLORS.concluido : COLORS.teal} className="hover:opacity-80 transition-opacity" />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-400 text-sm">
+                  Sem dados para exibir
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -491,7 +505,7 @@ const KpiCard = ({ title, value, icon, gradient, subtext, trend, onClick }: any)
     className={`p-5 rounded-2xl shadow-lg bg-gradient-to-br ${gradient} text-white relative overflow-hidden group hover:scale-[1.02] transition-transform ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
   >
     {/* Decoração de fundo */}
-    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+    <div className="absolute -right-4 -top-4 w-24 h-24 bg-white opacity-10 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700 pointer-events-none will-change-transform"></div>
 
     <div className="flex justify-between items-start relative z-10">
       <div>

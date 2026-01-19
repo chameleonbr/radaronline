@@ -374,6 +374,26 @@ export async function updateAction(
 }
 
 /**
+ * Atualiza o activity_id de uma ação (para reordenação/migração)
+ */
+export async function updateActionActivityId(uid: string, newActivityId: string): Promise<void> {
+    try {
+        const { error } = await supabase
+            .from('actions')
+            .update({ activity_id: newActivityId })
+            .eq('uid', uid);
+
+        if (error) {
+            logError('dataService', 'Erro ao atualizar activity_id da ação:', error);
+            throw new Error(`Erro ao mover ação: ${error.message}`);
+        }
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao mover ação:', error);
+        throw error;
+    }
+}
+
+/**
  * Upsert: Cria a ação se não existir, atualiza se existir
  * Usado pelo handleSaveFullAction para garantir persistência
  */

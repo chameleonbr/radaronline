@@ -6,6 +6,8 @@ import {
   Status,
   RaciRole,
   Action,
+  Objective,
+  Activity,
   GanttRange,
   TeamMember,
   filterActionsByMicro,
@@ -17,6 +19,7 @@ import {
 import { formatISODate, parseDateLocal } from './lib/date';
 import { clampProgress } from './lib/validation';
 import { log, logError } from './lib/logger';
+import { getActivityDisplayId, getObjectiveTitleWithoutNumber } from './lib/text';
 import { filterOrphanedActions } from './lib/actionValidation';
 import { getCache, setCache, invalidateAllCache, CACHE_KEYS } from './lib/sessionCache';
 
@@ -1148,6 +1151,104 @@ function AppContent() {
     }
   }, [objectives, user?.role, user?.microregiaoId, currentMicroId, showToast]);
 
+  // ✅ NOVA FUNÇÃO: Renumerar tudo após exclusão
+  // Movida para antes de handleDeleteObjective para estar no escopo correto e ser dependência
+  const renumberObjectivesAndActivities = useCallback(async (currentObjectives: Objective[]) => {
+    try {
+      // 1. Iterar sobre todos os objetos restantes
+      for (let i = 0; i < currentObjectives.length; i++) {
+        const obj = currentObjectives[i];
+        const targetNumber = i + 1; // 1, 2, 3...
+
+        // --- A. Renumerar Objetivo (Título) ---
+        const cleanTitle = getObjectiveTitleWithoutNumber(obj.title);
+        const newTitle = `${targetNumber}. ${cleanTitle}`;
+
+        // Se título já começa com o número correto, pular
+        if (!obj.title.startsWith(`${targetNumber}.`)) {
+          await dataService.updateObjective(obj.id, { title: newTitle });
+          // Atualizar estado local
+          setObjectives(prev => prev.map(o => o.id === obj.id ? { ...o, title: newTitle } : o));
+        }
+
+        // --- B. Renumerar Atividades (IDs) ---
+        const objActivities = activities[obj.id] || [];
+        const newActivitiesList: any[] = [];
+        let activitiesChanged = false;
+
+        for (const act of objActivities) {
+          // ID esperado: "Micro_ObjNum.ActNum" ou "ObjNum.ActNum"
+
+          // Extrair o sufixo da atividade (ex: "1.1")
+          const displayId = getActivityDisplayId(act.id); // "1.1"
+          const parts = displayId.split('.');
+          const actNum = parts.length > 1 ? parts[1] : parts[0]; // "1"
+
+          // Novo ID base: "TargetNum.ActNum" (ex: "1.1")
+          const correctDisplayId = `${targetNumber}.${actNum}`;
+
+          // Se o ID de exibição atual é diferente do correto
+          if (!displayId.startsWith(`${targetNumber}.`)) {
+            activitiesChanged = true;
+
+            // Extrair e manter prefixo + identificar microrregião
+            let microregiaoId = '';
+            let newFullId = correctDisplayId;
+
+            if (act.id.includes('_')) {
+              const parts = act.id.split('_');
+              microregiaoId = parts[0];
+              newFullId = `${microregiaoId}_${correctDisplayId}`;
+            } else {
+              // Fallback se não tiver prefixo (legado/global)
+              microregiaoId = (currentMicroId && currentMicroId !== 'all') ? currentMicroId : (user?.microregiaoId || '');
+              // Manter sem prefixo se não tinha ou adicionar? Vou manter a lógica do ID original.
+              newFullId = correctDisplayId;
+            }
+
+            log('App', `Renumerando Atividade: ${act.id} -> ${newFullId}`);
+
+            // 1. Criar NOVA atividade com o ID correto (cópia)
+            const newAct = await dataService.createActivity(
+              obj.id,
+              newFullId,
+              act.title,
+              microregiaoId, // FIXED: Usando ID extraído ou fallback
+              act.description
+            );
+
+            // 2. Mover todas as ações da atividade antiga para a nova
+            const relatedActions = actions.filter(a => a.activityId === act.id);
+            for (const action of relatedActions) {
+              await dataService.updateActionActivityId(action.uid, newFullId);
+            }
+
+            // 3. Excluir atividade antiga
+            await dataService.deleteActivity(act.id);
+
+            newActivitiesList.push(newAct);
+          } else {
+            newActivitiesList.push(act);
+          }
+        }
+
+        if (activitiesChanged) {
+          // Recarregar tudo para garantir consistência
+          const freshActivities = await dataService.loadActivities();
+          const freshActions = await dataService.loadActions();
+          setActivities(freshActivities);
+          setActions(freshActions);
+        }
+      }
+
+      showToast('Numeração atualizada com sucesso!', 'success');
+
+    } catch (error: any) {
+      logError('App', 'Erro ao renumerar', error);
+      showToast(`Erro na renumeração: ${error.message}`, 'error');
+    }
+  }, [activities, actions, currentMicroId, user?.microregiaoId, showToast]);
+
   const handleDeleteObjective = useCallback(async (id: number) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem excluir objetivos', 'error');
@@ -1188,12 +1289,20 @@ function AppContent() {
         }
       }
 
-      showToast('Objetivo excluído!', 'success');
+      showToast('Objetivo excluído! Renumerando...', 'info');
+
+      // ✅ RENUMERAR SEQUENCIALMENTE
+      setTimeout(() => {
+        renumberObjectivesAndActivities(objectives.filter(o => o.id !== id));
+      }, 500);
+
     } catch (error: any) {
       logError('App', 'Erro ao excluir objetivo', error);
       showToast(`Erro ao excluir objetivo: ${error.message}`, 'error');
     }
-  }, [user?.role, activities, actions, objectives, selectedObjective, showToast]);
+  }, [user?.role, activities, actions, objectives, selectedObjective, showToast, renumberObjectivesAndActivities]);
+
+
 
   const handleAddActivity = useCallback(async (objectiveId: number) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {

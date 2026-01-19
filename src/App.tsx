@@ -308,12 +308,25 @@ function AppContent() {
   }, [isAuthenticated, isAdmin, didAutoOpenAdmin]);
 
   // Check for first-time access onboarding (municipality + password)
+  // Check for first-time access onboarding (municipality + password)
   useEffect(() => {
-    // Apenas usuários não-admin com firstAccess = true precisam completar onboarding
-    if (isAuthenticated && user && !isAdmin && user.firstAccess) {
+    // DEBUG: Log para investigar por que o modal não abre
+    if (user) {
+      log('App', 'Verificando FirstAccess', {
+        id: user.id,
+        auth: isAuthenticated,
+        admin: isAdmin,
+        firstAccess: user.firstAccess,
+        modalOpen: showMunicipalityModal
+      });
+    }
+
+    // Apenas usuários com firstAccess = true precisam completar onboarding (incluindo Admins/Gestores)
+    if (isAuthenticated && user && user.firstAccess) {
+      log('App', '🚨 Triggering Municipality Modal - User needs setup');
       setShowMunicipalityModal(true);
     }
-  }, [isAuthenticated, isAdmin, user?.firstAccess]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user, user?.firstAccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ✅ FASE 2: Consolidar useEffects relacionados a navegação e view mode
   useEffect(() => {
@@ -1437,7 +1450,7 @@ function AppContent() {
   const microregiaoNome = currentMicrorregiao
     ? currentMicrorregiao.nome
     : isViewingAllMicros
-      ? 'Todas as microrregiões (somente leitura)'
+      ? 'Todas as microrregiões'
       : '';
 
   const macrorregiaoNome = currentMicrorregiao
@@ -1642,12 +1655,7 @@ function AppContent() {
         Ir para conteúdo principal
       </a>
 
-      {/* Aviso de modo somente leitura (só para não-admin) */}
-      {isViewingAllMicros && !isAdmin && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium">
-          📋 Visualizando todas as microrregiões (somente leitura)
-        </div>
-      )}
+
 
       {/* SIDEBAR - Desktop only when micro selected, or anytime on mobile without micro */}
       {/* No mobile com micro selecionada, usamos o MobileDrawer ao invés da Sidebar */}
@@ -1985,7 +1993,7 @@ function AppContent() {
       />
 
       {/* FIRST ACCESS ONBOARDING MODAL */}
-      {showMunicipalityModal && user && !isAdmin && (
+      {showMunicipalityModal && user && (
         <MunicipalityOnboardingModal
           user={user}
           onSave={async (municipio, novaSenha) => {
@@ -1999,8 +2007,10 @@ function AppContent() {
               );
 
               // Atualizar o contexto de autenticação para refletir a mudança
-              if (authContext?.refreshUser) {
-                await authContext.refreshUser();
+              // Auto-login com a nova senha para evitar que o usuário seja desconectado
+              if (authContext) {
+                log('App', 'Realizando auto-login após alteração de senha...');
+                await authContext.login(user.email, novaSenha);
               }
 
               setShowMunicipalityModal(false);

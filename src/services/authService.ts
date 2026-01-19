@@ -560,7 +560,25 @@ export async function deleteUser(userId: string): Promise<boolean> {
 
     if (functionError) {
       logError('authService', 'Erro ao excluir usuário', functionError);
-      throw new Error(`Erro ao excluir usuário: ${functionError.message}`);
+
+      // Tentar extrair mensagem detalhada do erro
+      let errorMessage = 'Erro ao excluir usuário';
+
+      if (functionError instanceof FunctionsHttpError) {
+        try {
+          const body = await functionError.context.response.json();
+          errorMessage = body?.error || errorMessage;
+        } catch (e) {
+          try {
+            // Fallback para tentar ler o body se o response já foi consumido ou não existe
+            const bodyRaw = functionError.context?.body;
+            const body = typeof bodyRaw === 'string' ? JSON.parse(bodyRaw) : bodyRaw;
+            errorMessage = body?.error || errorMessage;
+          } catch (e2) { /* ignore */ }
+        }
+      }
+
+      throw new Error(errorMessage);
     }
 
     log('authService', 'Usuário excluído com sucesso');

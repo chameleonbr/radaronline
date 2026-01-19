@@ -40,7 +40,7 @@ export function LoginPage() {
     <div
       className="min-h-[100svh] w-full relative flex items-center justify-center p-4"
       style={{
-        backgroundImage: 'url(/login-bg.png)',
+        backgroundImage: 'url(/fundo.png)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',

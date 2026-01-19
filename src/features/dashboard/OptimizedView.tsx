@@ -51,10 +51,10 @@ const RACI_ROLES: { role: RaciRole; label: string; color: string }[] = [
   { role: 'I', label: 'Informado', color: 'bg-slate-400' },
 ];
 
-const OBJECTIVE_COLORS: Record<number, { border: string; bg: string; accent: string }> = {
-  1: { border: 'border-cyan-200 dark:border-cyan-800', bg: 'bg-cyan-50 dark:bg-cyan-900/30', accent: 'bg-cyan-500' },
-  2: { border: 'border-indigo-200 dark:border-indigo-800', bg: 'bg-indigo-50 dark:bg-indigo-900/30', accent: 'bg-indigo-500' },
-  3: { border: 'border-amber-200 dark:border-amber-800', bg: 'bg-amber-50 dark:bg-amber-900/30', accent: 'bg-amber-500' },
+const OBJECTIVE_COLORS: Record<number, { border: string; bg: string; accent: string; text: string }> = {
+  1: { border: 'border-cyan-200 dark:border-cyan-800', bg: 'bg-cyan-50 dark:bg-cyan-900/30', accent: 'bg-cyan-500', text: 'text-cyan-600 dark:text-cyan-400' },
+  2: { border: 'border-indigo-200 dark:border-indigo-800', bg: 'bg-indigo-50 dark:bg-indigo-900/30', accent: 'bg-indigo-500', text: 'text-indigo-600 dark:text-indigo-400' },
+  3: { border: 'border-amber-200 dark:border-amber-800', bg: 'bg-amber-50 dark:bg-amber-900/30', accent: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
 };
 
 const STATUS_CONFIG: Record<Status, { icon: React.ReactNode; color: string; bg: string; header: string }> = {
@@ -83,9 +83,9 @@ const MiniProgress: React.FC<{ value: number; size?: 'sm' | 'md' }> = ({ value, 
   };
   return (
     <div className={`w-full ${height} bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner`}>
-      <div 
-        className={`${height} ${getGradient()} rounded-full transition-all duration-500 ease-out`} 
-        style={{ width: `${Math.min(100, value)}%` }} 
+      <div
+        className={`${height} ${getGradient()} rounded-full transition-all duration-500 ease-out`}
+        style={{ width: `${Math.min(100, value)}%` }}
       />
     </div>
   );
@@ -138,12 +138,12 @@ const ActionCard: React.FC<{
   const status = STATUS_CONFIG[action.status] || STATUS_CONFIG['Não Iniciado'];
   const responsible = action.raci.find(r => r.role === 'R')?.name || action.raci[0]?.name || '-';
   const commentCount = action.comments?.length || 0;
-  
+
   return (
     <div
       className={`group relative p-3 rounded-xl border cursor-pointer transition-all duration-200 
-        ${isLate 
-          ? 'border-rose-200/80 bg-gradient-to-br from-rose-50 to-white dark:border-rose-700/60 dark:from-rose-900/40 dark:to-slate-800 shadow-rose-100/50 dark:shadow-rose-900/20' 
+        ${isLate
+          ? 'border-rose-200/80 bg-gradient-to-br from-rose-50 to-white dark:border-rose-700/60 dark:from-rose-900/40 dark:to-slate-800 shadow-rose-100/50 dark:shadow-rose-900/20'
           : 'border-slate-200/60 dark:border-slate-600/60 bg-white dark:bg-slate-800 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-lg hover:shadow-teal-100/40 dark:hover:shadow-teal-900/20'
         } 
         shadow-sm hover:-translate-y-0.5`}
@@ -173,11 +173,10 @@ const ActionCard: React.FC<{
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-slate-500 dark:text-slate-400">Progresso</span>
-          <span className={`text-sm font-bold tabular-nums ${
-            action.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 
-            action.progress >= 50 ? 'text-teal-600 dark:text-teal-400' : 
-            'text-slate-600 dark:text-slate-300'
-          }`}>
+          <span className={`text-sm font-bold tabular-nums ${action.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' :
+            action.progress >= 50 ? 'text-teal-600 dark:text-teal-400' :
+              'text-slate-600 dark:text-slate-300'
+            }`}>
             {action.progress}%
           </span>
         </div>
@@ -239,40 +238,38 @@ const ActionRow: React.FC<{
       onClick={onClick}
     >
       {/* Status Indicator */}
-      <div className={`w-1.5 h-8 rounded-full ${
-        action.status === 'Concluído' ? 'bg-emerald-500' :
+      <div className={`w-1.5 h-8 rounded-full ${action.status === 'Concluído' ? 'bg-emerald-500' :
         action.status === 'Em Andamento' ? 'bg-blue-500' :
-        action.status === 'Atrasado' || isLate ? 'bg-rose-500' :
-        'bg-slate-300 dark:bg-slate-600'
-      }`} />
-      
+          action.status === 'Atrasado' || isLate ? 'bg-rose-500' :
+            'bg-slate-300 dark:bg-slate-600'
+        }`} />
+
       {/* Status Icon */}
       <span className={`shrink-0 p-1 rounded-lg ${status.bg}`}>{status.icon}</span>
-      
+
       {/* ID Badge */}
       <span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded w-14 text-center shrink-0">
         {getActionDisplayId(action.id)}
       </span>
-      
+
       {/* Title */}
       <span className="flex-1 text-sm text-slate-700 dark:text-slate-200 truncate font-medium group-hover:text-teal-700 dark:group-hover:text-teal-300 transition-colors">
         {action.title}
       </span>
-      
+
       {/* Progress */}
       <div className="w-28 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex-1">
             <MiniProgress value={action.progress} />
           </div>
-          <span className={`text-xs font-bold tabular-nums w-9 text-right ${
-            action.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'
-          }`}>
+          <span className={`text-xs font-bold tabular-nums w-9 text-right ${action.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'
+            }`}>
             {action.progress}%
           </span>
         </div>
       </div>
-      
+
       {/* Comments */}
       <span className="w-10 shrink-0">
         {commentCount > 0 && (
@@ -282,7 +279,7 @@ const ActionRow: React.FC<{
           </span>
         )}
       </span>
-      
+
       {/* Responsible */}
       <span className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 w-28 truncate shrink-0">
         <div className="w-5 h-5 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-[9px] font-bold shrink-0">
@@ -290,20 +287,20 @@ const ActionRow: React.FC<{
         </div>
         <span className="truncate">{responsible.split(' ')[0]}</span>
       </span>
-      
+
       {/* Date */}
       <span className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 w-24 shrink-0 justify-end bg-slate-50 dark:bg-slate-700/50 px-2 py-1 rounded-lg">
         <Calendar size={11} />
         {formatDateBr(action.plannedEndDate)}
       </span>
-      
+
       {/* Late Warning */}
       {isLate && (
         <span className="shrink-0 p-1 rounded-full bg-rose-100 dark:bg-rose-900/50">
           <AlertTriangle size={12} className="text-rose-500" />
         </span>
       )}
-      
+
       {/* Edit hover */}
       <span className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-teal-500 transition-all shrink-0">
         <Edit3 size={11} className="text-white" />
@@ -459,11 +456,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           {/* Total */}
           <button
             onClick={() => setStatusFilter('all')}
-            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-              statusFilter === 'all' 
-                ? 'bg-slate-100 dark:bg-slate-700' 
-                : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
-            }`}
+            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${statusFilter === 'all'
+              ? 'bg-slate-100 dark:bg-slate-700'
+              : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'
+              }`}
           >
             <span className={`text-lg font-bold ${statusFilter === 'all' ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>
               {metrics.total}
@@ -476,11 +472,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           {/* Concluídas */}
           <button
             onClick={() => setStatusFilter('Concluído')}
-            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-              statusFilter === 'Concluído' 
-                ? 'bg-emerald-50 dark:bg-emerald-900/30' 
-                : 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20'
-            }`}
+            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${statusFilter === 'Concluído'
+              ? 'bg-emerald-50 dark:bg-emerald-900/30'
+              : 'hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20'
+              }`}
           >
             <span className={`text-lg font-bold ${statusFilter === 'Concluído' ? 'text-emerald-600 dark:text-emerald-400' : 'text-emerald-500/70 dark:text-emerald-500/50'}`}>
               {metrics.completed}
@@ -491,11 +486,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           {/* Em Andamento */}
           <button
             onClick={() => setStatusFilter('Em Andamento')}
-            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-              statusFilter === 'Em Andamento' 
-                ? 'bg-blue-50 dark:bg-blue-900/30' 
-                : 'hover:bg-blue-50/50 dark:hover:bg-blue-900/20'
-            }`}
+            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${statusFilter === 'Em Andamento'
+              ? 'bg-blue-50 dark:bg-blue-900/30'
+              : 'hover:bg-blue-50/50 dark:hover:bg-blue-900/20'
+              }`}
           >
             <span className={`text-lg font-bold ${statusFilter === 'Em Andamento' ? 'text-blue-600 dark:text-blue-400' : 'text-blue-500/70 dark:text-blue-500/50'}`}>
               {metrics.inProgress}
@@ -506,11 +500,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           {/* Não Iniciadas */}
           <button
             onClick={() => setStatusFilter('Não Iniciado')}
-            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-              statusFilter === 'Não Iniciado' 
-                ? 'bg-slate-100 dark:bg-slate-700' 
-                : 'hover:bg-slate-100/50 dark:hover:bg-slate-700/30'
-            }`}
+            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${statusFilter === 'Não Iniciado'
+              ? 'bg-slate-100 dark:bg-slate-700'
+              : 'hover:bg-slate-100/50 dark:hover:bg-slate-700/30'
+              }`}
           >
             <span className={`text-lg font-bold ${statusFilter === 'Não Iniciado' ? 'text-slate-600 dark:text-slate-300' : 'text-slate-400 dark:text-slate-500'}`}>
               {metrics.notStarted}
@@ -522,11 +515,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           {metrics.alert > 0 && (
             <button
               onClick={() => setStatusFilter('alert')}
-              className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-                statusFilter === 'alert' 
-                  ? 'bg-amber-50 dark:bg-amber-900/30' 
-                  : 'hover:bg-amber-50/50 dark:hover:bg-amber-900/20'
-              }`}
+              className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${statusFilter === 'alert'
+                ? 'bg-amber-50 dark:bg-amber-900/30'
+                : 'hover:bg-amber-50/50 dark:hover:bg-amber-900/20'
+                }`}
             >
               <span className={`text-lg font-bold ${statusFilter === 'alert' ? 'text-amber-600 dark:text-amber-400' : 'text-amber-500/70 dark:text-amber-500/50'}`}>
                 {metrics.alert}
@@ -539,11 +531,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           {metrics.late > 0 && (
             <button
               onClick={() => setStatusFilter('late')}
-              className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-                statusFilter === 'late' 
-                  ? 'bg-rose-50 dark:bg-rose-900/30' 
-                  : 'hover:bg-rose-50/50 dark:hover:bg-rose-900/20'
-              }`}
+              className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${statusFilter === 'late'
+                ? 'bg-rose-50 dark:bg-rose-900/30'
+                : 'hover:bg-rose-50/50 dark:hover:bg-rose-900/20'
+                }`}
             >
               <span className={`text-lg font-bold ${statusFilter === 'late' ? 'text-rose-600 dark:text-rose-400' : 'text-rose-500/70 dark:text-rose-500/50'}`}>
                 {metrics.late}
@@ -556,8 +547,8 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           <span className="text-slate-300 dark:text-slate-600 ml-1">|</span>
           <div className="flex items-center gap-2 px-3 py-1.5">
             <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-teal-400 to-emerald-500 rounded-full transition-all" 
+              <div
+                className="h-full bg-gradient-to-r from-teal-400 to-emerald-500 rounded-full transition-all"
                 style={{ width: `${metrics.avgProgress}%` }}
               />
             </div>
@@ -573,11 +564,10 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${
-                  viewMode === mode 
-                    ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30' 
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                }`}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${viewMode === mode
+                  ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/30'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                  }`}
               >
                 {mode === 'tree' ? 'Árvore' : mode === 'cards' ? 'Cards' : mode === 'list' ? 'Lista' : 'Kanban'}
               </button>
@@ -603,189 +593,252 @@ export const OptimizedView: React.FC<OptimizedViewProps> = ({
           {/* Container Principal */}
           <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm rounded-2xl border border-slate-200/60 dark:border-slate-700/60 h-full overflow-auto shadow-xl shadow-slate-200/50 dark:shadow-slate-900/50">
             <div className="p-4 space-y-4">
-            {viewMode === 'tree' && (
-              <div className="space-y-4">
-                {groupedData.map((obj, objIndex) => {
-                  const displayNum = objIndex + 1;
-                  return (
-                    <div key={obj.id} className={`bg-white dark:bg-slate-800 rounded-2xl border-2 overflow-hidden shadow-lg hover:shadow-xl transition-shadow ${OBJECTIVE_COLORS[displayNum]?.border || 'border-slate-200 dark:border-slate-700'}`}>
-                      {/* Objective Header */}
-                      <button onClick={() => setExpandedObjectives(prev => prev.includes(obj.id) ? prev.filter(x => x !== obj.id) : [...prev, obj.id])} className="w-full px-5 py-4 flex items-center gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-all">
-                        <span className={`text-slate-400 transition-transform duration-200 ${expandedObjectives.includes(obj.id) ? 'rotate-0' : '-rotate-90'}`}>
-                          <ChevronDown size={20} />
-                        </span>
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-lg ${OBJECTIVE_COLORS[displayNum]?.accent || 'bg-teal-500'}`}>
-                          {displayNum}
-                        </div>
-                        <div className="flex-1 text-left">
-                          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">{obj.title}</h3>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full">{obj.actionCount} ações</span>
-                            <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full">{obj.activities.length} atividades</span>
-                            {obj.lateCount > 0 && (
-                              <span className="text-xs bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded-full font-medium animate-pulse">⚠ {obj.lateCount} atrasadas</span>
-                            )}
+              {viewMode === 'tree' && (
+                <div className="space-y-4">
+                  {groupedData.map((obj, objIndex) => {
+                    const displayNum = objIndex + 1;
+                    return (
+                      <div key={obj.id} className={`bg-white dark:bg-slate-800 rounded-2xl border-2 overflow-hidden shadow-lg hover:shadow-xl transition-shadow ${OBJECTIVE_COLORS[displayNum]?.border || 'border-slate-200 dark:border-slate-700'}`}>
+                        {/* Objective Header */}
+                        <button onClick={() => setExpandedObjectives(prev => prev.includes(obj.id) ? prev.filter(x => x !== obj.id) : [...prev, obj.id])} className="w-full px-5 py-4 flex items-center gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-all">
+                          <span className={`text-slate-400 transition-transform duration-200 ${expandedObjectives.includes(obj.id) ? 'rotate-0' : '-rotate-90'}`}>
+                            <ChevronDown size={20} />
+                          </span>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-lg ${OBJECTIVE_COLORS[displayNum]?.accent || 'bg-teal-500'}`}>
+                            {displayNum}
                           </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="w-32"><MiniProgress value={obj.progress} size="md" /></div>
-                          <span className={`text-lg font-bold w-14 text-right ${obj.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>{obj.progress}%</span>
-                        </div>
-                      </button>
-                      
-                      {/* Activities */}
-                      {expandedObjectives.includes(obj.id) && (
-                        <div className="border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-900/30">
-                          {obj.activities.map(act => (
-                            <div key={act.id} className="border-b border-slate-100/80 dark:border-slate-700/30 last:border-0">
-                              <button onClick={() => setExpandedActivities(prev => prev.includes(act.id) ? prev.filter(x => x !== act.id) : [...prev, act.id])} className="w-full px-5 py-3 pl-14 flex items-center gap-3 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all">
-                                <span className={`text-slate-400 transition-transform duration-200 ${expandedActivities.includes(act.id) ? 'rotate-0' : '-rotate-90'}`}>
-                                  <ChevronDown size={16} />
-                                </span>
-                                <div className="w-7 h-7 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex items-center justify-center relative shadow-sm">
-                                  <Layers size={13} className="text-slate-500 dark:text-slate-400" />
-                                  <span className={`absolute -left-2.5 w-2.5 h-2.5 rounded-full shadow-sm ${OBJECTIVE_COLORS[displayNum]?.accent || 'bg-slate-400'}`}></span>
-                                </div>
-                                <div className="flex-1 text-left">
-                                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{getActivityDisplayId(act.id)}. {act.title}</h4>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-xs text-slate-500 dark:text-slate-400">{act.actions.length} ações</span>
-                                    {act.lateCount > 0 && <span className="text-xs text-rose-500 font-medium">• {act.lateCount} atrasadas</span>}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <div className="w-20"><MiniProgress value={act.progress} /></div>
-                                  <span className={`text-sm font-bold w-10 text-right ${act.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>{act.progress}%</span>
-                                </div>
-                              </button>
-                              
-                              {/* Actions Grid */}
-                              {expandedActivities.includes(act.id) && act.actions.length > 0 && (
-                                <div className="px-5 pb-4 pl-20 bg-white/40 dark:bg-slate-800/40">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {act.actions.map(action => {
-                                      const isSelected = selectedUid === action.uid && isModalOpen;
-                                      return (
-                                        <div key={action.uid} className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-teal-400 ring-offset-2 rounded-xl' : ''}`}>
-                                          <ActionCard action={action} onClick={() => handleSelectAction(action.uid)} isLate={isActionLate(action)} />
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
+                          <div className="flex-1 text-left">
+                            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">{obj.title}</h3>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full">{obj.actionCount} ações</span>
+                              <span className="text-xs bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full">{obj.activities.length} atividades</span>
+                              {obj.lateCount > 0 && (
+                                <span className="text-xs bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded-full font-medium animate-pulse">⚠ {obj.lateCount} atrasadas</span>
                               )}
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="w-32"><MiniProgress value={obj.progress} size="md" /></div>
+                            <span className={`text-lg font-bold w-14 text-right ${obj.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>{obj.progress}%</span>
+                          </div>
+                        </button>
 
-            {viewMode === 'cards' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {filteredActions.map(action => {
-                  const isSelected = selectedUid === action.uid && isModalOpen;
-                  return (
-                    <div key={action.uid} className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-teal-400 ring-offset-2 rounded-xl scale-[1.02]' : ''}`}>
-                      <ActionCard action={action} onClick={() => handleSelectAction(action.uid)} isLate={isActionLate(action)} />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                        {/* Activities */}
+                        {expandedObjectives.includes(obj.id) && (
+                          <div className="border-t border-slate-100 dark:border-slate-700/50 bg-slate-50/50 dark:bg-slate-900/30">
+                            {obj.activities.map(act => (
+                              <div key={act.id} className="border-b border-slate-100/80 dark:border-slate-700/30 last:border-0">
+                                <button onClick={() => setExpandedActivities(prev => prev.includes(act.id) ? prev.filter(x => x !== act.id) : [...prev, act.id])} className="w-full px-5 py-3 pl-14 flex items-center gap-3 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all">
+                                  <span className={`text-slate-400 transition-transform duration-200 ${expandedActivities.includes(act.id) ? 'rotate-0' : '-rotate-90'}`}>
+                                    <ChevronDown size={16} />
+                                  </span>
+                                  <div className="w-7 h-7 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 flex items-center justify-center relative shadow-sm">
+                                    <Layers size={13} className="text-slate-500 dark:text-slate-400" />
+                                    <span className={`absolute -left-2.5 w-2.5 h-2.5 rounded-full shadow-sm ${OBJECTIVE_COLORS[displayNum]?.accent || 'bg-slate-400'}`}></span>
+                                  </div>
+                                  <div className="flex-1 text-left">
+                                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">{getActivityDisplayId(act.id)}. {act.title}</h4>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      <span className="text-xs text-slate-500 dark:text-slate-400">{act.actions.length} ações</span>
+                                      {act.lateCount > 0 && <span className="text-xs text-rose-500 font-medium">• {act.lateCount} atrasadas</span>}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-20"><MiniProgress value={act.progress} /></div>
+                                    <span className={`text-sm font-bold w-10 text-right ${act.progress >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>{act.progress}%</span>
+                                  </div>
+                                </button>
 
-            {viewMode === 'list' && (
-              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden shadow-sm">
-                {/* Table Header */}
-                <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-slate-100/50 dark:from-slate-700 dark:to-slate-700/50 border-b border-slate-200 dark:border-slate-600 flex items-center gap-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  <span className="w-3"></span>
-                  <span className="w-8"></span>
-                  <span className="w-16">ID</span>
-                  <span className="flex-1">Ação</span>
-                  <span className="w-28">Progresso</span>
-                  <span className="w-10">💬</span>
-                  <span className="w-28">Responsável</span>
-                  <span className="w-24 text-right">Prazo</span>
-                  <span className="w-8"></span>
-                  <span className="w-8"></span>
+                                {/* Actions Grid */}
+                                {expandedActivities.includes(act.id) && act.actions.length > 0 && (
+                                  <div className="px-5 pb-4 pl-20 bg-white/40 dark:bg-slate-800/40">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                      {act.actions.map(action => {
+                                        const isSelected = selectedUid === action.uid && isModalOpen;
+                                        return (
+                                          <div key={action.uid} className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-teal-400 ring-offset-2 rounded-xl' : ''}`}>
+                                            <ActionCard action={action} onClick={() => handleSelectAction(action.uid)} isLate={isActionLate(action)} />
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div>
+              )}
+
+              {viewMode === 'cards' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {filteredActions.map(action => {
                     const isSelected = selectedUid === action.uid && isModalOpen;
                     return (
-                      <div key={action.uid} className={`transition-all duration-200 ${isSelected ? 'bg-teal-50/50 dark:bg-teal-900/20' : ''}`}>
-                        <ActionRow action={action} onClick={() => handleSelectAction(action.uid)} isLate={isActionLate(action)} />
+                      <div key={action.uid} className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-teal-400 ring-offset-2 rounded-xl scale-[1.02]' : ''}`}>
+                        <ActionCard
+                          action={action}
+                          onClick={() => handleSelectAction(action.uid)}
+                          isLate={isActionLate(action)}
+                        />
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            )}
 
-            {viewMode === 'kanban' && (
-              <div className="pb-2">
-                <div className="grid grid-cols-4 gap-4">
-                  {KANBAN_COLUMNS.map(col => {
-                    const colActions = filteredActions.filter(a => a.status === col.key);
-                    return (
-                      <div
-                        key={col.key}
-                        className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-700/60 rounded-2xl overflow-hidden flex flex-col shadow-lg hover:shadow-xl transition-shadow"
-                      >
-                        {/* Kanban Column Header */}
-                        <div className={`px-4 py-3 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60 ${STATUS_CONFIG[col.key].header}`}>
-                          <span className="text-sm font-bold flex items-center gap-2">
-                            <span className="p-1 rounded-lg bg-white/50 dark:bg-slate-800/50">
-                              {STATUS_CONFIG[col.key].icon}
+                  {filteredActions.length === 0 && (
+                    <div className="col-span-full text-center py-16 px-6">
+                      <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+                        <Zap size={36} className="text-slate-400 dark:text-slate-500" />
+                      </div>
+                      <p className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-1">Nenhuma ação encontrada</p>
+                      <p className="text-sm text-slate-400 dark:text-slate-500">Tente ajustar os filtros.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {viewMode === 'list' && (
+                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700/60 overflow-hidden shadow-sm">
+                  {/* Table Header */}
+                  <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-slate-100/50 dark:from-slate-700 dark:to-slate-700/50 border-b border-slate-200 dark:border-slate-600 flex items-center gap-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-sm bg-opacity-90">
+                    <span className="w-3"></span>
+                    <span className="w-8"></span>
+                    <span className="w-16">ID</span>
+                    <span className="flex-1">Ação</span>
+                    <span className="w-28 pl-6">Progresso</span>
+                    <span className="w-10 text-center">💬</span>
+                    <span className="w-28">Responsável</span>
+                    <span className="w-24 text-right">Prazo</span>
+                    <span className="w-8"></span>
+                    <span className="w-8"></span>
+                  </div>
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+                    {groupedData.flatMap((obj, objIndex) => {
+                      const displayNum = objIndex + 1;
+                      const visibleActivities = obj.activities.filter(act => act.actions.length > 0);
+
+                      if (visibleActivities.length === 0) return [];
+
+                      const rows = [];
+
+                      // Objective Header Row
+                      rows.push(
+                        <div key={`obj-${obj.id}`} className="bg-slate-50/80 dark:bg-slate-700/30 px-4 py-2 border-y border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className={`flex items-center justify-center w-6 h-6 rounded-md text-white text-xs font-bold shadow-sm ${OBJECTIVE_COLORS[displayNum]?.accent || 'bg-slate-500'}`}>
+                              {displayNum}
                             </span>
-                            {col.label}
-                          </span>
-                          <span className="text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded-full shadow-sm">
-                            {colActions.length}
-                          </span>
+                            <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm tracking-tight">{obj.title}</h3>
+                          </div>
+                          <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            {obj.actionCount} ações
+                          </div>
                         </div>
-                        
-                        {/* Kanban Column Content */}
-                        <div className="p-3 space-y-3 flex-1 bg-slate-50/50 dark:bg-slate-900/30">
-                          {colActions.length === 0 && (
-                            <div className="text-sm text-slate-400 italic px-3 py-8 text-center bg-white/50 dark:bg-slate-800/50 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
-                              <Zap size={24} className="mx-auto mb-2 opacity-30" />
-                              Nenhuma ação
-                            </div>
-                          )}
-                          {colActions.map(action => {
-                            const isSelected = selectedUid === action.uid && isModalOpen;
-                            return (
-<div key={action.uid} className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-teal-400 ring-offset-1 rounded-xl scale-[1.02]' : ''}`}>
-                                <ActionCard
-                                  action={action}
-                                  onClick={() => handleSelectAction(action.uid)}
-                                  isLate={isActionLate(action)}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                      );
 
-            {/* Estado Vazio */}
-            {filteredActions.length === 0 && (
-              <div className="text-center py-16 px-6">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
-                  <Zap size={36} className="text-slate-400 dark:text-slate-500" />
+                      visibleActivities.forEach(act => {
+                        // Activity Header Row
+                        rows.push(
+                          <div key={`act-${act.id}`} className="bg-white dark:bg-slate-800 px-4 py-2 pl-12 border-b border-slate-100/50 dark:border-slate-700/50 flex items-center gap-2">
+                            <Layers size={12} className="text-slate-400" />
+                            <h4 className="font-semibold text-slate-600 dark:text-slate-300 text-xs">
+                              {getActivityDisplayId(act.id)}. {act.title}
+                            </h4>
+                          </div>
+                        );
+
+                        // Actions
+                        act.actions.forEach(action => {
+                          const isSelected = selectedUid === action.uid && isModalOpen;
+                          rows.push(
+                            <div key={action.uid} className={`transition-all duration-200 hover:bg-slate-50 dark:hover:bg-slate-700/30 ${isSelected ? 'bg-teal-50/50 dark:bg-teal-900/20' : ''}`}>
+                              <ActionRow action={action} onClick={() => handleSelectAction(action.uid)} isLate={isActionLate(action)} />
+                            </div>
+                          );
+                        });
+                      });
+
+                      return rows;
+                    })}
+
+                    {filteredActions.length === 0 && (
+                      <div className="text-center py-16 px-6">
+                        <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+                          <Zap size={36} className="text-slate-400 dark:text-slate-500" />
+                        </div>
+                        <p className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-1">Nenhuma ação encontrada</p>
+                        <p className="text-sm text-slate-400 dark:text-slate-500">Tente ajustar os filtros.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <p className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-1">Nenhuma ação encontrada</p>
-                <p className="text-sm text-slate-400 dark:text-slate-500">Tente ajustar os filtros ou criar novas ações</p>
-              </div>
-            )}
+              )}
+
+              {viewMode === 'kanban' && (
+                <div className="pb-2">
+                  <div className="grid grid-cols-4 gap-4">
+                    {KANBAN_COLUMNS.map(col => {
+                      const colActions = filteredActions.filter(a => a.status === col.key);
+                      return (
+                        <div
+                          key={col.key}
+                          className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-700/60 rounded-2xl overflow-hidden flex flex-col shadow-lg hover:shadow-xl transition-shadow"
+                        >
+                          {/* Kanban Column Header */}
+                          <div className={`px-4 py-3 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60 ${STATUS_CONFIG[col.key].header}`}>
+                            <span className="text-sm font-bold flex items-center gap-2">
+                              <span className="p-1 rounded-lg bg-white/50 dark:bg-slate-800/50">
+                                {STATUS_CONFIG[col.key].icon}
+                              </span>
+                              {col.label}
+                            </span>
+                            <span className="text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-2.5 py-1 rounded-full shadow-sm">
+                              {colActions.length}
+                            </span>
+                          </div>
+
+                          {/* Kanban Column Content */}
+                          <div className="p-3 space-y-3 flex-1 bg-slate-50/50 dark:bg-slate-900/30">
+                            {colActions.length === 0 && (
+                              <div className="text-sm text-slate-400 italic px-3 py-8 text-center bg-white/50 dark:bg-slate-800/50 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                                <Zap size={24} className="mx-auto mb-2 opacity-30" />
+                                Nenhuma ação
+                              </div>
+                            )}
+                            {colActions.map(action => {
+                              const isSelected = selectedUid === action.uid && isModalOpen;
+                              return (
+                                <div key={action.uid} className={`transition-all duration-200 ${isSelected ? 'ring-2 ring-teal-400 ring-offset-1 rounded-xl scale-[1.02]' : ''}`}>
+                                  <ActionCard
+                                    action={action}
+                                    onClick={() => handleSelectAction(action.uid)}
+                                    isLate={isActionLate(action)}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Estado Vazio */}
+              {filteredActions.length === 0 && (
+                <div className="text-center py-16 px-6">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
+                    <Zap size={36} className="text-slate-400 dark:text-slate-500" />
+                  </div>
+                  <p className="text-lg font-semibold text-slate-600 dark:text-slate-300 mb-1">Nenhuma ação encontrada</p>
+                  <p className="text-sm text-slate-400 dark:text-slate-500">Tente ajustar os filtros ou criar novas ações</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

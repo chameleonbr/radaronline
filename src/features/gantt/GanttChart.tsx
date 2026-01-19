@@ -37,7 +37,13 @@ export const GanttChart: React.FC<GanttChartProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [focusedIdx, setFocusedIdx] = useState(-1);
+
   const [hoveredAction, setHoveredAction] = useState<{ action: Action; rect: DOMRect } | null>(null);
+
+  // Estados para Drag-to-Scroll
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   const ganttRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -49,6 +55,33 @@ export const GanttChart: React.FC<GanttChartProps> = ({
 
   const handleBarMouseLeave = () => {
     setHoveredAction(null);
+  };
+
+  // Handlers para Drag-to-Scroll
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollContainerRef.current) return;
+    // Evita conflito se clicar numa barra de ação (já tratada por outra lógica) ou scrollbar
+    if ((e.target as HTMLElement).closest('.group\\/bar')) return;
+
+    setIsDragging(true);
+    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
+    setScrollLeft(scrollContainerRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5; // Multiplicador de velocidade (opcional)
+    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
   };
 
   useEffect(() => {
@@ -505,7 +538,15 @@ export const GanttChart: React.FC<GanttChartProps> = ({
         </div>
 
         {/* Chart */}
-        <div className="flex-1 relative overflow-x-auto" ref={scrollContainerRef} style={{ overflow: 'visible auto' }}>
+        <div
+          className={`flex-1 relative overflow-x-auto ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          ref={scrollContainerRef}
+          style={{ overflow: 'visible auto' }}
+          onMouseDown={handleMouseDown}
+          onMouseLeave={handleMouseLeave}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+        >
           <div className="min-w-fit relative" style={{ overflow: 'visible' }}>
             {/* Header Row */}
             <div className="flex border-b border-slate-200 dark:border-slate-700 h-16 bg-white dark:bg-slate-800 sticky top-0 z-40 w-full gantt-header">
@@ -655,28 +696,28 @@ export const GanttChart: React.FC<GanttChartProps> = ({
                 return (
                   <div
                     key={action.id}
-                    className={`flex h-auto min-h-[4.5rem] border-b border-slate-100 dark:border-slate-700/50 relative hover:bg-slate-50/50 dark:hover:bg-slate-700/30 group ${isFocused ? 'bg-blue-50/50 dark:bg-blue-900/20 ring-2 ring-blue-300 dark:ring-blue-600 ring-inset' : ''}`}
+                    className={`flex h-auto min-h-[3.6rem] border-b border-slate-100 dark:border-slate-700/50 relative hover:bg-slate-50/50 dark:hover:bg-slate-700/30 group ${isFocused ? 'bg-blue-50/50 dark:bg-blue-900/20 ring-2 ring-blue-300 dark:ring-blue-600 ring-inset' : ''}`}
                     style={{ overflow: 'visible' }}
                   >
                     {/* Card da ação */}
-                    <div className="sticky left-0 z-30 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 w-[300px] shrink-0 px-2 py-2 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                    <div className="sticky left-0 z-30 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 w-[300px] shrink-0 px-2 py-1 flex flex-col justify-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                       <div
-                        className="bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm p-2.5 h-full flex flex-col justify-center relative overflow-hidden border-l-4 cursor-pointer hover:shadow-md transition-shadow"
+                        className="bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 shadow-sm p-2 h-full flex flex-col justify-center relative overflow-hidden border-l-4 cursor-pointer hover:shadow-md transition-shadow gap-1"
                         style={{ borderLeftColor: statusBorder }}
                         onClick={() => scrollToPosition(leftStart)}
                         tabIndex={0}
                         role="button"
                         aria-label={`Focar barra da ação ${action.title}`}
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1.5">
+                        <div className="min-w-0 flex-1 flex flex-col h-full">
+                          <div className="flex items-center gap-2 mb-1">
                             <span className="bg-slate-100 dark:bg-slate-600 text-slate-500 dark:text-slate-300 rounded px-1.5 py-0.5 text-[10px] font-mono border border-slate-200 dark:border-slate-500">{getActionDisplayId(action.id)}</span>
                             {/* Badge de status */}
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${statusBadge.bg} ${statusBadge.text}`}>
                               {action.status}
                             </span>
                           </div>
-                          <div className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-tight mb-2 line-clamp-2" title={action.title}>
+                          <div className="text-xs font-bold text-slate-700 dark:text-slate-200 leading-tight mb-1 line-clamp-2" title={action.title}>
                             {action.title}
                           </div>
                           <div className="flex items-end justify-between gap-1 mt-auto">

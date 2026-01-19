@@ -55,18 +55,23 @@ import {
   DemoBanner,
 } from './components/common';
 
-// Feature Components
+// Feature Components - Lazy loaded para reduzir bundle inicial
 import { TeamView } from './features/team/TeamView';
 import { ActivityTabs } from './features/actions/ActivityTabs';
-import { Dashboard, OptimizedView } from './features/dashboard';
-import { GanttChart } from './features/gantt/GanttChart';
 import { ActionTable } from './features/actions/ActionTable';
 import { ActionDetailModal } from './features/actions/ActionDetailModal';
 import { LoginPage, LgpdConsent, LandingOnboarding } from './features/login';
-import { AdminPanel } from './features/admin';
-import { LinearCalendar } from './features/admin/dashboard/LinearCalendar';
 import { UserSettingsModal } from './features/settings/UserSettingsModal';
 import { MunicipalityOnboardingModal } from './components/auth/MunicipalityOnboardingModal';
+
+// Lazy loaded components - Carregados sob demanda para melhor performance inicial
+import { lazy } from 'react';
+
+const Dashboard = lazy(() => import('./features/dashboard').then(m => ({ default: m.Dashboard })));
+const OptimizedView = lazy(() => import('./features/dashboard').then(m => ({ default: m.OptimizedView })));
+const GanttChart = lazy(() => import('./features/gantt/GanttChart').then(m => ({ default: m.GanttChart })));
+const AdminPanel = lazy(() => import('./features/admin').then(m => ({ default: m.AdminPanel })));
+const LinearCalendar = lazy(() => import('./features/admin/dashboard/LinearCalendar').then(m => ({ default: m.LinearCalendar })));
 
 // Mock Data for Demo Mode
 import { DEMO_OBJECTIVES, DEMO_ACTIVITIES, DEMO_ACTIONS, DEMO_TEAM } from './data/mockData';
@@ -1688,10 +1693,10 @@ function AppContent() {
         {/* SCROLLABLE AREA */}
         {/* Padding extra quando FAB está visível (mobile + strategy + table + canCreate) */}
         <div className={`flex-1 overflow-y-auto overflow-x-hidden relative ${isMobile
-            ? (currentNav === 'strategy' && viewMode === 'table' && checkCanCreate()
-              ? 'pb-mobile-nav-with-fab'
-              : 'pb-mobile-nav')
-            : ''
+          ? (currentNav === 'strategy' && viewMode === 'table' && checkCanCreate()
+            ? 'pb-mobile-nav-with-fab'
+            : 'pb-mobile-nav')
+          : ''
           }`}>
 
           {/* Breadcrumb */}
@@ -1717,29 +1722,33 @@ function AppContent() {
             {/* --- DASHBOARD VIEW --- */}
             {currentNav === 'home' ? (
               <ErrorBoundary>
-                <Dashboard
-                  actions={microActions}
-                  team={currentTeam}
-                  objectives={objectives}
-                  activities={activities}
-                  onNavigate={handleDashboardNavigate}
-                />
+                <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full" /></div>}>
+                  <Dashboard
+                    actions={microActions}
+                    team={currentTeam}
+                    objectives={objectives}
+                    activities={activities}
+                    onNavigate={handleDashboardNavigate}
+                  />
+                </Suspense>
               </ErrorBoundary>
 
               /* --- GANTT VIEW --- */
             ) : viewMode === 'gantt' && currentNav === 'strategy' ? (
               <ErrorBoundary>
-                <GanttChart
-                  actions={ganttActions}
-                  ganttRange={ganttRange}
-                  setGanttRange={setGanttRange}
-                  containerWidth={containerWidth}
-                  statusFilter={ganttStatusFilter}
-                  setStatusFilter={setGanttStatusFilter}
-                  onActionClick={handleGanttActionClick}
-                  showToast={showToast}
-                  isMobile={isMobile}
-                />
+                <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full" /></div>}>
+                  <GanttChart
+                    actions={ganttActions}
+                    ganttRange={ganttRange}
+                    setGanttRange={setGanttRange}
+                    containerWidth={containerWidth}
+                    statusFilter={ganttStatusFilter}
+                    setStatusFilter={setGanttStatusFilter}
+                    onActionClick={handleGanttActionClick}
+                    showToast={showToast}
+                    isMobile={isMobile}
+                  />
+                </Suspense>
               </ErrorBoundary>
 
             ) : viewMode === 'team' ? (
@@ -1799,39 +1808,43 @@ function AppContent() {
             ) : viewMode === 'optimized' ? (
               /* --- OPTIMIZED VIEW --- */
               <ErrorBoundary>
-                <OptimizedView
-                  objectives={objectives}
-                  activities={activities}
-                  actions={microActions}
-                  team={currentTeam}
-                  onUpdateAction={(uid, updates) => {
-                    // Adaptar para a assinatura existente
-                    Object.entries(updates).forEach(([field, value]) => {
-                      if (value !== undefined) {
-                        handleUpdateAction(uid, field, value as string | number);
-                      }
-                    });
-                  }}
-                  onSaveAction={handleSaveAction}
-                  onDeleteAction={handleDeleteAction}
-                  onAddRaci={handleAddRaci}
-                  onRemoveRaci={handleRemoveRaci}
-                  onAddComment={handleAddComment}
-                  readOnly={isViewingAllMicros && !isAdmin}
-                />
+                <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full" /></div>}>
+                  <OptimizedView
+                    objectives={objectives}
+                    activities={activities}
+                    actions={microActions}
+                    team={currentTeam}
+                    onUpdateAction={(uid, updates) => {
+                      // Adaptar para a assinatura existente
+                      Object.entries(updates).forEach(([field, value]) => {
+                        if (value !== undefined) {
+                          handleUpdateAction(uid, field, value as string | number);
+                        }
+                      });
+                    }}
+                    onSaveAction={handleSaveAction}
+                    onDeleteAction={handleDeleteAction}
+                    onAddRaci={handleAddRaci}
+                    onRemoveRaci={handleRemoveRaci}
+                    onAddComment={handleAddComment}
+                    readOnly={isViewingAllMicros && !isAdmin}
+                  />
+                </Suspense>
               </ErrorBoundary>
 
             ) : viewMode === 'calendar' ? (
               /* --- CALENDAR VIEW - Agenda de Ações --- */
               <ErrorBoundary>
-                <div className="h-[calc(100vh-200px)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-                  <LinearCalendar
-                    actions={microActions}
-                    activities={activities}
-                    objectives={objectives}
-                    microId={currentMicroId}
-                  />
-                </div>
+                <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full" /></div>}>
+                  <div className="h-[calc(100vh-200px)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                    <LinearCalendar
+                      actions={microActions}
+                      activities={activities}
+                      objectives={objectives}
+                      microId={currentMicroId}
+                    />
+                  </div>
+                </Suspense>
               </ErrorBoundary>
 
             ) : (

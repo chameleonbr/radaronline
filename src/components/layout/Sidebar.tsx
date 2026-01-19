@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronLeft, ChevronRight, Home, Target, Settings, LogOut, Shield, Trash2, Plus, Edit2, LayoutDashboard, Activity as ActivityIcon, Users, Trophy, Triangle, Calendar, ClipboardList } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Target, Settings, LogOut, Shield, Trash2, Plus, Edit2, LayoutDashboard, Activity as ActivityIcon, Users, Trophy, Triangle, Calendar, ClipboardList, MapPin } from 'lucide-react';
 
 import { slideInLeft, staggerContainer, staggerItem, buttonTap } from '../../lib/motion';
 import { Objective, Activity as _ActivityType } from '../../types';
@@ -12,7 +12,6 @@ import { NotificationBell } from '../common/NotificationBell';
 import { SecureDeleteModal } from '../common/SecureDeleteModal';
 import { EditNameModal } from '../common/EditNameModal';
 import { getMacrorregioes, getMicroregioesByMacro } from '../../data/microregioes';
-import { MapPin } from 'lucide-react';
 
 interface SidebarItemProps {
   icon: LucideIcon;

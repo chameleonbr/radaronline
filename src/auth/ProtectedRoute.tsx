@@ -37,16 +37,45 @@ type ProtectedRouteProps = {
  * pelo estado em App.tsx. Este componente apenas guarda o conteúdo.
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, hasSession, profileLoadError } = useAuth();
 
+  // 1. Carregando inicial ou transição de fetch
   if (isLoading) {
     return <LoadingGate message="Verificando autenticação..." />;
   }
 
-  if (!isAuthenticated) {
+  // 2. Sem sessão confirmada -> Login
+  // IMPORTANTE: Só redireciona se realmente não tiver sessão detectada pelo Supabase
+  if (!isAuthenticated && !hasSession) {
     return null; // App.tsx vai mostrar LoginPage
   }
 
+  // 3. Tem sessão, mas user está null (Perfil falhou ou ainda carregando pós-sessão)
+  if (hasSession && !user) {
+    if (profileLoadError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-6 text-center border border-red-100">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <h2 className="text-lg font-bold text-slate-800 mb-2">Erro ao carregar perfil</h2>
+            <p className="text-slate-600 mb-6 text-sm">{profileLoadError}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium w-full"
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        </div>
+      );
+    }
+    // Se não tem erro explícito mas user é null com sessão, ainda está processando
+    return <LoadingGate message="Carregando dados do usuário..." />;
+  }
+
+  // 4. Autenticado mas pendente LGPD
   if (user && !user.lgpdConsentimento) {
     return null; // App.tsx vai mostrar LgpdConsent
   }

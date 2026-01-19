@@ -7,134 +7,156 @@ import * as authService from '../services/authService';
 import { loggingService } from '../services/loggingService';
 import { DEMO_USER } from '../data/mockData';
 
-// =====================================
-// TYPES
-// =====================================
-
 export interface ExtendedAuthContextType extends AuthContextType {
   refreshUser: () => Promise<void>;
   isDemoMode: boolean;
   loginAsDemo: () => void;
+
+  // NOVO: sinaliza que existe sessão, mesmo se perfil ainda não carregou
+  hasSession: boolean;
+  profileLoadError: string | null;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<ExtendedAuthContextType | null>(null);
 
-// =====================================
-// CACHE SIMPLIFICADO
-// =====================================
-// Armazena perfil em memória para evitar requests repetidos na mesma sessão de navegação
+// Cache em memória
 const profileCache = new Map<string, User>();
+
+function clearSupabaseAuthStorage() {
+  try {
+    const keys = Object.keys(localStorage);
+    for (const k of keys) {
+      // Padrão comum do Supabase v2: sb-<project>-auth-token
+      if (k.startsWith('sb-') && k.endsWith('-auth-token')) localStorage.removeItem(k);
+      // Compat adicional
+      if (k.includes('supabase') && k.includes('auth')) localStorage.removeItem(k);
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
   const [viewingMicroregiaoId, setViewingMicroregiaoId] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // Lock para evitar conflitos de multiplas chamadas
-  const isFetchingRef = useRef(false);
+  // NOVO
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
 
-  /**
-   * Carrega perfil do Supabase
-   * MELHORIA: Não desloga o usuário se der erro de rede, apenas se o perfil não existir.
-   */
+  // Refs para evitar re-subscrição e closures velhas
+  const userIdRef = useRef<string | null>(null);
+  const isDemoRef = useRef(false);
+  useEffect(() => { userIdRef.current = user?.id ?? null; }, [user?.id]);
+  useEffect(() => { isDemoRef.current = isDemoMode; }, [isDemoMode]);
+
+  // Lock real: dedupe por userId
+  const inFlightProfileRef = useRef<Map<string, Promise<User | null>>>(new Map());
+
   const loadUserProfile = useCallback(async (userId: string): Promise<User | null> => {
-    // 1. Verifica cache de memória
-    if (profileCache.has(userId)) {
-      return profileCache.get(userId)!;
-    }
+    if (profileCache.has(userId)) return profileCache.get(userId)!;
 
-    try {
-      console.log('[AuthContext] 🚀 Buscando perfil no DB:', userId);
+    const existing = inFlightProfileRef.current.get(userId);
+    if (existing) return existing;
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*') // Seleciona tudo para garantir mapeamento
-        .eq('id', userId)
-        .single();
+    const promise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-      if (error) {
-        console.error('[AuthContext] ❌ Erro ao buscar perfil (RLS ou Rede):', error.message);
-        // NÃO faz logout aqui. Pode ser apenas falha de conexão.
+        if (error) {
+          // Importante: guardar erro para UI/Router não entrar em loop
+          setProfileLoadError(error.message || 'Falha ao carregar perfil');
+          return null;
+        }
+
+        if (!data) {
+          setProfileLoadError('Perfil não encontrado');
+          return null;
+        }
+
+        if (!data.ativo) {
+          setProfileLoadError('Usuário inativo');
+          return null;
+        }
+
+        const profile: User = {
+          id: data.id,
+          nome: data.nome,
+          email: data.email,
+          role: data.role,
+          microregiaoId: data.microregiao_id || 'all',
+          ativo: data.ativo,
+          lgpdConsentimento: data.lgpd_consentimento,
+          lgpdConsentimentoData: data.lgpd_consentimento_data || undefined,
+          avatarId: data.avatar_id || 'zg10',
+          createdBy: data.created_by || undefined,
+          municipio: data.municipio || undefined,
+          firstAccess: data.first_access ?? true,
+          createdAt: data.created_at,
+        };
+
+        setProfileLoadError(null);
+        profileCache.set(userId, profile);
+        return profile;
+      } catch (err: any) {
+        setProfileLoadError(err?.message || 'Erro crítico ao carregar perfil');
         return null;
+      } finally {
+        inFlightProfileRef.current.delete(userId);
       }
+    })();
 
-      if (!data) {
-        console.warn('[AuthContext] ⚠️ Perfil não encontrado. Usuário deletado?');
-        return null;
-      }
-
-      if (!data.ativo) {
-        console.warn('[AuthContext] ⛔ Usuário inativo.');
-        return null;
-      }
-
-      // Mapeamento seguro
-      const profile: User = {
-        id: data.id,
-        nome: data.nome,
-        email: data.email,
-        role: data.role,
-        microregiaoId: data.microregiao_id || 'all',
-        ativo: data.ativo,
-        lgpdConsentimento: data.lgpd_consentimento,
-        lgpdConsentimentoData: data.lgpd_consentimento_data || undefined,
-        avatarId: data.avatar_id || 'zg10',
-        createdBy: data.created_by || undefined,
-        municipio: data.municipio || undefined,
-        firstAccess: data.first_access ?? true,
-        createdAt: data.created_at,
-      };
-
-      // Salva no cache
-      profileCache.set(userId, profile);
-      return profile;
-
-    } catch (err) {
-      console.error('[AuthContext] 💥 Erro crítico:', err);
-      return null;
-    }
+    inFlightProfileRef.current.set(userId, promise);
+    return promise;
   }, []);
 
-  /**
-   * Inicialização e Monitoramento de Sessão
-   * Este é o coração da correção.
-   */
   useEffect(() => {
     let mounted = true;
 
     const initializeAuth = async () => {
+      setIsLoading(true);
+      setProfileLoadError(null);
+
       try {
-        // 1. Pega sessão atual
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
 
-        if (sessionError) {
-          throw sessionError;
-        }
+        const sid = session?.user?.id ?? null;
+        setSessionUserId(sid);
 
-        if (session?.user) {
-          console.log('[AuthContext] 🔓 Sessão recuperada. Carregando perfil...');
-          const profile = await loadUserProfile(session.user.id);
+        if (sid) {
+          const profile = await loadUserProfile(sid);
 
-          if (mounted) {
-            if (profile) {
-              setUser(profile);
-              setViewingMicroregiaoId(profile.microregiaoId === 'all' ? null : profile.microregiaoId);
-            } else {
-              // SÓ loga warning, não desloga automaticamente
-              // Pode ser erro de rede, RLS ainda carregando, etc.
-              console.log('[AuthContext] ⚠️ Sessão válida mas perfil inacessível. Verifique RLS ou conexão.');
-              // NÃO chama signOut() aqui - essa é a correção chave!
-            }
+          if (mounted && profile) {
+            setUser(profile);
+            setViewingMicroregiaoId(profile.microregiaoId === 'all' ? null : profile.microregiaoId);
           }
         } else {
-          console.log('[AuthContext] 🚪 Nenhuma sessão ativa');
+          if (mounted) {
+            setUser(null);
+            setViewingMicroregiaoId(null);
+            profileCache.clear();
+          }
         }
-      } catch (error) {
-        console.error('[AuthContext] Erro na inicialização:', error);
-        // Limpar storage apenas se erro for de token inválido
-        if (JSON.stringify(error).includes('invalid_token')) {
-          localStorage.clear();
+      } catch (error: any) {
+        const msg = String(error?.message || error || '');
+        // Se token está inválido, aí sim "zera" somente auth do Supabase
+        if (msg.toLowerCase().includes('invalid') && msg.toLowerCase().includes('token')) {
+          clearSupabaseAuthStorage();
+          await supabase.auth.signOut();
+          setSessionUserId(null);
+          setUser(null);
+          setViewingMicroregiaoId(null);
+          profileCache.clear();
+        } else {
+          setProfileLoadError(msg || 'Erro na inicialização de autenticação');
         }
       } finally {
         if (mounted) setIsLoading(false);
@@ -143,89 +165,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initializeAuth();
 
-    // 2. Listener de mudanças (Login/Logout em outras abas ou expiração)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[AuthContext] 📡 Evento: ${event}`);
+      if (isDemoRef.current) return;
 
-      // Ignora eventos em demo mode
-      if (isDemoMode) {
-        console.log('[AuthContext] 🎭 Demo mode ativo - ignorando evento');
+      const sid = session?.user?.id ?? null;
+      setSessionUserId(sid);
+
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setViewingMicroregiaoId(null);
+        setIsDemoMode(false);
+        setProfileLoadError(null);
+        profileCache.clear();
+        setIsLoading(false);
         return;
       }
 
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Evita recarregar se o usuário já estiver no estado (evita flicker)
-        if (user?.id === session.user.id) return;
+      if (!sid) return;
 
-        setIsLoading(true);
-        const profile = await loadUserProfile(session.user.id);
-        if (profile) {
-          setUser(profile);
-          setViewingMicroregiaoId(profile.microregiaoId === 'all' ? null : profile.microregiaoId);
-        }
-        setIsLoading(false);
+      // Evita recarga redundante usando ref atualizada
+      if (userIdRef.current === sid && event !== 'TOKEN_REFRESHED') return;
+
+      setIsLoading(true);
+
+      if (event === 'TOKEN_REFRESHED') {
+        profileCache.delete(sid);
       }
-      else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setViewingMicroregiaoId(null);
-        profileCache.clear();
-        setIsDemoMode(false);
-        setIsLoading(false);
+
+      const profile = await loadUserProfile(sid);
+      if (profile) {
+        setUser(profile);
+        setViewingMicroregiaoId(profile.microregiaoId === 'all' ? null : profile.microregiaoId);
       }
-      else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('[AuthContext] 🔄 Token refreshed');
-        // Refresh silencioso do perfil
-        profileCache.delete(session.user.id);
-        const profile = await loadUserProfile(session.user.id);
-        if (profile) {
-          setUser(profile);
-        }
-      }
+
+      setIsLoading(false);
     });
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [loadUserProfile, user?.id, isDemoMode]);
-
-  // =====================================
-  // AÇÕES
-  // =====================================
+  }, [loadUserProfile]);
 
   const login = async (email: string, senha: string) => {
     setIsLoading(true);
-    profileCache.clear(); // Limpa cache antigo
+    setProfileLoadError(null);
+    profileCache.clear();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password: senha,
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
 
     if (error) {
       setIsLoading(false);
       return {
         success: false,
-        error: error.message === 'Invalid login credentials'
-          ? 'Email ou senha incorretos'
-          : error.message
+        error: error.message === 'Invalid login credentials' ? 'Email ou senha incorretos' : error.message
       };
     }
 
-    if (data.user) {
-      const profile = await loadUserProfile(data.user.id);
+    const sid = data.user?.id ?? null;
+    setSessionUserId(sid);
+
+    if (sid) {
+      const profile = await loadUserProfile(sid);
       if (profile) {
         setUser(profile);
-        const microId = profile.microregiaoId === 'all' ? null : profile.microregiaoId;
-        setViewingMicroregiaoId(microId);
+        setViewingMicroregiaoId(profile.microregiaoId === 'all' ? null : profile.microregiaoId);
         loggingService.logActivity('login', 'auth', profile.id, { name: profile.nome });
         setIsLoading(false);
         return { success: true };
-      } else {
-        // Perfil não encontrado após login bem-sucedido
-        setIsLoading(false);
-        return { success: false, error: 'Erro ao carregar perfil do usuário. Verifique se a conta está ativa.' };
       }
+      setIsLoading(false);
+      return { success: false, error: 'Sessão criada, mas falha ao carregar perfil. Verifique RLS/conexão.' };
     }
 
     setIsLoading(false);
@@ -237,11 +247,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsDemoMode(false);
       setUser(null);
       setViewingMicroregiaoId(null);
+      setSessionUserId(null);
+      setProfileLoadError(null);
       return;
     }
+
     await supabase.auth.signOut();
     setUser(null);
     setViewingMicroregiaoId(null);
+    setSessionUserId(null);
+    setProfileLoadError(null);
     profileCache.clear();
   };
 
@@ -249,7 +264,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profileCache.clear();
     setUser(DEMO_USER);
     setIsDemoMode(true);
+    setSessionUserId('demo');
     setViewingMicroregiaoId(DEMO_USER.microregiaoId === 'all' ? null : DEMO_USER.microregiaoId);
+    setProfileLoadError(null);
     setIsLoading(false);
   };
 
@@ -271,14 +288,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const setViewingMicrorregiao = (id: string) => {
-    if (isAdminLike(user?.role)) {
-      setViewingMicroregiaoId(id === 'all' ? null : id);
-    }
+    if (isAdminLike(user?.role)) setViewingMicroregiaoId(id === 'all' ? null : id);
   };
-
-  // =====================================
-  // VALORES EXPOSTOS
-  // =====================================
 
   const currentMicrorregiao: Microrregiao | null = viewingMicroregiaoId
     ? getMicroregiaoById(viewingMicroregiaoId) || null
@@ -301,19 +312,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser,
     isDemoMode,
     loginAsDemo,
+
+    hasSession: !!sessionUserId && sessionUserId !== 'demo',
+    profileLoadError,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
-  return context as ExtendedAuthContextType;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth deve ser usado dentro de um AuthProvider');
+  return ctx;
 }
-
-export function useAuthSafe() {
-  return useContext(AuthContext) as ExtendedAuthContextType | null;
-}
-
-export { AuthContext };

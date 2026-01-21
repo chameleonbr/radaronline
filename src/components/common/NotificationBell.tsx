@@ -299,12 +299,17 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
     // ✅ REALTIME: Atualiza automaticamente quando novas solicitações chegam
     // Usando Ref para evitar re-subscrição desnecessária quando loadRequests mudar
     const loadRequestsRef = useRef(loadRequests);
+    const loadPendingCountRef = useRef(loadPendingCount);
+
     useEffect(() => {
         loadRequestsRef.current = loadRequests;
-    }, [loadRequests]);
+        loadPendingCountRef.current = loadPendingCount;
+    }, [loadRequests, loadPendingCount]);
 
     useEffect(() => {
         if (!user?.id) return;
+
+        console.log('🔔 [NOTIFICATION] Subscribing to realtime changes for user:', user.id);
 
         const channel = supabase
             .channel('user_requests_changes')
@@ -315,22 +320,34 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                     schema: 'public',
                     table: 'user_requests'
                 },
-                () => {
-                    // Chama a função mais recente via ref
+                (payload) => {
+                    console.log('🔔 [NOTIFICATION] Realtime event received:', payload);
+
+                    // Se for usuário comum, verificar se a notificação é para ele
+                    // O payload.new tem os dados da nova linha
+                    if (!isAdmin && payload.new && 'user_id' in payload.new) {
+                        const newRecord = payload.new as { user_id: string };
+                        if (newRecord.user_id !== user.id) {
+                            // Ignorar notificações de outros usuários (embora RLS deva filtrar)
+                            return;
+                        }
+                    }
+
+                    // Chama as funções mais recentes via ref
                     loadRequestsRef.current();
-                    // Atualiza contador também se necessário, mas loadRequests já deve cuidar disso ou podemos chamar loadPendingCount também
-                    // loadPendingCount é estável? Ele também depende de user/isAdmin.
-                    // Idealmente deveríamos ter um ref para ele também se fosse ser chamado aqui.
-                    // Mas o código original chamava loadPendingCount(). Vamos manter seguro.
-                    // Para simplificar e garantir, apenas recarregamos a lista principal que já atualiza o estado
+                    loadPendingCountRef.current();
                 }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('🔔 [NOTIFICATION] Subscription status:', status);
+            });
 
         return () => {
+            console.log('🔔 [NOTIFICATION] Unsubscribing channel');
             supabase.removeChannel(channel);
         };
-    }, [user?.id]); // Dependência apenas do ID (primitivo estável)
+    }, [user?.id, isAdmin]); // Dependência user.id e isAdmin
+
 
     // Fechar ao clicar fora
     useEffect(() => {

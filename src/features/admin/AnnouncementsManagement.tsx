@@ -280,14 +280,22 @@ export function AnnouncementsManagement() {
             <div className="flex-1 overflow-auto p-8 custom-scrollbar">
                 <AnimatePresence mode="wait">
                     {loading ? (
-                        <div className="flex justify-center flex-col items-center py-20 opacity-50">
+                        <motion.div
+                            key="loading"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="flex justify-center flex-col items-center py-20 opacity-50"
+                        >
                             <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4" />
                             <p className="text-slate-400 text-sm font-medium animate-pulse">Carregando mural...</p>
-                        </div>
+                        </motion.div>
                     ) : filteredList.length === 0 ? (
                         <motion.div
+                            key="empty"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
                             className="text-center py-20"
                         >
                             <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -303,9 +311,11 @@ export function AnnouncementsManagement() {
                         </motion.div>
                     ) : (
                         <motion.div
+                            key={`list-${activeTab}`}
                             variants={containerVariants}
                             initial="hidden"
                             animate="visible"
+                            exit="hidden"
                             className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-4"}
                         >
                             {filteredList.map(item => {
@@ -597,19 +607,23 @@ export function AnnouncementsManagement() {
                                                                         const microIds = analystMicros.map(m => m.id);
                                                                         const macroNames = analyst.macros.map(m => m.toUpperCase());
 
-                                                                        if (allAnalystMicrosSelected) {
-                                                                            // Deselect all for this analyst
+                                                                        // Check if this analyst is currently the EXCLUSIVE selection
+                                                                        const isExclusive = formData.targetMicros.length === microIds.length &&
+                                                                            microIds.every(id => formData.targetMicros.includes(id));
+
+                                                                        if (isExclusive) {
+                                                                            // If already exclusively selected, clear all (toggle off)
                                                                             setFormData(prev => ({
                                                                                 ...prev,
-                                                                                targetMicros: prev.targetMicros.filter(id => !microIds.includes(id))
+                                                                                targetMicros: []
                                                                             }));
                                                                         } else {
-                                                                            // Select all for this analyst AND expand their macros
+                                                                            // Exclusive Select: Replace current selection with only this analyst's micros
                                                                             setFormData(prev => ({
                                                                                 ...prev,
-                                                                                targetMicros: [...new Set([...prev.targetMicros, ...microIds])]
+                                                                                targetMicros: microIds
                                                                             }));
-                                                                            // Add analyst macros to expanded list
+                                                                            // Expand macros to show what was selected
                                                                             setExpandedMacros(prev => [...new Set([...prev, ...macroNames])]);
                                                                         }
                                                                     }}
@@ -678,9 +692,16 @@ export function AnnouncementsManagement() {
                                                             const allSelected = micros.every(m => formData.targetMicros.includes(m.id));
 
                                                             return (
-                                                                <div key={macroName} className="bg-white dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700/50 overflow-hidden">
+
+                                                                <div key={macroName} className={`rounded-lg border overflow-hidden transition-all ${allSelected
+                                                                    ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800'
+                                                                    : 'bg-white dark:bg-slate-800/50 border-slate-100 dark:border-slate-700/50'
+                                                                    }`}>
                                                                     <div
-                                                                        className="flex items-center justify-between p-2 bg-slate-50/50 dark:bg-slate-700/30 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors cursor-pointer"
+                                                                        className={`flex items-center justify-between p-2 transition-colors cursor-pointer ${allSelected
+                                                                            ? 'bg-emerald-100/50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+                                                                            : 'bg-slate-50/50 dark:bg-slate-700/30 hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                                                                            }`}
                                                                         onClick={() => {
                                                                             if (expandedMacros.includes(macroName)) {
                                                                                 setExpandedMacros(prev => prev.filter(m => m !== macroName));
@@ -690,9 +711,9 @@ export function AnnouncementsManagement() {
                                                                         }}
                                                                     >
                                                                         <div className="flex items-center gap-2">
-                                                                            {isExpanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
-                                                                            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">{macroName}</span>
-                                                                            <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300 rounded-full">
+                                                                            {isExpanded ? <ChevronDown size={14} className={allSelected ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"} /> : <ChevronRight size={14} className={allSelected ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"} />}
+                                                                            <span className={`text-xs font-bold uppercase tracking-wider ${allSelected ? "text-emerald-700 dark:text-emerald-300" : "text-slate-600 dark:text-slate-300"}`}>{macroName}</span>
+                                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${allSelected ? "bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200" : "bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300"}`}>
                                                                                 {micros.length}
                                                                             </span>
                                                                         </div>

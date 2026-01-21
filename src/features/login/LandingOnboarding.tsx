@@ -245,11 +245,10 @@ const Hero = ({ onContinue }: { onContinue: () => void }) => {
             <motion.div
                 animate={{ y: [0, 14, 0] }}
                 transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-                className="absolute bottom-10 flex flex-col items-center gap-3 cursor-pointer z-20"
-                onClick={() => document.getElementById("story")?.scrollIntoView({ behavior: "smooth" })}
+                className="absolute bottom-10 flex flex-col items-center gap-3 z-20"
             >
                 <div
-                    className="px-6 py-3 rounded-full font-black text-xs md:text-sm uppercase tracking-widest border-2 flex items-center gap-2 transition-transform hover:scale-105"
+                    className="px-6 py-3 rounded-full font-black text-xs md:text-sm uppercase tracking-widest border-2 flex items-center gap-2 cursor-default"
                     style={{
                         background: GRADIENT,
                         color: "#04110C",
@@ -261,6 +260,9 @@ const Hero = ({ onContinue }: { onContinue: () => void }) => {
                     Começar a jornada
                 </div>
                 <ArrowDown size={32} strokeWidth={3} color={COLORS.ink} className="mt-1 opacity-80" />
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-60 text-slate-800 bg-white/50 backdrop-blur-sm px-2 py-1 rounded-md">
+                    Use o scroll do mouse para navegar
+                </span>
             </motion.div>
         </section>
     );
@@ -313,7 +315,7 @@ const StickyStory = () => {
 
                         <h2 className="text-4xl md:text-7xl font-black text-white leading-tight">
                             A gestão em saúde entrou em uma nova era, com dados, integração e serviço digital como{" "}
-                            <span className="inline-block bg-white text-black px-4 rounded-xl">
+                            <span className="inline-block bg-white text-black px-3 pt-0 pb-0.5 rounded-lg align-middle leading-none mx-1">
                                 parte do cuidado
                             </span>
                             .
@@ -352,7 +354,7 @@ const StickyStory = () => {
 
                         <h2 className="text-4xl md:text-7xl font-black text-white leading-tight">
                             Em Minas, a Saúde Digital deixa de ser discurso e vira{" "}
-                            <span className="inline-block bg-white text-black px-4 rounded-xl">
+                            <span className="inline-block bg-white text-black px-3 pt-0 pb-0.5 rounded-lg align-middle leading-none mx-1">
                                 entrega no território
                             </span>
                             .
@@ -948,6 +950,7 @@ const FAQ = () => {
 
     return (
         <section
+            id="faq-section"
             className="py-28 md:py-36 px-6"
             style={{
                 background:
@@ -1076,15 +1079,19 @@ export function LandingOnboarding({ onComplete }: LandingOnboardingProps) {
     // Detectar scroll para mostrar CTA flutuante
     useEffect(() => {
         const handleScroll = () => {
-            const scrollTop = window.scrollY;
-            const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-            const scrollPercent = (scrollTop / docHeight) * 100;
-
-            // Mostrar quando passou de 70% da página
-            setShowFloatingCTA(scrollPercent > 70);
+            const faqSection = document.getElementById("faq-section");
+            if (faqSection) {
+                const rect = faqSection.getBoundingClientRect();
+                // Mostra quando o topo da seção de FAQ entra na tela (está menor que a altura da janela)
+                // e o usuário ainda não passou muito do footer (opcional, mas aqui vamos deixar visível até o fim)
+                setShowFloatingCTA(rect.top < window.innerHeight);
+            }
         };
 
         window.addEventListener('scroll', handleScroll);
+        // Chama uma vez para verificar estado inicial
+        handleScroll();
+
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 

@@ -1427,6 +1427,7 @@ function AppContent() {
           // Admins e superadmins podem editar objetivos/atividades em qualquer momento
           onToggleEditMode={isAdmin ? () => setIsEditMode(!isEditMode) : undefined}
           onUpdateObjective={(id, newTitle) => handleEditObjective(id, newTitle)}
+          onNavigate={(nav) => setCurrentNav(nav)}
         />
 
         {/* SCROLLABLE AREA */}
@@ -1682,6 +1683,12 @@ function AppContent() {
               }
 
               setShowMunicipalityModal(false);
+
+              // FORCE NAVIGATION TO MURAL (NEWS)
+              // This is critical to ensure the user doesn't land on "Team" view or other restricted areas
+              setCurrentNav('news');
+              setViewMode('table');
+
               showToast('Configuração concluída! Bem-vindo(a) ao sistema.', 'success');
 
               // Trigger onboarding tour after first access is completed
@@ -1773,16 +1780,9 @@ function LoadingFallback() {
         <p className="text-slate-600 mb-4">Carregando...</p>
 
         {showRetry && !showLogout && (
-          <p className="text-xs text-slate-400 mb-3">Está demorando mais que o esperado...</p>
-        )}
-
-        {showRetry && (
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors"
-          >
-            Tentar Novamente
-          </button>
+          <p className="text-sm text-slate-500 mb-3 animate-pulse">
+            Estamos restabelecendo a conexão. Isso pode levar alguns instantes.
+          </p>
         )}
 
         {showLogout && (

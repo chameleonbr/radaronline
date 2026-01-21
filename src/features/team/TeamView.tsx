@@ -353,7 +353,9 @@ export function TeamView({ team, microId, onUpdateTeam, onAddMember, onRemoveMem
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredTeam.map((member) => {
           const isEditing = editingId === member.id;
-          const isPending = member.isRegistered === false;
+          // Usuário pede que 'Cadastro Pendente' seja apenas para Gestor. 
+          // Vamos assumir que 'Membro' não deve mostrar pendência.
+          const isPending = member.isRegistered === false && member.role.toLowerCase() !== 'membro';
 
           if (isEditing) {
             // Card em Modo de Edição
@@ -369,13 +371,12 @@ export function TeamView({ team, microId, onUpdateTeam, onAddMember, onRemoveMem
                     onChange={e => setEditForm({ ...editForm, name: e.target.value })}
                     placeholder="Nome"
                   />
-                  <select
+                  <input
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700"
                     value={editForm.role}
                     onChange={e => setEditForm({ ...editForm, role: e.target.value })}
-                  >
-                    {ROLES_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                    placeholder="Cargo"
+                  />
                   <input
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700"
                     value={editForm.email}

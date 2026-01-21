@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, X, Check, Clock, XCircle, MessageSquare, RotateCcw, AtSign, Shield, ChevronRight, CheckCheck } from 'lucide-react';
+import { Bell, X, Check, Clock, XCircle, RotateCcw, AtSign, Shield, ChevronRight, CheckCheck, Megaphone } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../auth/AuthContext';
 import { getMicroregiaoById } from '../../data/microregioes';
@@ -27,6 +27,7 @@ export interface NotificationBellProps {
     className?: string;
     collapsed?: boolean;
     onViewAllRequests?: () => void;
+    onNavigate?: (nav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news') => void;
 }
 
 // Chave para localStorage
@@ -50,7 +51,7 @@ const saveReadNotifications = (ids: Set<string>) => {
 // Tipo para controle de abas
 type NotificationTab = 'unread' | 'all';
 
-export function NotificationBell({ className = '', collapsed = false, onViewAllRequests }: NotificationBellProps) {
+export function NotificationBell({ className = '', collapsed = false, onViewAllRequests, onNavigate }: NotificationBellProps) {
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [requests, setRequests] = useState<UserRequest[]>([]);
@@ -59,12 +60,32 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
     const [selectedRequest, setSelectedRequest] = useState<UserRequest | null>(null);
     const [adminNote, setAdminNote] = useState('');
     const [saving, setSaving] = useState(false);
-    const buttonRef = useRef<HTMLButtonElement>(null);
-    const panelRef = useRef<HTMLDivElement>(null);
     const [readIds, setReadIds] = useState<Set<string>>(getReadNotifications);
     const [activeTab, setActiveTab] = useState<NotificationTab>('unread');
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLDivElement>(null);
 
     const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
+
+    // Click outside handler
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (isOpen &&
+                panelRef.current &&
+                !panelRef.current.contains(event.target as Node) &&
+                buttonRef.current &&
+                !buttonRef.current.contains(event.target as Node)
+            ) {
+                setIsOpen(false);
+            }
+        }
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
 
     // Verificar se uma notificação é "não lida"
     const isUnread = (request: UserRequest): boolean => {
@@ -74,8 +95,8 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
             // Para admins: não lida se está pendente (e não é menção)
             return request.status === 'pending' && request.request_type !== 'mention';
         } else {
-            // Para usuários: não lida se é menção pendente OU tem resposta do admin
-            if (request.request_type === 'mention') {
+            // Para usuários: não lida se é menção/anúncio pendente OU tem resposta do admin
+            if (request.request_type === 'mention' || request.request_type === 'announcement') {
                 return request.status === 'pending';
             }
             return !!(request.admin_notes && request.status !== 'pending');
@@ -120,8 +141,12 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                 .order('created_at', { ascending: false })
                 .limit(20);
 
-            // Admins veem todas, usuários veem só as suas
-            if (!isAdmin) {
+            if (isAdmin) {
+                // Admins veem solicitações que precisam de atenção (NÃO announcements)
+                // Announcements são criados pelos admins para os usuários
+                query = query.in('request_type', ['request', 'feedback', 'support', 'mention']);
+            } else {
+                // Usuários veem suas próprias notificações (incluindo announcements)
                 query = query.eq('user_id', user.id);
             }
 
@@ -186,7 +211,11 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'pending');
 
-            if (!isAdmin) {
+            if (isAdmin) {
+                // Admins: contam apenas solicitações que precisam atenção (sem announcements)
+                countQuery = countQuery.in('request_type', ['request', 'feedback', 'support', 'mention']);
+            } else {
+                // Usuários: contam suas próprias notificações
                 countQuery = countQuery.eq('user_id', user.id);
             }
 
@@ -194,7 +223,7 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
             if (!error) {
                 setPendingCount(count || 0);
             }
-        } catch (err) {
+        } catch {
             // ignore silently
         }
     }, [user, isAdmin]);
@@ -265,7 +294,7 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
             loadRequests();
             loadPendingCount();
         }
-    }, [user, loadRequests]);
+    }, [user, loadRequests, loadPendingCount]);
 
     // ✅ REALTIME: Atualiza automaticamente quando novas solicitações chegam
     // Usando Ref para evitar re-subscrição desnecessária quando loadRequests mudar
@@ -454,17 +483,34 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                                     </button>
 
                                     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-                                        <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                                        {/* Header do Card */}
+                                        <div className={`p-5 border-b border-slate-100 dark:border-slate-800 ${selectedRequest.request_type === 'announcement' ? 'bg-teal-50/50 dark:bg-teal-900/10' : 'bg-slate-50/50 dark:bg-slate-900/50'}`}>
                                             <div className="flex justify-between items-start gap-4">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-bold text-lg">
-                                                        {(selectedRequest.user?.nome || 'U')[0].toUpperCase()}
+                                                    {/* Avatar / Ícone */}
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${selectedRequest.request_type === 'announcement'
+                                                        ? 'bg-teal-100 text-teal-600 dark:bg-teal-900/50 dark:text-teal-400'
+                                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                                                        }`}>
+                                                        {selectedRequest.request_type === 'announcement' ? (
+                                                            <Megaphone size={20} />
+                                                        ) : (
+                                                            (selectedRequest.user?.nome || 'U')[0].toUpperCase()
+                                                        )}
                                                     </div>
+
                                                     <div>
                                                         <div className="font-bold text-slate-800 dark:text-slate-100 text-base">
-                                                            {isAdmin ? selectedRequest.user?.nome : 'Sua Solicitação'}
+                                                            {selectedRequest.request_type === 'announcement' ? 'Mural da Rede' :
+                                                                isAdmin ? selectedRequest.user?.nome : 'Sua Solicitação'}
                                                         </div>
-                                                        {isAdmin && selectedRequest.user && (
+
+                                                        {/* Subtítulo / Detalhes do Usuário */}
+                                                        {selectedRequest.request_type === 'announcement' ? (
+                                                            <div className="text-xs text-teal-600 dark:text-teal-400 font-medium mt-0.5">
+                                                                Comunicado Oficial
+                                                            </div>
+                                                        ) : (isAdmin && selectedRequest.user && (
                                                             <div className="flex flex-wrap gap-x-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                                                 {selectedRequest.user.cargo && (
                                                                     <span className="font-medium text-teal-600 dark:text-teal-400">
@@ -490,95 +536,133 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                                                                     <span>{selectedRequest.user.municipio}</span>
                                                                 )}
                                                             </div>
-                                                        )}
-                                                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                                                        ))}
+
+                                                        {/* Data */}
+                                                        <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
+                                                            <Clock size={10} />
                                                             {new Date(selectedRequest.created_at).toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short' })}
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${selectedRequest.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-900/30' :
-                                                    selectedRequest.status === 'resolved' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/30' :
-                                                        'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/30'
-                                                    }`}>
-                                                    {selectedRequest.status === 'pending' ? 'PENDENTE' :
-                                                        selectedRequest.status === 'resolved' ? 'RESOLVIDO' : 'REJEITADO'}
-                                                </span>
+
+                                                {/* Status Badge - Esconde para anúncios ou mostra badge específico */}
+                                                {selectedRequest.request_type !== 'announcement' && (
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${selectedRequest.status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-900/30' :
+                                                        selectedRequest.status === 'resolved' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/30' :
+                                                            'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/30'
+                                                        }`}>
+                                                        {selectedRequest.status === 'pending' ? 'PENDENTE' :
+                                                            selectedRequest.status === 'resolved' ? 'RESOLVIDO' : 'REJEITADO'}
+                                                    </span>
+                                                )}
+
+                                                {/* Badge opcional para anúncios */}
+                                                {selectedRequest.request_type === 'announcement' && (
+                                                    <span className="px-2.5 py-1 rounded-full text-xs font-bold border bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-400 dark:border-teal-900/30 flex items-center gap-1">
+                                                        <Megaphone size={12} />
+                                                        NOVO
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 
                                         <div className="p-5">
+                                            {/* Conteúdo Principal */}
                                             <div className="prose prose-sm dark:prose-invert max-w-none">
                                                 <p className="text-slate-800 dark:text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">
                                                     {selectedRequest.content}
                                                 </p>
                                             </div>
 
-                                            {/* Admin Response Section */}
+                                            {/* Footer / Resposta / Ações */}
                                             {(selectedRequest.admin_notes || isAdmin) && (
                                                 <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
-                                                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                                                        {isAdmin ? 'Área Administrativa' : 'Resposta da Administração'}
-                                                    </h5>
 
-                                                    {!isAdmin && selectedRequest.admin_notes && (
-                                                        <div className="bg-teal-50 dark:bg-teal-900/10 border border-teal-100 dark:border-teal-900/30 rounded-lg p-4">
-                                                            <div className="flex gap-3">
-                                                                <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center shrink-0">
-                                                                    <Shield className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                                                                </div>
-                                                                <div>
-                                                                    <div className="font-bold text-teal-900 dark:text-teal-100 text-sm mb-1">Radar Admin</div>
-                                                                    <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
-                                                                        {selectedRequest.admin_notes}
-                                                                    </p>
-                                                                </div>
-                                                            </div>
+                                                    {/* Se for ANÚNCIO, mostra estilo diferente (Call to Action) */}
+                                                    {selectedRequest.request_type === 'announcement' && !isAdmin ? (
+                                                        <div className="flex justify-end">
+                                                            <button
+                                                                className="flex items-center gap-2 px-4 py-2 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-900/20 dark:text-teal-300 dark:hover:bg-teal-900/30 rounded-lg text-sm font-bold transition-colors"
+                                                                onClick={() => {
+                                                                    setIsOpen(false);
+                                                                    if (onNavigate) {
+                                                                        onNavigate('news');
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Megaphone size={16} />
+                                                                Ir para o Mural
+                                                            </button>
                                                         </div>
-                                                    )}
+                                                    ) : (
+                                                        /* Display Padrão para Solicitações */
+                                                        <>
+                                                            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                                                                {isAdmin ? 'Área Administrativa' : 'Resposta da Administração'}
+                                                            </h5>
 
-                                                    {isAdmin && (
-                                                        <div className="space-y-4">
-                                                            <textarea
-                                                                value={adminNote}
-                                                                onChange={(e) => setAdminNote(e.target.value)}
-                                                                placeholder="Digite sua resposta ou observação interna..."
-                                                                rows={4}
-                                                                className="w-full px-4 py-3 text-sm text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all resize-none placeholder:text-slate-400"
-                                                            />
+                                                            {!isAdmin && selectedRequest.admin_notes && (
+                                                                <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-lg p-4">
+                                                                    <div className="flex gap-3">
+                                                                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                                                                            <Shield className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className="font-bold text-slate-900 dark:text-slate-100 text-sm mb-1">Radar Admin</div>
+                                                                            <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
+                                                                                {selectedRequest.admin_notes}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )}
 
-                                                            <div className="flex flex-wrap items-center gap-2 justify-end">
-                                                                {selectedRequest.status !== 'pending' && (
-                                                                    <button
-                                                                        onClick={() => handleUpdate(selectedRequest.id, 'pending', adminNote)}
-                                                                        disabled={saving}
-                                                                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg transition-colors border border-amber-200/50"
-                                                                    >
-                                                                        <RotateCcw className="w-3 h-3" />
-                                                                        Reabrir
-                                                                    </button>
-                                                                )}
-                                                                {selectedRequest.status !== 'rejected' && (
-                                                                    <button
-                                                                        onClick={() => handleUpdate(selectedRequest.id, 'rejected', adminNote)}
-                                                                        disabled={saving}
-                                                                        className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-all shadow-sm"
-                                                                    >
-                                                                        <XCircle className="w-3 h-3" />
-                                                                        Rejeitar
-                                                                    </button>
-                                                                )}
-                                                                {selectedRequest.status !== 'resolved' && (
-                                                                    <button
-                                                                        onClick={() => handleUpdate(selectedRequest.id, 'resolved', adminNote)}
-                                                                        disabled={saving}
-                                                                        className="flex items-center gap-2 px-5 py-2 text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 rounded-lg shadow-md hover:shadow-lg transition-all"
-                                                                    >
-                                                                        {saving ? 'Salvando...' : 'Resolver & Responder'}
-                                                                        <Check className="w-3 h-3" />
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                            {isAdmin && (
+                                                                <div className="space-y-4">
+                                                                    <textarea
+                                                                        value={adminNote}
+                                                                        onChange={(e) => setAdminNote(e.target.value)}
+                                                                        placeholder="Digite sua resposta ou observação interna..."
+                                                                        rows={4}
+                                                                        className="w-full px-4 py-3 text-sm text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all resize-none placeholder:text-slate-400"
+                                                                    />
+
+                                                                    <div className="flex flex-wrap items-center gap-2 justify-end">
+                                                                        {selectedRequest.status !== 'pending' && (
+                                                                            <button
+                                                                                onClick={() => handleUpdate(selectedRequest.id, 'pending', adminNote)}
+                                                                                disabled={saving}
+                                                                                className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg transition-colors border border-amber-200/50"
+                                                                            >
+                                                                                <RotateCcw className="w-3 h-3" />
+                                                                                Reabrir
+                                                                            </button>
+                                                                        )}
+                                                                        {selectedRequest.status !== 'rejected' && (
+                                                                            <button
+                                                                                onClick={() => handleUpdate(selectedRequest.id, 'rejected', adminNote)}
+                                                                                disabled={saving}
+                                                                                className="flex items-center gap-2 px-4 py-2 text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-lg transition-all shadow-sm"
+                                                                            >
+                                                                                <XCircle className="w-3 h-3" />
+                                                                                Rejeitar
+                                                                            </button>
+                                                                        )}
+                                                                        {selectedRequest.status !== 'resolved' && (
+                                                                            <button
+                                                                                onClick={() => handleUpdate(selectedRequest.id, 'resolved', adminNote)}
+                                                                                disabled={saving}
+                                                                                className="flex items-center gap-2 px-5 py-2 text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 rounded-lg shadow-md hover:shadow-lg transition-all"
+                                                                            >
+                                                                                {saving ? 'Salvando...' : 'Resolver & Responder'}
+                                                                                <Check className="w-3 h-3" />
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </div>
                                             )}
@@ -629,21 +713,24 @@ export function NotificationBell({ className = '', collapsed = false, onViewAllR
                                                             <div className={`
                                                             w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm border
                                                             ${request.request_type === 'mention' ? 'bg-blue-100 text-blue-600 border-blue-200 dark:bg-blue-900/30 dark:border-blue-800' :
-                                                                    request.status === 'pending' ? 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:border-amber-800' :
-                                                                        request.status === 'resolved' ? 'bg-green-100 text-green-600 border-green-200 dark:bg-green-900/30 dark:border-green-800' :
-                                                                            'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:border-red-800'}
+                                                                    request.request_type === 'announcement' ? 'bg-teal-100 text-teal-600 border-teal-200 dark:bg-teal-900/30 dark:border-teal-800' :
+                                                                        request.status === 'pending' ? 'bg-amber-100 text-amber-600 border-amber-200 dark:bg-amber-900/30 dark:border-amber-800' :
+                                                                            request.status === 'resolved' ? 'bg-green-100 text-green-600 border-green-200 dark:bg-green-900/30 dark:border-green-800' :
+                                                                                'bg-red-100 text-red-600 border-red-200 dark:bg-red-900/30 dark:border-red-800'}
                                                         `}>
                                                                 {request.request_type === 'mention' ? <AtSign className="w-5 h-5" /> :
-                                                                    request.status === 'pending' ? <Clock className="w-5 h-5" /> :
-                                                                        request.status === 'resolved' ? <Check className="w-5 h-5" /> :
-                                                                            <XCircle className="w-5 h-5" />}
+                                                                    request.request_type === 'announcement' ? <Megaphone className="w-5 h-5" /> :
+                                                                        request.status === 'pending' ? <Clock className="w-5 h-5" /> :
+                                                                            request.status === 'resolved' ? <Check className="w-5 h-5" /> :
+                                                                                <XCircle className="w-5 h-5" />}
                                                             </div>
 
                                                             <div className="flex-1 min-w-0 pt-0.5">
                                                                 <div className="flex justify-between items-start mb-1">
                                                                     <span className={`text-sm ${unread ? 'font-bold text-slate-900 dark:text-white' : 'font-medium text-slate-700 dark:text-slate-300'}`}>
                                                                         {request.request_type === 'mention' ? 'Menção' :
-                                                                            isAdmin ? (request.user?.nome || 'Usuário') : 'Solicitação'}
+                                                                            request.request_type === 'announcement' ? 'Comunicado' :
+                                                                                isAdmin ? (request.user?.nome || 'Usuário') : 'Solicitação'}
                                                                     </span>
                                                                     <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">
                                                                         {new Date(request.created_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}

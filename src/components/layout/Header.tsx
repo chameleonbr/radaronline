@@ -23,6 +23,7 @@ interface HeaderProps {
   isEditMode?: boolean;
   onToggleEditMode?: () => void;
   onUpdateObjective?: (id: number, newTitle: string) => void;
+  onNavigate?: (nav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,6 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
   isEditMode = false,
   onToggleEditMode,
   onUpdateObjective,
+  onNavigate,
 }) => {
   const objectiveIndex = objectives.findIndex(o => o.id === selectedObjective);
   const objective = objectives[objectiveIndex];
@@ -87,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Lado direito: Ações compactas */}
           <div className="flex items-center gap-1 shrink-0">
-            <NotificationBell />
+            <NotificationBell onNavigate={onNavigate} />
             <ZoomControl />
             <ThemeToggle size="sm" />
           </div>
@@ -209,7 +211,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="flex items-center gap-3">
           {/* Notification Bell */}
-          {micro && <NotificationBell />}
+          {micro && <NotificationBell onNavigate={onNavigate} />}
 
           {/* Edit Mode Toggle */}
           {(isAdmin || userRole === 'superadmin') && currentNav === 'strategy' && onToggleEditMode && viewMode === 'table' && (

@@ -26,44 +26,8 @@ import { Announcement } from '../../types/announcement.types';
 
 // Removendo MOCK_ANNOUNCEMENTS em favor da API real
 
-const INITIAL_EVENTS: AutomatedEvent[] = [
-    {
-        id: 'e1',
-        type: 'plan_completed',
-        municipality: 'Ouro Preto',
-        title: 'Ouro Preto conclui o Planejamento Local 2026',
-        timestamp: '2h atrás',
-        details: '14 UBSs finalizaram o diagnóstico, estruturando a base do Plano de Ação da Atenção Primária.',
-        imageGradient: 'from-blue-600 to-cyan-500',
-        likes: 24,
-        footerContext: 'Marco do Planejamento Local • Equipes municipais mobilizadas',
-        created_at: new Date().toISOString()
-    },
-    {
-        id: 'e2',
-        type: 'goal_reached',
-        municipality: 'Mariana',
-        title: 'Mariana atinge meta de adesão das equipes',
-        timestamp: '4h atrás',
-        details: '80% dos profissionais cadastrados passaram a utilizar a plataforma, integrando a comunicação da rede.',
-        imageGradient: 'from-emerald-600 to-teal-500',
-        likes: 18,
-        footerContext: 'Resultado do engajamento das equipes locais',
-        created_at: new Date().toISOString()
-    },
-    {
-        id: 'e3',
-        type: 'system_milestone',
-        municipality: 'Regional Itabira',
-        title: 'Regional de Itabira inicia monitoramento digital',
-        timestamp: '5h atrás',
-        details: 'Novo módulo liberado para apoiar gestores no acompanhamento das ações e resultados.',
-        imageGradient: 'from-violet-600 to-purple-500',
-        likes: 45,
-        footerContext: 'Etapa concluída no processo de transformação digital',
-        created_at: new Date().toISOString()
-    }
-];
+// MOCK_ANNOUNCEMENTS removed in favor of API
+
 
 // --- Components ---
 
@@ -96,21 +60,23 @@ const Carousel = ({ items }: { items: Announcement[] }) => {
 
     return (
         <div className="relative group rounded-3xl overflow-hidden shadow-xl mb-8 h-[300px]">
-            <div className="absolute inset-0 bg-slate-900" />
+            {/* Background base - lighter to let image show */}
+            <div className="absolute inset-0 bg-slate-900/20" />
 
             <AnimatePresence mode="wait">
                 <motion.img
                     key={current.imageUrl}
                     src={current.imageUrl}
                     initial={{ opacity: 0, scale: 1.05 }}
-                    animate={{ opacity: 0.5, scale: 1 }}
+                    animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 1 }}
-                    className="absolute inset-0 w-full h-full object-cover mix-blend-overlay"
+                    transition={{ duration: 0.8 }}
+                    className="absolute inset-0 w-full h-full object-cover"
                 />
             </AnimatePresence>
 
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent flex flex-col justify-end p-8">
+            {/* Gradient overlay for text readability - mainly at bottom */}
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent flex flex-col justify-end p-8">
                 <motion.div
                     key={current.id}
                     initial={{ opacity: 0, x: -20 }}
@@ -156,6 +122,148 @@ const Carousel = ({ items }: { items: Announcement[] }) => {
                 </button>
             </div>
         </div>
+    );
+};
+
+const AnnouncementCard = ({ announcement, index = 0 }: { announcement: Announcement; index?: number }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const MAX_LENGTH = 180; // Characters before truncation
+
+    const shouldTruncate = announcement.content.length > MAX_LENGTH;
+    const displayContent = isExpanded || !shouldTruncate
+        ? announcement.content
+        : announcement.content.slice(0, MAX_LENGTH) + '...';
+
+    const isHighPriority = announcement.priority === 'high';
+
+    return (
+        <motion.article
+            layout
+            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{
+                duration: 0.4,
+                delay: index * 0.1,
+                ease: [0.25, 0.46, 0.45, 0.94]
+            }}
+            whileHover={{ y: -4, transition: { duration: 0.2 } }}
+            className={`
+                group relative overflow-hidden rounded-2xl 
+                bg-white dark:bg-slate-900
+                border border-slate-100 dark:border-slate-800
+                shadow-sm hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50
+                transition-shadow duration-300
+            `}
+        >
+            {/* Gradient Accent Line */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${isHighPriority
+                ? 'bg-gradient-to-b from-amber-400 via-orange-500 to-red-500'
+                : 'bg-gradient-to-b from-teal-400 via-cyan-500 to-blue-500'
+                }`} />
+
+            {/* Decorative Background Pattern */}
+            <div className={`absolute top-0 right-0 w-32 h-32 opacity-[0.03] ${isHighPriority ? 'text-amber-500' : 'text-teal-500'
+                }`}>
+                <Megaphone size={128} className="transform rotate-12" />
+            </div>
+
+            {/* Header */}
+            <div className={`relative px-6 py-4 border-b ${isHighPriority
+                ? 'border-amber-100/50 bg-gradient-to-r from-amber-50/80 to-orange-50/40'
+                : 'border-teal-50/50 bg-gradient-to-r from-teal-50/50 to-cyan-50/30'
+                }`}>
+                <div className="flex items-start gap-4">
+                    {/* Icon */}
+                    <motion.div
+                        whileHover={{ scale: 1.1, rotate: 5 }}
+                        className={`p-3 rounded-xl shadow-lg ${isHighPriority
+                            ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-amber-200/50'
+                            : 'bg-gradient-to-br from-teal-400 to-cyan-500 text-white shadow-teal-200/50'
+                            }`}
+                    >
+                        <Megaphone size={20} />
+                    </motion.div>
+
+                    <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg leading-snug mb-2 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                            {announcement.title}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm ${isHighPriority
+                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
+                                : 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white'
+                                }`}>
+                                {isHighPriority ? '⚡ Importante' : '📢 Comunicado'}
+                            </span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/60 px-2 py-0.5 rounded-full">
+                                <CalendarCheck size={12} />
+                                {new Date(announcement.displayDate).toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                })}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="relative px-6 py-5">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={isExpanded ? 'expanded' : 'collapsed'}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed whitespace-pre-wrap"
+                    >
+                        {displayContent}
+                    </motion.div>
+                </AnimatePresence>
+
+                {/* Read More / Collapse Button */}
+                {shouldTruncate && (
+                    <motion.button
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        whileHover={{ x: 3 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`mt-4 flex items-center gap-2 text-sm font-bold transition-all ${isHighPriority
+                            ? 'text-amber-600 hover:text-amber-700'
+                            : 'text-teal-600 hover:text-teal-700'
+                            }`}
+                    >
+                        <motion.span
+                            animate={{ rotate: isExpanded ? 90 : 0 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            <ChevronRight size={16} />
+                        </motion.span>
+                        {isExpanded ? 'Recolher' : 'Ler mais'}
+                    </motion.button>
+                )}
+
+                {/* Link externo */}
+                {announcement.linkUrl && (
+                    <motion.a
+                        href={announcement.linkUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm hover:shadow-md ${isHighPriority
+                            ? 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 hover:from-amber-100 hover:to-orange-100 border border-amber-100'
+                            : 'bg-gradient-to-r from-teal-50 to-cyan-50 text-teal-700 hover:from-teal-100 hover:to-cyan-100 border border-teal-100'
+                            }`}
+                    >
+                        <TrendingUp size={14} />
+                        Acessar Link
+                        <ChevronRight size={12} />
+                    </motion.a>
+                )}
+            </div>
+        </motion.article>
     );
 };
 
@@ -238,7 +346,7 @@ interface NewsFeedProps {
 
 export const NewsFeed = ({ onOpenRoadmap }: NewsFeedProps) => {
     const { user } = useAuth();
-    const [events, setEvents] = useState(INITIAL_EVENTS);
+    const [events, setEvents] = useState<AutomatedEvent[]>([]);
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
     // Load Automated Events
@@ -246,17 +354,22 @@ export const NewsFeed = ({ onOpenRoadmap }: NewsFeedProps) => {
         const loadNews = async () => {
             // Se tiver usuário logado e com micro, filtra. Senão pega geral.
             const userMicro = user?.microregiaoId;
+
             const data = await loadAnnouncements(userMicro);
+
             setAnnouncements(data);
 
             // Carregar eventos reais
-            const autoEvents = await loadAutomatedEvents(6);
-            if (autoEvents.length > 0) {
-                setEvents(autoEvents);
+            try {
+                const autoEvents = await loadAutomatedEvents(6);
+                setEvents(autoEvents); // Sempre atualiza, mesmo se vazio
+            } catch (err) {
+                console.error('Falha ao carregar eventos:', err);
+                setEvents([]);
             }
         };
         loadNews();
-    }, [user?.microregiaoId]);
+    }, [user?.microregiaoId, user?.role]);
 
     // Like logic
     const handleLike = (id: string) => {
@@ -302,7 +415,32 @@ export const NewsFeed = ({ onOpenRoadmap }: NewsFeedProps) => {
                     <Carousel items={announcements} />
                 </section>
 
-                {/* 2. Automated Feed */}
+                {/* 2. All Announcements (Expandable Cards) */}
+                {announcements.length > 0 && (
+                    <section className="bg-white/50 rounded-3xl p-6 border border-slate-100">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="bg-teal-50 p-2.5 rounded-xl text-teal-600 border border-teal-100">
+                                <Megaphone size={20} />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-800 text-lg leading-none">Todos os Comunicados</h3>
+                                <p className="text-xs text-slate-400 font-medium mt-0.5">
+                                    {announcements.length} {announcements.length === 1 ? 'comunicado' : 'comunicados'} disponíveis
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <AnimatePresence>
+                                {announcements.map((announcement, index) => (
+                                    <AnnouncementCard key={announcement.id} announcement={announcement} index={index} />
+                                ))}
+                            </AnimatePresence>
+                        </div>
+                    </section>
+                )}
+
+                {/* 3. Automated Feed */}
                 <section className="bg-slate-50/50 rounded-3xl p-6 border border-slate-100">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="bg-white p-2.5 rounded-xl text-blue-600 shadow-sm border border-slate-100">

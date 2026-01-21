@@ -1675,7 +1675,7 @@ export async function loadAnnouncements(microregiaoId?: string): Promise<Announc
         }));
 
         // Filtrar no client-side se necessário (já que target_micros é array)
-        if (microregiaoId) {
+        if (microregiaoId && microregiaoId !== 'all') {
             announcements = announcements.filter(a =>
                 a.targetMicros.length === 0 ||
                 a.targetMicros.includes('all') ||
@@ -1748,6 +1748,74 @@ export async function createAnnouncement(data: Omit<Announcement, 'id' | 'create
             .single();
 
         if (error) throw error;
+
+        // ✅ Notification Logic (Fire and Forget)
+        (async () => {
+            try {
+                console.log('🔔 [NOTIFICATION] Starting notification creation for announcement:', result.title);
+                console.log('🔔 [NOTIFICATION] Target micros:', result.target_micros);
+
+                let profilesQuery = supabase.from('profiles').select('id, nome, email, role, microregiao_id');
+
+                // Filter by target micros if not 'all'
+                if (!result.target_micros.includes('all')) {
+                    console.log('🔔 [NOTIFICATION] Filtering by specific micros:', result.target_micros);
+                    profilesQuery = profilesQuery.in('microregiao_id', result.target_micros);
+                } else {
+                    console.log('🔔 [NOTIFICATION] Sending to ALL users (global)');
+                }
+
+                const { data: profiles, error: profilesError } = await profilesQuery;
+
+                if (profilesError) {
+                    console.error('❌ [NOTIFICATION] Error fetching profiles:', profilesError);
+                    console.error('❌ [NOTIFICATION] Error details:', JSON.stringify(profilesError, null, 2));
+                    return;
+                }
+
+                console.log(`🔔 [NOTIFICATION] Found ${profiles?.length || 0} profiles to notify`);
+                if (profiles && profiles.length > 0) {
+                    console.log('🔔 [NOTIFICATION] Sample profile:', profiles[0]);
+                }
+
+                if (profiles && profiles.length > 0) {
+                    const notifications = profiles.map(p => ({
+                        user_id: p.id,
+                        request_type: 'announcement',
+                        status: 'pending',
+                        content: result.title, // Title as notification content
+                        admin_notes: 'Visualizar no Mural',
+                        created_at: new Date().toISOString()
+                    }));
+
+                    console.log(`🔔 [NOTIFICATION] Attempting to insert ${notifications.length} notifications...`);
+                    console.log('🔔 [NOTIFICATION] Sample notification:', notifications[0]);
+
+                    // Batch insert
+                    const { error: notifError, count, data: insertedData } = await supabase
+                        .from('user_requests')
+                        .insert(notifications)
+                        .select('id', { count: 'exact' });
+
+                    if (notifError) {
+                        console.error('❌ [NOTIFICATION] CRITICAL: Error creating notifications:', notifError);
+                        console.error('❌ [NOTIFICATION] Error message:', notifError.message);
+                        console.error('❌ [NOTIFICATION] Error code:', notifError.code);
+                        console.error('❌ [NOTIFICATION] Error hint:', notifError.hint);
+                        console.error('❌ [NOTIFICATION] Error details:', notifError.details);
+                    } else {
+                        console.log(`✅ [NOTIFICATION] SUCCESS: Created ${notifications.length} notifications (DB Count: ${count}) for announcement.`);
+                        console.log('✅ [NOTIFICATION] Inserted IDs:', insertedData?.map(d => d.id));
+                    }
+                } else {
+                    console.warn('⚠️ [NOTIFICATION] WARNING: No profiles found for notification target:', result.target_micros);
+                }
+            } catch (err) {
+                console.error('❌ [NOTIFICATION] CRITICAL: Unexpected error in notification logic:', err);
+                console.error('❌ [NOTIFICATION] Stack trace:', err instanceof Error ? err.stack : 'No stack trace');
+            }
+
+        })();
 
         return {
             id: result.id,

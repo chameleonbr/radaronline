@@ -1792,10 +1792,10 @@ export async function createAnnouncement(data: Omit<Announcement, 'id' | 'create
                     console.log('🔔 [NOTIFICATION] Sample notification:', notifications[0]);
 
                     // Batch insert
-                    const { error: notifError, count, data: insertedData } = await supabase
+                    const { error: notifError, data: insertedData } = await supabase
                         .from('user_requests')
                         .insert(notifications)
-                        .select('id', { count: 'exact' });
+                        .select('id');
 
                     if (notifError) {
                         console.error('❌ [NOTIFICATION] CRITICAL: Error creating notifications:', notifError);
@@ -1804,7 +1804,7 @@ export async function createAnnouncement(data: Omit<Announcement, 'id' | 'create
                         console.error('❌ [NOTIFICATION] Error hint:', notifError.hint);
                         console.error('❌ [NOTIFICATION] Error details:', notifError.details);
                     } else {
-                        console.log(`✅ [NOTIFICATION] SUCCESS: Created ${notifications.length} notifications (DB Count: ${count}) for announcement.`);
+                        console.log(`✅ [NOTIFICATION] SUCCESS: Created ${notifications.length} notifications for announcement.`);
                         console.log('✅ [NOTIFICATION] Inserted IDs:', insertedData?.map(d => d.id));
                     }
                 } else {

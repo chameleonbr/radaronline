@@ -3,6 +3,7 @@ import type { Action, ActionComment, TeamMember, RaciMember, ActionTag } from '.
 import { generateActionUid } from '../types';
 import { loggingService } from './loggingService';
 import { log, logWarn, logError } from '../lib/logger';
+import type { Announcement } from '../types/announcement.types';
 
 // =====================================
 // TIPOS PARA O BANCO DE DADOS
@@ -367,6 +368,28 @@ export async function updateAction(
             changes: Object.keys(updates),
             displayId: uid
         });
+
+        // GENERA EVENTO AUTOMÁTICO SE AÇÃO FOI CONCLUÍDA
+        if (updates.status === 'Concluído' || updates.progress === 100) {
+            // Verifica se a ação JÁ não estava concluída antes (evitar duplicidade)
+            // Como só temos o `updates` e o `updatedAction`, assumimos que foi uma mudança de estado agora.
+            // Idealmente checaríamos o estado anterior, mas para MVP vamos assumir que se mandou update de status/progress é novo.
+
+
+
+            // Buscar nome da micro
+            const { data: micro } = await supabase.from('microregioes').select('nome').eq('id', updatedAction.microregiaoId).single();
+            const microNome = micro?.nome || updatedAction.microregiaoId;
+
+            await recordAutomatedEvent({
+                type: 'plan_completed',
+                municipality: microNome,
+                title: `${microNome} concluiu a ação: ${updatedAction.title}`,
+                details: `Ação estratégica finalizada com sucesso, contribuindo para o plano regional.`,
+                imageGradient: 'from-blue-600 to-cyan-500',
+                footerContext: 'Marco de Execução'
+            });
+        }
 
         return updatedAction;
     } catch (error) {
@@ -1012,11 +1035,28 @@ export async function addTeamMember(input: {
             newMember.isRegistered = false;
         }
 
+        // TRIGGER AUTOMATED EVENT: New Team Member
+        const microName = await getMicroName(input.microregiaoId);
+        await recordAutomatedEvent({
+            type: 'new_user',
+            municipality: microName,
+            title: `${input.name} entrou para a equipe`,
+            details: `Novo reforço para a gestão da saúde em ${microName}.`,
+            imageGradient: 'from-emerald-600 to-teal-500',
+            footerContext: 'Expansão da Rede de Colaboradores'
+        });
+
         return newMember;
     } catch (error) {
         logError('dataService', 'Erro inesperado ao adicionar membro:', error);
         throw error;
     }
+}
+
+// Helper para buscar nome da microrregião
+async function getMicroName(id: string): Promise<string> {
+    const { data } = await supabase.from('microregioes').select('nome').eq('id', id).single();
+    return data?.nome || id;
 }
 
 /**
@@ -1041,6 +1081,8 @@ async function notifyAdminsOfPendingUser(name: string, email: string, microId: s
 
     await supabase.from('user_requests').insert(notifications);
 }
+
+
 
 /**
  * Remove membro da equipe
@@ -1588,4 +1630,271 @@ export async function deleteTag(tagId: string): Promise<void> {
         logError('dataService', 'Erro inesperado ao excluir tag:', error);
         throw error;
     }
+}
+
+// =====================================
+// ANNOUNCEMENTS (MURAL) - CRUD
+// =====================================
+
+/**
+ * Carrega anúncios ativos
+ * @param microregiaoId - Opcional: Se fornecido, filtra anúncios direcionados a esta micro (ou 'all')
+ */
+export async function loadAnnouncements(microregiaoId?: string): Promise<Announcement[]> {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        const query = supabase
+            .from('announcements')
+            .select('*')
+            .eq('is_active', true)
+            .or(`expiration_date.is.null,expiration_date.gte.${today}`)
+            .order('display_date', { ascending: false })
+            .order('created_at', { ascending: false });
+
+        const { data, error } = await query;
+
+        if (error) {
+            logError('dataService', 'Erro ao carregar anúncios:', error);
+            return [];
+        }
+
+        let announcements = (data || []).map((row: any) => ({
+            id: row.id,
+            title: row.title,
+            content: row.content,
+            type: row.type,
+            priority: row.priority,
+            displayDate: row.display_date,
+            targetMicros: row.target_micros || [],
+            linkUrl: row.link_url,
+            imageUrl: row.image_url,
+            isActive: row.is_active,
+            createdBy: row.created_by,
+            createdAt: row.created_at
+        }));
+
+        // Filtrar no client-side se necessário (já que target_micros é array)
+        if (microregiaoId) {
+            announcements = announcements.filter(a =>
+                a.targetMicros.length === 0 ||
+                a.targetMicros.includes('all') ||
+                a.targetMicros.includes(microregiaoId)
+            );
+        }
+
+        return announcements;
+    } catch (error) {
+        logError('dataService', 'Erro inesperado ao carregar anúncios:', error);
+        return [];
+    }
+}
+
+/**
+ * Carrega TODOS anúncios (para admin)
+ */
+export async function loadAllAnnouncementsForAdmin(): Promise<Announcement[]> {
+    try {
+        const { data, error } = await supabase
+            .from('announcements')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        return (data || []).map((row: any) => ({
+            id: row.id,
+            title: row.title,
+            content: row.content,
+            type: row.type,
+            priority: row.priority,
+            displayDate: row.display_date,
+            targetMicros: row.target_micros || [],
+            linkUrl: row.link_url,
+            imageUrl: row.image_url,
+            isActive: row.is_active,
+            expirationDate: row.expiration_date,
+            createdBy: row.created_by,
+            createdAt: row.created_at
+        }));
+    } catch (error) {
+        logError('dataService', 'Erro admin load announcements:', error);
+        return [];
+    }
+}
+
+export async function createAnnouncement(data: Omit<Announcement, 'id' | 'createdAt' | 'createdBy'>): Promise<Announcement | null> {
+    try {
+        const { data: user } = await supabase.auth.getUser();
+
+        const dbPayload = {
+            title: data.title,
+            content: data.content,
+            type: data.type,
+            priority: data.priority,
+            display_date: data.displayDate,
+            expiration_date: data.expirationDate || null,
+            target_micros: data.targetMicros,
+            link_url: data.linkUrl,
+            image_url: data.imageUrl,
+            is_active: data.isActive,
+            created_by: user.user?.id
+        };
+
+        const { data: result, error } = await supabase
+            .from('announcements')
+            .insert(dbPayload)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        return {
+            id: result.id,
+            title: result.title,
+            content: result.content,
+            type: result.type,
+            priority: result.priority,
+            displayDate: result.display_date,
+            targetMicros: result.target_micros,
+            linkUrl: result.link_url,
+            imageUrl: result.image_url,
+            isActive: result.is_active,
+            createdBy: result.created_by,
+            createdAt: result.created_at
+        };
+    } catch (error) {
+        logError('dataService', 'Erro ao criar anúncio:', error);
+        throw error;
+    }
+}
+
+export async function updateAnnouncement(id: string, data: Partial<Omit<Announcement, 'id' | 'createdAt' | 'createdBy'>>): Promise<void> {
+    try {
+        const dbPayload: any = {};
+        if (data.title !== undefined) dbPayload.title = data.title;
+        if (data.content !== undefined) dbPayload.content = data.content;
+        if (data.type !== undefined) dbPayload.type = data.type;
+        if (data.priority !== undefined) dbPayload.priority = data.priority;
+        if (data.displayDate !== undefined) dbPayload.display_date = data.displayDate;
+        if (data.expirationDate !== undefined) dbPayload.expiration_date = data.expirationDate || null;
+        if (data.targetMicros !== undefined) dbPayload.target_micros = data.targetMicros;
+        if (data.linkUrl !== undefined) dbPayload.link_url = data.linkUrl;
+        if (data.imageUrl !== undefined) dbPayload.image_url = data.imageUrl;
+        if (data.isActive !== undefined) dbPayload.is_active = data.isActive;
+
+        const { error } = await supabase
+            .from('announcements')
+            .update(dbPayload)
+            .eq('id', id);
+
+        if (error) throw error;
+    } catch (error) {
+        logError('dataService', 'Erro ao atualizar anúncio:', error);
+        throw error;
+    }
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('announcements')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        logError('dataService', 'Erro ao deletar anúncio:', error);
+        throw error;
+    }
+}
+
+export async function toggleAnnouncementActive(id: string, currentState: boolean): Promise<void> {
+    const { error } = await supabase
+        .from('announcements')
+        .update({ is_active: !currentState })
+        .eq('id', id);
+
+    if (error) throw error;
+}
+
+// =====================================
+// AUTOMATED EVENTS (ACONTECENDO AGORA)
+// =====================================
+
+export type AutomatedEventType = 'plan_completed' | 'goal_reached' | 'new_user' | 'system_milestone';
+
+export interface AutomatedEvent {
+    id: string;
+    type: AutomatedEventType;
+    municipality: string;
+    title: string;
+    details?: string;
+    imageGradient: string;
+    likes: number;
+    footerContext?: string;
+    timestamp?: string; // For display (calculated from created_at)
+    created_at: string;
+}
+
+/**
+ * Carrega os últimos eventos automáticos
+ */
+export async function loadAutomatedEvents(limit: number = 6): Promise<AutomatedEvent[]> {
+    try {
+        const { data, error } = await supabase
+            .from('automated_events')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (error) throw error;
+
+        return (data || []).map((row: any) => ({
+            id: row.id,
+            type: row.type,
+            municipality: row.municipality,
+            title: row.title,
+            details: row.details,
+            imageGradient: row.image_gradient,
+            likes: row.likes,
+            footerContext: row.footer_context,
+            timestamp: timeSince(new Date(row.created_at)),
+            created_at: row.created_at
+        }));
+    } catch (error) {
+        logError('dataService', 'Erro ao carregar eventos automáticos:', error);
+        return [];
+    }
+}
+
+/**
+ * Registra um novo evento automático
+ */
+export async function recordAutomatedEvent(event: Omit<AutomatedEvent, 'id' | 'timestamp' | 'created_at' | 'likes'>): Promise<void> {
+    try {
+        await supabase
+            .from('automated_events')
+            .insert({
+                type: event.type,
+                municipality: event.municipality,
+                title: event.title,
+                details: event.details,
+                image_gradient: event.imageGradient,
+                footer_context: event.footerContext
+            });
+    } catch (error) {
+        // Silent fail to not disrupt main flow
+        console.error('Falha ao registrar evento automático:', error);
+    }
+}
+
+/**
+ * Helper para formatar tempo relativo (ex: "2h atrás")
+ */
+function timeSince(date: Date) {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    let interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + "h atrás";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + "min atrás";
+    return "agora mesmo";
 }

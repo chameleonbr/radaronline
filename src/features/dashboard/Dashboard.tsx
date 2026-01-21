@@ -70,7 +70,7 @@ function SafeResponsiveContainer({ children, minHeight }: { children: React.Reac
   }, []);
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: minHeight ? `${minHeight}px` : undefined }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: minHeight ? `${minHeight}px` : '250px' }}>
       {dimensions ? (
         <ResponsiveContainer width={dimensions.width} height={dimensions.height}>
           {children}

@@ -23,6 +23,7 @@ import {
   MapPin,
   Target,
   UserPlus,
+  Megaphone,
 } from 'lucide-react';
 import { NotificationBell } from '../../components/common/NotificationBell';
 import { ZoomControl } from '../../components/common/ZoomControl';
@@ -49,15 +50,17 @@ import {
   PendingRegistrationsPanel,
   RequestsManagement,
 } from './dashboard';
+import { AnnouncementsManagement } from './AnnouncementsManagement';
 import MicroDetailModal from './dashboard/MicroDetailModal';
 import { AnalyticsDashboard } from './dashboard/AnalyticsDashboard';
 import { UserSettingsModal } from '../settings/UserSettingsModal';
-import { ConfirmModal, useToast } from '../../components/common';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
+import { useToast } from '../../components/common/Toast';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
 import { log, logError } from '../../lib/logger';
 import { useResponsive } from '../../hooks/useResponsive';
 
-type TabType = 'dashboard' | 'usuarios' | 'microregioes' | 'ranking' | 'atividades' | 'requests';
+type TabType = 'dashboard' | 'usuarios' | 'microregioes' | 'ranking' | 'atividades' | 'requests' | 'communication';
 
 interface AdminPanelProps {
   onBack?: () => void;
@@ -371,6 +374,7 @@ export function AdminPanel(props: AdminPanelProps) {
     { id: 'ranking', icon: Trophy, label: 'Ranking' },
     { id: 'atividades', icon: Activity, label: 'Atividades' },
     { id: 'requests', icon: Bell, label: 'Pedidos' },
+    { id: 'communication', icon: Megaphone, label: 'Mural' },
   ] as const;
 
   // ========== MOBILE LAYOUT ==========
@@ -748,6 +752,13 @@ export function AdminPanel(props: AdminPanelProps) {
               </div>
             )}
 
+            {/* Tab: Comunicação Mobile */}
+            {activeTab === 'communication' && (
+              <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden min-h-[60vh]">
+                <AnnouncementsManagement />
+              </div>
+            )}
+
           </div>
         </main>
 
@@ -996,7 +1007,7 @@ export function AdminPanel(props: AdminPanelProps) {
         </header>
 
         {/* Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <main className={`mx-auto px-4 sm:px-6 py-6 ${activeTab === 'communication' ? 'max-w-[1600px] w-full' : 'max-w-7xl'}`}>
 
           {/* Tab: Dashboard */}
           {activeTab === 'dashboard' && (
@@ -1087,6 +1098,13 @@ export function AdminPanel(props: AdminPanelProps) {
           {activeTab === 'requests' && (
             <div className="h-[calc(100vh-140px)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
               <RequestsManagement />
+            </div>
+          )}
+
+          {/* Tab: Communication (Mural) */}
+          {activeTab === 'communication' && (
+            <div className="h-[calc(100vh-140px)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+              <AnnouncementsManagement />
             </div>
           )}
 

@@ -5,12 +5,9 @@ import { staggerContainerFast, staggerItem } from '../../lib/motion';
 import { Action, Status, RaciRole, TeamMember, ActionComment } from '../../types';
 import { formatDateBr, getTodayStr } from '../../lib/date';
 import { getActionNumber, getActivityPrefixFromActionId, getActionDisplayId } from '../../lib/text';
-import {
-  StatusBadge,
-  RaciCompactPill,
-  RaciTag,
-  SearchFilter
-} from '../../components/common';
+import { StatusBadge } from '../../components/common/StatusBadge';
+import { RaciCompactPill, RaciTag } from '../../components/common/RaciPill';
+import { SearchFilter } from '../../components/common/SearchFilter';
 import { LoadingButton } from '../../components/common/LoadingSpinner';
 import { Tooltip } from '../../components/common/Tooltip';
 import { Select } from '../../ui/Select';
@@ -111,7 +108,7 @@ const CommentItem: React.FC<{ comment: ActionComment }> = ({ comment }) => {
 // =====================================
 // COMPONENTE PRINCIPAL
 // =====================================
-export const ActionTable: React.FC<ActionTableProps> = ({
+const ActionTableImpl: React.FC<ActionTableProps> = ({
   actions,
   selectedActivity,
   team,
@@ -620,3 +617,5 @@ export const ActionTable: React.FC<ActionTableProps> = ({
     </div>
   );
 };
+
+export const ActionTable = React.memo(ActionTableImpl);

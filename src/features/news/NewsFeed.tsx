@@ -13,12 +13,15 @@ import {
     Trophy,
     Zap,
     MapPin,
-    Lightbulb
+    Lightbulb,
+    Megaphone
 } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import confetti from 'canvas-confetti';
 
-// --- Types ---
+import { loadAnnouncements, loadAutomatedEvents } from '../../services/dataService';
+import { useAuth } from '../../auth/AuthContext';
+import { Announcement } from '../../types/announcement.types';
 
 type EventType = 'plan_completed' | 'goal_reached' | 'new_user' | 'system_milestone';
 
@@ -34,35 +37,7 @@ interface AutomatedEvent {
     footerContext?: string; // New field for "effort/context" msg
 }
 
-interface Announcement {
-    id: string;
-    title: string;
-    content: string;
-    date: string;
-    priority: 'normal' | 'high';
-    imageUrl?: string;
-}
-
-// --- Mock Data ---
-
-const MOCK_ANNOUNCEMENTS: Announcement[] = [
-    {
-        id: 'a1',
-        title: '⚠️ Manutenção Programada: Módulo de RAG',
-        content: 'O sistema passará por atualização neste domingo (25/02) das 08h às 12h para inclusão dos novos indicadores estaduais.',
-        date: '19/02/2025',
-        priority: 'high',
-        imageUrl: 'https://images.unsplash.com/photo-1551636898-4007baf03c15?q=80&w=2000&auto=format&fit=crop'
-    },
-    {
-        id: 'a2',
-        title: 'Novo Tutorial: Como gerar relatórios PDF',
-        content: 'Disponibilizamos um guia rápido na central de ajuda ensinando a exportar dados por UBS. Confira agora!',
-        date: '18/02/2025',
-        priority: 'normal',
-        imageUrl: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2000&auto=format&fit=crop'
-    }
-];
+// Removendo MOCK_ANNOUNCEMENTS em favor da API real
 
 const INITIAL_EVENTS: AutomatedEvent[] = [
     {
@@ -109,11 +84,23 @@ const Carousel = ({ items }: { items: Announcement[] }) => {
     const prev = () => setCurrentIndex(prev => (prev - 1 + items.length) % items.length);
 
     useEffect(() => {
+        if (items.length <= 1) return;
         const timer = setInterval(() => {
             setCurrentIndex(prev => (prev + 1) % items.length);
         }, 8000);
         return () => clearInterval(timer);
     }, [items.length]);
+
+    if (items.length === 0) {
+        return (
+            <div className="relative rounded-3xl overflow-hidden shadow-xl mb-8 h-[200px] bg-slate-100 flex items-center justify-center">
+                <div className="text-center text-slate-400">
+                    <Megaphone size={48} className="mx-auto mb-2 opacity-30" />
+                    <p>Sem novidades no momento</p>
+                </div>
+            </div>
+        );
+    }
 
     const current = items[currentIndex];
 
@@ -147,7 +134,7 @@ const Carousel = ({ items }: { items: Announcement[] }) => {
                             {current.priority === 'high' ? 'Importante' : 'Novidade'}
                         </span>
                         <span className="text-white/70 text-xs font-medium flex items-center gap-1">
-                            <CalendarCheck size={12} /> {current.date}
+                            <CalendarCheck size={12} /> {new Date(current.displayDate).toLocaleDateString('pt-BR')}
                         </span>
                     </div>
 
@@ -160,7 +147,17 @@ const Carousel = ({ items }: { items: Announcement[] }) => {
                 </motion.div>
             </div>
 
-            <div className="absolute bottom-6 right-6 flex gap-2">
+            {current.linkUrl && (
+                <a
+                    href={current.linkUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="absolute inset-0 z-10 cursor-pointer"
+                    title={`Visitar ${current.title}`}
+                />
+            )}
+
+            <div className="absolute bottom-6 right-6 flex gap-2 z-20">
                 <button onClick={prev} className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white backdrop-blur-md transition-all border border-white/10">
                     <ChevronLeft size={16} />
                 </button>
@@ -250,7 +247,26 @@ interface NewsFeedProps {
 }
 
 export const NewsFeed = ({ onOpenRoadmap }: NewsFeedProps) => {
+    const { user } = useAuth();
     const [events, setEvents] = useState(INITIAL_EVENTS);
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+    // Load Automated Events
+    useEffect(() => {
+        const loadNews = async () => {
+            // Se tiver usuário logado e com micro, filtra. Senão pega geral.
+            const userMicro = user?.microregiaoId;
+            const data = await loadAnnouncements(userMicro);
+            setAnnouncements(data);
+
+            // Carregar eventos reais
+            const autoEvents = await loadAutomatedEvents(6);
+            if (autoEvents.length > 0) {
+                setEvents(autoEvents);
+            }
+        };
+        loadNews();
+    }, [user?.microregiaoId]);
 
     // Like logic
     const handleLike = (id: string) => {
@@ -293,7 +309,7 @@ export const NewsFeed = ({ onOpenRoadmap }: NewsFeedProps) => {
 
                 {/* 1. Carousel */}
                 <section>
-                    <Carousel items={MOCK_ANNOUNCEMENTS} />
+                    <Carousel items={announcements} />
                 </section>
 
                 {/* 2. Automated Feed */}

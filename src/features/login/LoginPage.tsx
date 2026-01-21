@@ -211,6 +211,8 @@ export function LoginPage() {
             <img
               src="/loginlogo2.webp"
               alt="Logos SUS Digital e SES"
+              width="640"
+              height="360"
               className="w-[40rem] h-auto object-contain opacity-40 hover:opacity-60 transition-opacity duration-500"
               style={{ filter: 'brightness(0) invert(1)' }}
             />

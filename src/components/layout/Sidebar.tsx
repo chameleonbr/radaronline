@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronLeft, ChevronRight, Home, Target, Settings, LogOut, Shield, Trash2, Plus, Edit2, LayoutDashboard, Activity as ActivityIcon, Users, Trophy, Triangle, Calendar, ClipboardList, MapPin, Newspaper, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Target, Settings, LogOut, Shield, Trash2, Plus, Edit2, LayoutDashboard, Activity as ActivityIcon, Users, Trophy, Triangle, Calendar, ClipboardList, MapPin, Newspaper, BarChart3, Megaphone } from 'lucide-react';
 
 import { slideInLeft, staggerContainer, staggerItem, buttonTap } from '../../lib/motion';
 import { Objective, Activity as _ActivityType } from '../../types';
@@ -556,6 +556,13 @@ const SidebarContent: React.FC<SidebarProps> = ({
                   label="Solicitações"
                   isActive={adminActiveTab === 'requests'}
                   onClick={() => onAdminTabChange('requests')}
+                  collapsed={!isOpen}
+                />
+                <SidebarItem
+                  icon={Megaphone}
+                  label="Mural"
+                  isActive={adminActiveTab === 'communication'}
+                  onClick={() => onAdminTabChange('communication')}
                   collapsed={!isOpen}
                 />
               </>

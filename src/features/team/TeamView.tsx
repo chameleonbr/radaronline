@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { TeamMember } from '../../types';
 import { getMicroregiaoById, getMunicipiosByMicro } from '../../data/microregioes';
-import { ConfirmModal } from '../../components/common';
+import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { logError } from '../../lib/logger';
 import {
   Mail, MapPin, Edit3, Trash2, Plus,
@@ -9,7 +9,7 @@ import {
   ChevronDown, Filter, Loader2, AlertTriangle
 } from 'lucide-react';
 
-import { useToast } from '../../components/common';
+import { useToast } from '../../components/common/Toast';
 
 // Melhores Práticas: Definir papeis padrão para evitar "Lider", "Chefe", "Resp." misturados
 const ROLES_OPTIONS = [

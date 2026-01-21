@@ -173,7 +173,10 @@ export const Header: React.FC<HeaderProps> = ({
             )
           ) : (
             <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 leading-tight">
-              {currentNav === 'home' ? 'Visão Geral' : 'Configurações'}
+              {currentNav === 'home' ? 'Visão Geral' :
+                currentNav === 'news' ? 'Mural da Rede' :
+                  currentNav === 'dashboard' ? 'Relatórios' :
+                    'Configurações'}
             </h1>
           )}
         </div>

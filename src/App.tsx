@@ -1,29 +1,23 @@
-import { useState, useMemo, useRef, useEffect, useCallback, Suspense } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, Suspense, lazy } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useAppData } from './hooks/useAppData';
 
 
 // Types
 import {
   Status,
-  RaciRole,
   Action,
   Objective,
   GanttRange,
-  TeamMember,
-  filterActionsByMicro,
-  findActionByUid,
-  getNextActionNumber
+  getNextActionNumber,
+  filterActionsByMicro
 } from './types';
 
 // Lib
-import { formatISODate, parseDateLocal } from './lib/date';
-import { clampProgress } from './lib/validation';
 import { log, logError } from './lib/logger';
 import { getActivityDisplayId, getObjectiveTitleWithoutNumber } from './lib/text';
-import { filterOrphanedActions } from './lib/actionValidation';
-import { getCache, setCache, CACHE_KEYS } from './lib/sessionCache';
 
-// Data - Apenas constantes de configuração, sem mocks
+// Data - Apenas constantes de configuração
 import { MICROREGIOES } from './data/microregioes';
 
 // Services - Fonte única de dados
@@ -37,6 +31,7 @@ import { useAuthSafe } from './auth/AuthContext';
 // Hooks
 import { useResponsive } from './hooks/useMediaQuery';
 import { AnalyticsProvider } from './hooks/useAnalytics';
+import { useActionHandlers } from './hooks/useActionHandlers';
 
 // Layout Components
 import { Sidebar } from './components/layout/Sidebar';
@@ -57,36 +52,30 @@ import { EditNameModal } from './components/common/EditNameModal';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { DemoBanner } from './components/common/DemoBanner';
 
-// Feature Components - Mantidos síncronos (leves ou essenciais para primeiro render)
+// Feature Components
 import { MunicipalityOnboardingModal } from './components/auth/MunicipalityOnboardingModal';
 
-// Lazy loaded components - Carregados sob demanda para melhor performance inicial
-import { lazy } from 'react';
-
-// Login - lazy porque usuário autenticado não precisa
+// Lazy loaded components
 const LoginPage = lazy(() => import('./features/login/LoginPage').then(m => ({ default: m.LoginPage })));
 const LgpdConsent = lazy(() => import('./features/login/LgpdConsent').then(m => ({ default: m.LgpdConsent })));
 const LandingOnboarding = lazy(() => import('./features/login/LandingOnboarding').then(m => ({ default: m.LandingOnboarding })));
 
-// Dashboard e Admin - lazy carregados após auth
+// Dashboard e Admin
 const Dashboard = lazy(() => import('./features/dashboard').then(m => ({ default: m.Dashboard })));
 const OptimizedView = lazy(() => import('./features/dashboard').then(m => ({ default: m.OptimizedView })));
 const GanttChart = lazy(() => import('./features/gantt/GanttChart').then(m => ({ default: m.GanttChart })));
 const AdminPanel = lazy(() => import('./features/admin').then(m => ({ default: m.AdminPanel })));
 const LinearCalendar = lazy(() => import('./features/admin/dashboard/LinearCalendar').then(m => ({ default: m.LinearCalendar })));
 
-// Componentes de ações - lazy porque dependem de dados carregados
+// Componentes de ações
 const TeamView = lazy(() => import('./features/team/TeamView').then(m => ({ default: m.TeamView })));
 const ActivityTabs = lazy(() => import('./features/actions/ActivityTabs').then(m => ({ default: m.ActivityTabs })));
 const ActionTable = lazy(() => import('./features/actions/ActionTable').then(m => ({ default: m.ActionTable })));
 const ActionDetailModal = lazy(() => import('./features/actions/ActionDetailModal').then(m => ({ default: m.ActionDetailModal })));
 
-// Settings e News - lazy carregados quando acessados
+// Settings e News
 const UserSettingsModal = lazy(() => import('./features/settings/UserSettingsModal').then(m => ({ default: m.UserSettingsModal })));
 const NewsFeed = lazy(() => import('./features/news/NewsFeed').then(m => ({ default: m.NewsFeed })));
-
-// Mock Data for Demo Mode
-import { DEMO_OBJECTIVES, DEMO_ACTIVITIES, DEMO_ACTIONS, DEMO_TEAM } from './data/mockData';
 
 // =====================================
 // COMPONENTE PRINCIPAL DO APP
@@ -113,8 +102,27 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<'main' | 'admin' | 'lgpd'>('main');
   const [didAutoOpenAdmin, setDidAutoOpenAdmin] = useState(false);
   const [hasViewedLanding, setHasViewedLanding] = useState(false);
-  const [selectedObjective, setSelectedObjective] = useState<number>(1);
-  const [selectedActivity, setSelectedActivity] = useState<string>('1.1'); // Default inicial
+  // --- DATA STATE (via useAppData) ---
+  const {
+    actions,
+    setActions,
+    objectives,
+    setObjectives,
+    activities,
+    setActivities,
+    teamsByMicro,
+    setTeamsByMicro,
+    // isDataLoading,  // Unused
+    // dataError,      // Unused
+    // loadData,       // Unused
+    // refreshActions, // Unused
+    selectedObjective,
+    setSelectedObjective,
+    selectedActivity,
+    setSelectedActivity
+  } = useAppData();
+
+  // --- UI STATE RESTORED ---
   const [viewMode, setViewMode] = useState<'table' | 'gantt' | 'team' | 'optimized' | 'calendar'>('table');
   const [ganttRange, setGanttRange] = useState<GanttRange>('all');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(!isMobile);
@@ -136,17 +144,8 @@ function AppContent() {
   const [isEditMode, setIsEditMode] = useState(false); // New lifted state
   const activityTabsRef = useRef<HTMLDivElement | null>(null);
 
-  // --- DATA STATE ---
-  const [actions, setActions] = useState<Action[]>([]);
   const actionsRef = useRef<Action[]>(actions); // Referência atualizada para callbacks
-  const [teamsByMicro, setTeamsByMicro] = useState<Record<string, TeamMember[]>>({});
   const [expandedActionUid, setExpandedActionUid] = useState<string | null>(null);
-  const [, setIsDataLoading] = useState<boolean>(true);
-  const [, setDataError] = useState<string | null>(null);
-
-  // --- OBJECTIVES & ACTIVITIES STATE (carregados do banco) ---
-  const [objectives, setObjectives] = useState<{ id: number; title: string; status: 'on-track' | 'delayed' }[]>([]);
-  const [activities, setActivities] = useState<Record<number, { id: string; title: string; description: string }[]>>({});
 
   // Manter ref sincronizada com state
   useEffect(() => {
@@ -410,136 +409,11 @@ function AppContent() {
   }, [viewMode, expandedActionUid]);
 
   // =====================================
-  // CARREGAR DADOS DO SUPABASE
+  // CARREGAR DADOS DO SUPABASE (Delegado para useAppData)
   // =====================================
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setActions([]);
-      setTeamsByMicro({});
-      setObjectives([]);
-      setActivities({});
-      setIsDataLoading(false);
-      return;
-    }
+  // O hook useAppData já gerencia o carregamento inicial e cache.
+  // Mantemos este comentário para clareza.
 
-    const loadData = async () => {
-      setIsDataLoading(true);
-      setDataError(null);
-
-      try {
-        // ✅ DEMO MODE: Usar dados fictícios em vez de carregar do banco
-        if (isDemoMode) {
-          setActions(DEMO_ACTIONS);
-          setTeamsByMicro(DEMO_TEAM);
-          setObjectives(DEMO_OBJECTIVES);
-          setActivities(DEMO_ACTIVITIES);
-          setSelectedObjective(DEMO_OBJECTIVES[0]?.id || 1);
-          setSelectedActivity(DEMO_ACTIVITIES[1]?.[0]?.id || '1.1');
-          setIsDataLoading(false);
-          return;
-        }
-
-        // Carregar ações (filtradas por micro se não for admin vendo todas)
-        const microId = isViewingAllMicros ? undefined : currentMicroId;
-        const cacheKey = microId || 'all';
-
-        // ✅ CACHE-FIRST: Tentar usar dados do cache para render instantâneo
-        const cachedActions = getCache<Action[]>(CACHE_KEYS.ACTIONS, cacheKey);
-        const cachedTeams = getCache<Record<string, TeamMember[]>>(CACHE_KEYS.TEAMS, cacheKey);
-        const cachedObjectives = getCache<{ id: number; title: string; status: 'on-track' | 'delayed' }[]>(CACHE_KEYS.OBJECTIVES, cacheKey);
-        const cachedActivities = getCache<Record<number, { id: string; title: string; description: string }[]>>(CACHE_KEYS.ACTIVITIES, cacheKey);
-
-        const hasCache = cachedActions && cachedTeams && cachedObjectives && cachedActivities;
-
-        // Se tem cache válido, usa imediatamente e carrega do servidor em background
-        if (hasCache) {
-          log('App', '⚡ Usando dados do cache para render instantâneo');
-          setActions(cachedActions);
-          setTeamsByMicro(cachedTeams);
-          setObjectives(cachedObjectives);
-          setActivities(cachedActivities);
-          setIsDataLoading(false);
-
-          // Atualizar seleção baseado no cache
-          if (cachedObjectives.length > 0) {
-            const nextObjectiveId = cachedObjectives.some(o => o.id === selectedObjective)
-              ? selectedObjective
-              : cachedObjectives[0].id;
-            if (nextObjectiveId !== selectedObjective) {
-              setSelectedObjective(nextObjectiveId);
-            }
-            const nextObjectiveActivities = cachedActivities[nextObjectiveId] || [];
-            if (nextObjectiveActivities.length > 0 && !nextObjectiveActivities.some(a => a.id === selectedActivity)) {
-              setSelectedActivity(nextObjectiveActivities[0].id);
-            }
-          }
-        }
-
-        // Carregar todos os dados em paralelo (mesmo que tenha cache, atualiza em background)
-        const [actionsData, teamsData, objectivesData, activitiesData] = await Promise.all([
-          dataService.loadActions(microId),
-          dataService.loadTeams(microId),
-          dataService.loadObjectives(microId),
-          dataService.loadActivities(microId),
-        ]);
-
-        // Filtrar ações órfãs
-        const validActions = filterOrphanedActions(actionsData, activitiesData);
-
-        // ✅ Salvar no cache para próximo reload
-        setCache(CACHE_KEYS.ACTIONS, validActions, cacheKey);
-        setCache(CACHE_KEYS.TEAMS, teamsData, cacheKey);
-        setCache(CACHE_KEYS.OBJECTIVES, objectivesData, cacheKey);
-        setCache(CACHE_KEYS.ACTIVITIES, activitiesData, cacheKey);
-
-        // Atualizar estado com dados frescos
-        setActions(validActions);
-        setTeamsByMicro(teamsData);
-        setObjectives(objectivesData);
-        setActivities(activitiesData);
-
-        // Corrigir seleção usando variáveis locais para evitar estado stale
-        if (objectivesData.length > 0) {
-          // Determinar próximo objetivo selecionado baseado nos dados recém-carregados
-          const nextObjectiveId = objectivesData.some(o => o.id === selectedObjective)
-            ? selectedObjective
-            : objectivesData[0].id;
-
-          // Atualizar objetivo se mudou
-          if (nextObjectiveId !== selectedObjective) {
-            setSelectedObjective(nextObjectiveId);
-          }
-
-          // Usar nextObjectiveId (variável local) para buscar atividades, não selectedObjective (state)
-          const nextObjectiveActivities = activitiesData[nextObjectiveId] || [];
-
-          // Determinar próxima atividade selecionada
-          if (nextObjectiveActivities.length > 0) {
-            const activityStillExists = nextObjectiveActivities.some(a => a.id === selectedActivity);
-            if (!activityStillExists) {
-              setSelectedActivity(nextObjectiveActivities[0].id);
-            }
-          } else {
-            // Se o objetivo não tem atividades, limpa a seleção
-            setSelectedActivity('');
-          }
-        } else {
-          // Se não há objetivos, limpa tudo
-          setSelectedObjective(0);
-          setSelectedActivity('');
-        }
-      } catch (error: any) {
-        logError('App', 'Erro ao carregar dados', error);
-        setDataError(error.message || 'Erro ao carregar dados');
-        showToast('Erro ao carregar dados do servidor. Verifique sua conexão.', 'error');
-      } finally {
-        setIsDataLoading(false);
-      }
-    };
-
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, currentMicroId, isViewingAllMicros]); // showToast é estável, não precisa ser dependência
 
   // =====================================
   // PERMISSION HELPERS
@@ -595,140 +469,45 @@ function AppContent() {
   // ACTION HANDLERS (usam UID)
   // =====================================
 
-  type EditableActionField = 'title' | 'status' | 'startDate' | 'plannedEndDate' | 'endDate' | 'progress' | 'notes';
+  // =====================================
+  // ACTION HANDLERS (Delegado para useActionHandlers)
+  // =====================================
 
-  const handleUpdateAction = useCallback((uid: string, field: EditableActionField | string, value: string | number) => {
-    // Admin pode editar qualquer ação, usuário comum não pode se vendo todas as micros
-    if (isViewingAllMicros && !isAdmin) {
-      showToast('Selecione uma microrregião específica para editar', 'error');
-      return;
-    }
+  const {
+    handleUpdateAction,
+    handleSaveAction,
+    handleCreateAction,
+    handleDeleteAction,
+    handleAddRaci,
+    handleRemoveRaci,
+    handleAddComment
+  } = useActionHandlers({
+    actions,
+    setActions,
+    expandedActionUid,
+    setExpandedActionUid,
+    pendingNewActionUid,
+    setPendingNewActionUid,
 
-    // Usar actionsRef.current para evitar closure stale em updates rápidos
-    const action = findActionByUid(actionsRef.current, uid);
-    if (!action) {
-      showToast('Ação não encontrada', 'error');
-      return;
-    }
+    selectedActivity,
+    currentMicroId,
+    viewMode,
+    setViewMode,
+    isDemoMode,
+    isAdmin,
+    isViewingAllMicros,
 
-    // Validação: ação deve pertencer à micro atual (exceto para admin)
-    if (!isAdmin && action.microregiaoId !== currentMicroId) {
-      showToast('Você não pode editar ações de outra microrregião', 'error');
-      return;
-    }
+    checkCanEdit,
+    checkCanDelete,
+    checkCanCreate,
+    checkCanManageTeam,
 
-    if (!checkCanEdit(action)) {
-      showToast('Você não tem permissão para editar esta ação', 'error');
-      return;
-    }
-
-    setActions(prev => prev.map(a => {
-      if (a.uid !== uid) return a;
-      const next = { ...a };
-
-      if (field === 'progress') {
-        next.progress = clampProgress(value);
-      } else {
-        (next as Record<string, unknown>)[field] = value;
-      }
-
-      // Validar datas
-      const start = parseDateLocal(next.startDate);
-      const planned = parseDateLocal(next.plannedEndDate);
-      const end = parseDateLocal(next.endDate);
-
-      if (start && planned && planned < start) {
-        next.plannedEndDate = formatISODate(start) || '';
-      }
-      if (start && end && end < start) {
-        next.endDate = formatISODate(start) || '';
-      }
-
-      return next;
-    }));
-  }, [checkCanEdit, showToast, currentMicroId, isViewingAllMicros, isAdmin]);
-
-  const handleSaveAction = useCallback(async (uid?: string) => {
-    // ✅ DEMO MODE: Bloquear salvar
-    if (isDemoMode) {
-      showToast('Modo Visualização: Alterações não são salvas. Faça login real para usar o sistema.', 'warning');
-      setExpandedActionUid(null);
-      return;
-    }
-
-    if (!uid && !expandedActionUid) {
-      showToast('Nenhuma ação selecionada', 'error');
-      return;
-    }
-
-    const actionUid = uid || expandedActionUid!;
-    // Usar actionsRef.current para ter a versão mais atualizada (evita closure stale)
-    const action = findActionByUid(actionsRef.current, actionUid);
-
-    if (!action) {
-      logError('App', 'Ação não encontrada para UID', { actionUid, availableActions: actionsRef.current.map(a => a.uid) });
-      showToast('Ação não encontrada', 'error');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      // Verificar se é uma ação nova (ainda não salva no banco)
-      const isNewAction = pendingNewActionUid === actionUid;
-
-      if (isNewAction) {
-        // Criar a ação no banco
-        const parts = action.id.split('.');
-        const actionNumber = parseInt(parts[parts.length - 1], 10);
-
-        const savedAction = await dataService.createAction({
-          microregiaoId: action.microregiaoId,
-          activityId: action.activityId,
-          actionNumber,
-          title: action.title,
-        });
-
-        // Atualizar os outros campos se foram preenchidos
-        if (action.status !== 'Não Iniciado' || action.startDate || action.plannedEndDate || action.progress > 0) {
-          await dataService.updateAction(savedAction.uid, {
-            status: action.status,
-            startDate: action.startDate,
-            plannedEndDate: action.plannedEndDate,
-            endDate: action.endDate,
-            progress: action.progress,
-            notes: action.notes,
-          });
-        }
-
-        // Atualizar o UID na lista local (pode ter mudado)
-        setActions(prev => prev.map(a =>
-          a.uid === actionUid ? { ...savedAction, ...action, uid: savedAction.uid } : a
-        ));
-
-        setPendingNewActionUid(null);
-        showToast('Ação criada com sucesso!', 'success');
-      } else {
-        // Ação existente - apenas atualizar
-        await dataService.updateAction(actionUid, {
-          title: action.title,
-          status: action.status,
-          startDate: action.startDate,
-          plannedEndDate: action.plannedEndDate,
-          endDate: action.endDate,
-          progress: action.progress,
-          notes: action.notes,
-        });
-        showToast('Ação salva com sucesso!', 'success');
-      }
-
-      setExpandedActionUid(null);
-    } catch (error: any) {
-      logError('App', 'Erro ao salvar ação', error);
-      showToast(`Erro ao salvar: ${error.message}`, 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [expandedActionUid, pendingNewActionUid, showToast, isDemoMode]);
+    allTeams,
+    currentTeam,
+    setIsSaving,
+    setConfirmModal,
+    setIsCreateActionModalOpen
+  });
 
   // Handler para fechar o modal de ação - remove ação pendente se não foi salva
   const handleCloseActionModal = useCallback(() => {
@@ -739,63 +518,7 @@ function AppContent() {
       showToast('Ação descartada', 'info');
     }
     setExpandedActionUid(null);
-  }, [pendingNewActionUid, expandedActionUid, showToast]);
-
-  const handleCreateAction = useCallback(async () => {
-    // Admin visualizando "todas": abre modal para escolher a microrregião da nova ação
-    if (isAdmin && isViewingAllMicros) {
-      setIsCreateActionModalOpen(true);
-      return;
-    }
-
-    if (!checkCanCreate()) {
-      if (isViewingAllMicros) {
-        showToast('Selecione uma microrregião específica para criar ações', 'error');
-      } else {
-        showToast('Você não tem permissão para criar ações', 'error');
-      }
-      return;
-    }
-
-    if (!currentMicroId || currentMicroId === 'all') {
-      showToast('Escolha uma microrregião para criar ações', 'error');
-      return;
-    }
-
-    // ✅ DEMO MODE: Bloquear criar
-    if (isDemoMode) {
-      showToast('Modo Visualização: Não é possível criar ações. Faça login real para usar o sistema.', 'warning');
-      return;
-    }
-
-    // Criar ação temporária local (não salva no banco ainda)
-    const nextNum = getNextActionNumber(actions, selectedActivity, currentMicroId);
-    const actionId = `${selectedActivity}.${nextNum}`;
-    const tempUid = `${currentMicroId}::${actionId}`;
-
-    const tempAction: Action = {
-      uid: tempUid,
-      id: actionId,
-      activityId: selectedActivity,
-      microregiaoId: currentMicroId,
-      title: 'Nova Ação',
-      status: 'Não Iniciado',
-      startDate: '',
-      plannedEndDate: '',
-      endDate: '',
-      progress: 0,
-      raci: [],
-      notes: '',
-      comments: [],
-      tags: [],
-    };
-
-    setActions(prev => [...prev, tempAction]);
-    setPendingNewActionUid(tempUid); // Mark as unsaved
-    if (viewMode === 'gantt') setViewMode('table');
-    setExpandedActionUid(tempUid);
-    showToast('Preencha os dados e clique em Salvar', 'info');
-  }, [actions, checkCanCreate, currentMicroId, isAdmin, isViewingAllMicros, selectedActivity, viewMode, showToast, isDemoMode]);
+  }, [pendingNewActionUid, expandedActionUid, showToast, setActions]);
 
   const handleConfirmCreateInMicro = useCallback(() => {
     if (!createActionMicroId) {
@@ -803,203 +526,43 @@ function AppContent() {
       return;
     }
 
-    // Criar ação temporária local (não salva no banco ainda)
-    const nextNum = getNextActionNumber(actions, selectedActivity, createActionMicroId);
-    const actionId = `${selectedActivity}.${nextNum}`;
-    const tempUid = `${createActionMicroId}::${actionId}`;
-
-    const tempAction: Action = {
-      uid: tempUid,
-      id: actionId,
-      activityId: selectedActivity,
-      microregiaoId: createActionMicroId,
-      title: 'Nova Ação',
-      status: 'Não Iniciado',
-      startDate: '',
-      plannedEndDate: '',
-      endDate: '',
-      progress: 0,
-      raci: [],
-      notes: '',
-      comments: [],
-      tags: [],
-    };
-
-    setActions(prev => [...prev, tempAction]);
-    setPendingNewActionUid(tempUid);
-    if (viewMode === 'gantt') setViewMode('table');
-    setExpandedActionUid(tempUid);
-    showToast('Preencha os dados e clique em Salvar', 'info');
     setIsCreateActionModalOpen(false);
-  }, [actions, createActionMicroId, selectedActivity, viewMode, showToast]);
 
-  const handleDeleteAction = useCallback((uid: string) => {
-    // ✅ DEMO MODE: Bloquear excluir
-    if (isDemoMode) {
-      showToast('Modo Visualização: Não é possível excluir ações. Faça login real para usar o sistema.', 'warning');
-      return;
-    }
+    // Pequeno delay para permitir que o modal feche antes de chamar a criação
+    // que pode depender de estado
+    setTimeout(() => {
+      // Logic to create in specific micro - handled by passing microId override?
+      // Actually the original code did logic here.
+      // Let's reimplement just this specific special case helper here using the basics
 
-    if (isViewingAllMicros && !isAdmin) {
-      showToast('Selecione uma microrregião específica para excluir', 'error');
-      return;
-    }
+      const nextNum = getNextActionNumber(actions, selectedActivity, createActionMicroId);
+      const actionId = `${selectedActivity}.${nextNum}`;
+      const tempUid = `${createActionMicroId}::${actionId}`;
 
-    const action = findActionByUid(actions, uid);
-    if (!action) {
-      showToast('Ação não encontrada', 'error');
-      return;
-    }
+      const tempAction: Action = {
+        uid: tempUid,
+        id: actionId,
+        activityId: selectedActivity,
+        microregiaoId: createActionMicroId,
+        title: 'Nova Ação',
+        status: 'Não Iniciado',
+        startDate: '',
+        plannedEndDate: '',
+        endDate: '',
+        progress: 0,
+        raci: [],
+        notes: '',
+        comments: [],
+        tags: [],
+      };
 
-    // Usuário comum não pode excluir ações de outra micro
-    if (!isAdmin && action.microregiaoId !== currentMicroId) {
-      showToast('Você não pode excluir ações de outra microrregião', 'error');
-      return;
-    }
-
-    if (!checkCanDelete(action)) {
-      showToast('Você não tem permissão para excluir esta ação', 'error');
-      return;
-    }
-
-    setConfirmModal({
-      isOpen: true,
-      title: 'Excluir Ação',
-      message: `Tem certeza que deseja excluir "${action.title}"? Esta ação não pode ser desfeita.`,
-      onConfirm: async () => {
-        try {
-          // Fechar o modal de confirmação imediatamente para evitar ficar aberto durante a operação
-          setConfirmModal(prev => ({ ...prev, isOpen: false }));
-
-          await dataService.deleteAction(uid);
-          setActions(prev => prev.filter(a => a.uid !== uid));
-          setExpandedActionUid(null);
-          showToast('Ação excluída!', 'success');
-        } catch (error: any) {
-          logError('App', 'Erro ao excluir ação', error);
-          // Garantir que o modal de confirmação seja fechado em caso de erro também
-          setConfirmModal(prev => ({ ...prev, isOpen: false }));
-          showToast(`Erro ao excluir: ${error.message}`, 'error');
-        }
-      }
-    });
-  }, [actions, showToast, checkCanDelete, currentMicroId, isViewingAllMicros, isAdmin, isDemoMode]);
-
-  const handleAddRaci = useCallback(async (uid: string, memberId: string, role: RaciRole) => {
-    if (isViewingAllMicros && !isAdmin) {
-      showToast('Selecione uma microrregião específica para gerenciar equipe', 'error');
-      return;
-    }
-
-    const action = findActionByUid(actions, uid);
-    if (!action) {
-      showToast('Ação não encontrada', 'error');
-      return;
-    }
-
-    // Usuário comum não pode editar ações de outra micro
-    if (!isAdmin && action.microregiaoId !== currentMicroId) {
-      showToast('Você não pode editar ações de outra microrregião', 'error');
-      return;
-    }
-
-    if (!checkCanManageTeam(action)) {
-      showToast('Você não tem permissão para gerenciar a equipe desta ação', 'error');
-      return;
-    }
-
-    // Para admin vendo todas as micros, buscar membro em todas as equipes
-    const teamToSearch = isAdmin && isViewingAllMicros ? allTeams : currentTeam;
-    const member = teamToSearch.find(m => m.id === memberId);
-    if (!member) {
-      showToast('Membro não encontrado', 'error');
-      return;
-    }
-
-    // Verificar se já está na RACI
-    if (action.raci.some(r => r.name === member.name)) {
-      showToast(`${member.name} já está na equipe desta ação`, 'warning');
-      return;
-    }
-
-    try {
-      await dataService.addRaciMember(uid, member.name, role);
-      showToast(`${member.name} adicionado à equipe!`, 'info');
-    } catch (error: any) {
-      // Se o erro for "Ação não encontrada", significa que é uma ação nova não salva
-      // Nesse caso, permitimos adicionar ao estado local (draft)
-      const isNewActionError = error.message?.includes('Ação não encontrada') || error.message?.includes('row not found');
-
-      if (isNewActionError) {
-        log('App', 'Adicionando membro a ação não salva (local state only)');
-      } else {
-        logError('App', 'Erro ao adicionar membro RACI', error);
-        showToast(`Erro ao adicionar membro: ${error.message}`, 'error');
-        // Se for erro real (network, etc) que não seja "não encontrado", aborta update local
-        return;
-      }
-    }
-
-    // Update local state (Optimistic or Draft)
-    setActions(prev => prev.map(a =>
-      a.uid === uid
-        ? { ...a, raci: [...a.raci, { name: member.name, role }] }
-        : a
-    ));
-  }, [currentTeam, showToast, actions, checkCanManageTeam, currentMicroId, isViewingAllMicros, isAdmin, allTeams]);
-
-  const handleRemoveRaci = useCallback((uid: string, _idx: number, memberName: string) => {
-    // NOTA: _idx não é mais usado - removemos pelo nome para evitar inconsistências
-    if (isViewingAllMicros && !isAdmin) {
-      showToast('Selecione uma microrregião específica', 'error');
-      return;
-    }
-
-    const action = findActionByUid(actions, uid);
-    if (!action) {
-      showToast('Ação não encontrada', 'error');
-      return;
-    }
-
-    // Usuário comum não pode editar ações de outra micro
-    if (!isAdmin && action.microregiaoId !== currentMicroId) {
-      showToast('Você não pode editar ações de outra microrregião', 'error');
-      return;
-    }
-
-    if (!checkCanManageTeam(action)) {
-      showToast('Você não tem permissão para gerenciar a equipe desta ação', 'error');
-      return;
-    }
-
-    setConfirmModal({
-      isOpen: true,
-      title: 'Remover Membro',
-      message: `Remover ${memberName} desta ação?`,
-      onConfirm: async () => {
-        try {
-          await dataService.removeRaciMember(uid, memberName);
-          showToast(`${memberName} removido da equipe.`, 'info');
-        } catch (error: any) {
-          const isNewActionError = error.message?.includes('Ação não encontrada') || error.message?.includes('row not found');
-          if (isNewActionError) {
-            log('App', 'Removendo membro de ação não salva (local state only)');
-          } else {
-            logError('App', 'Erro ao remover membro RACI', error);
-            showToast(`Erro ao remover: ${error.message}`, 'error');
-            return;
-          }
-        }
-
-        // ✅ CORREÇÃO: Remover pelo NOME, não pelo índice, para evitar inconsistências
-        setActions(prev => prev.map(a =>
-          a.uid === uid
-            ? { ...a, raci: a.raci.filter(r => r.name !== memberName) }
-            : a
-        ));
-      }
-    });
-  }, [showToast, actions, checkCanManageTeam, currentMicroId, isViewingAllMicros, isAdmin]);
+      setActions(prev => [...prev, tempAction]);
+      setPendingNewActionUid(tempUid);
+      if (viewMode === 'gantt') setViewMode('table');
+      setExpandedActionUid(tempUid);
+      showToast('Preencha os dados e clique em Salvar', 'info');
+    }, 100);
+  }, [actions, createActionMicroId, selectedActivity, viewMode, showToast, setActions, setViewMode]);
 
   // Handler para expandir ação e carregar comentários sob demanda
   const handleExpandAction = useCallback(async (uid: string | null) => {
@@ -1011,7 +574,7 @@ function AppContent() {
     setExpandedActionUid(uid);
 
     // Encontrar a ação para verificar se precisa carregar comentários
-    // Usar actionsRef.current ou verificar no state atual se acessível
+    // Usar actions (state) pois é apenas leitura para decisão, não mutation
     const action = actions.find(a => a.uid === uid);
 
     // Se tem contagem > 0 mas 0 carregados, busca do servidor
@@ -1025,32 +588,7 @@ function AppContent() {
         logError('App', 'Erro ao carregar comentários on-demand', error);
       }
     }
-  }, [actions]);
-
-  // Handler para adicionar comentários (com suporte a threads)
-  const handleAddComment = useCallback(async (uid: string, content: string, parentId?: string | null) => {
-    const action = findActionByUid(actions, uid);
-    if (!action) {
-      showToast('Ação não encontrada', 'error');
-      return;
-    }
-
-    try {
-      const newComment = await dataService.addComment(uid, content, parentId);
-      setActions(prev => prev.map(a =>
-        a.uid === uid
-          ? { ...a, comments: [...(a.comments || []), newComment] }
-          : a
-      ));
-      showToast('Comentário adicionado!', 'success');
-
-      // Processar menções e criar notificações (assíncrono, não bloqueia)
-      dataService.processMentions(content, action.title, newComment.authorName);
-    } catch (error: any) {
-      logError('App', 'Erro ao adicionar comentário', error);
-      showToast(`Erro ao adicionar comentário: ${error.message}`, 'error');
-    }
-  }, [actions, showToast]);
+  }, [actions, setExpandedActionUid, setActions]);
 
 
 
@@ -1077,7 +615,7 @@ function AppContent() {
     setSelectedActivity(action.activityId);
     // setViewMode('table'); // Removido para manter no Gantt
     setExpandedActionUid(action.uid);
-  }, []);
+  }, [setSelectedActivity]);
 
   const handleNavigateToMain = useCallback(() => {
     setCurrentPage('main');
@@ -1100,7 +638,7 @@ function AppContent() {
     if (filters?.objectiveId) {
       setSelectedObjective(filters.objectiveId);
     }
-  }, []);
+  }, [setSelectedObjective]);
 
   // =====================================
   // OBJECTIVES & ACTIVITIES CRUD HANDLERS
@@ -1151,7 +689,7 @@ function AppContent() {
       logError('App', 'Erro ao criar objetivo', error);
       showToast(`Erro ao criar objetivo: ${error.message}`, 'error');
     }
-  }, [objectives, user?.role, user?.microregiaoId, currentMicroId, showToast]);
+  }, [objectives, user?.role, user?.microregiaoId, currentMicroId, showToast, setObjectives, setActivities]);
 
   // ✅ NOVA FUNÇÃO: Renumerar tudo após exclusão
   // Movida para antes de handleDeleteObjective para estar no escopo correto e ser dependência
@@ -1249,7 +787,7 @@ function AppContent() {
       logError('App', 'Erro ao renumerar', error);
       showToast(`Erro na renumeração: ${error.message}`, 'error');
     }
-  }, [activities, actions, currentMicroId, user?.microregiaoId, showToast]);
+  }, [activities, actions, currentMicroId, user?.microregiaoId, showToast, setObjectives, setActivities, setActions]);
 
   const handleDeleteObjective = useCallback(async (id: number) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
@@ -1302,7 +840,7 @@ function AppContent() {
       logError('App', 'Erro ao excluir objetivo', error);
       showToast(`Erro ao excluir objetivo: ${error.message}`, 'error');
     }
-  }, [user?.role, activities, actions, objectives, selectedObjective, showToast, renumberObjectivesAndActivities]);
+  }, [user?.role, activities, actions, selectedObjective, showToast, renumberObjectivesAndActivities, objectives, setObjectives, setActivities, setSelectedObjective, setSelectedActivity]);
 
 
 
@@ -1360,7 +898,7 @@ function AppContent() {
       logError('App', 'Erro ao criar atividade', error);
       showToast(`Erro ao criar atividade: ${error.message}`, 'error');
     }
-  }, [user?.role, user?.microregiaoId, currentMicroId, activities, showToast, objectives]);
+  }, [user?.role, user?.microregiaoId, currentMicroId, activities, showToast, objectives, setActivities]);
 
   const handleDeleteActivity = useCallback(async (objectiveId: number, activityId: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
@@ -1397,7 +935,7 @@ function AppContent() {
       logError('App', 'Erro ao excluir atividade', error);
       showToast(`Erro ao excluir atividade: ${error.message}`, 'error');
     }
-  }, [user?.role, actions, activities, selectedActivity, showToast]);
+  }, [user?.role, actions, activities, selectedActivity, showToast, setActivities, setSelectedActivity]);
 
   const handleUpdateObjective = useCallback(async (id: number, newTitle: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
@@ -1415,7 +953,7 @@ function AppContent() {
       logError('App', 'Erro ao atualizar objetivo', error);
       showToast(`Erro ao atualizar objetivo: ${error.message}`, 'error');
     }
-  }, [user?.role, showToast]);
+  }, [user?.role, showToast, setObjectives]);
 
   const handleUpdateActivity = useCallback(async (objectiveId: number, activityId: string, field: 'title' | 'description', value: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
@@ -1436,7 +974,7 @@ function AppContent() {
       logError('App', 'Erro ao atualizar atividade', error);
       showToast(`Erro ao atualizar atividade: ${error.message}`, 'error');
     }
-  }, [user?.role, showToast]);
+  }, [user?.role, showToast, setActivities]);
 
   const handleEditObjective = (id: number, currentTitle: string) => {
     setEditModalConfig({
@@ -1488,7 +1026,7 @@ function AppContent() {
     } finally {
       setIsSaving(false);
     }
-  }, [showToast]);
+  }, [showToast, setActions]);
 
   const handleSaveAndNewAction = useCallback(async (updatedAction: Action) => {
     setIsSaving(true);
@@ -1546,7 +1084,7 @@ function AppContent() {
     } finally {
       setIsSaving(false);
     }
-  }, [selectedActivity, showToast]);
+  }, [selectedActivity, showToast, setActions]);
 
   // =====================================
   // UI HELPERS

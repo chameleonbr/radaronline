@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas';
 import { Action, Status, GanttRange, RaciRole } from '../../types';
 import { parseDateLocal, getTodayStr, formatDateShort, ZOOM_LEVELS } from '../../lib/date';
 import { getActionDisplayId } from '../../lib/text';
-import { RaciCompactPill } from '../../components/common';
+import { RaciCompactPill } from '../../components/common/RaciPill';
 import { Tooltip } from '../../components/common/Tooltip';
 import { logError } from '../../lib/logger';
 

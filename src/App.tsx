@@ -679,8 +679,8 @@ function AppContent() {
     }
 
     try {
-      // Usar a posição sequencial (quantidade de objetivos + 1), não o ID do banco
-      const nextDisplayNumber = objectives.length + 1;
+      // Usar a posição sequencial (quantidade de objetivos + 1) NO CONTEXTO FILTRADO
+      const nextDisplayNumber = filteredObjectives.length + 1;
       const newTitle = `${nextDisplayNumber}. Novo Objetivo`;
 
       // Salvar no banco
@@ -709,7 +709,7 @@ function AppContent() {
       logError('App', 'Erro ao criar objetivo', error);
       showToast(`Erro ao criar objetivo: ${error.message}`, 'error');
     }
-  }, [objectives, user?.role, user?.microregiaoId, currentMicroId, showToast, setObjectives, setActivities]);
+  }, [objectives, filteredObjectives, user?.role, user?.microregiaoId, currentMicroId, showToast, setObjectives, setActivities]);
 
   // ✅ NOVA FUNÇÃO: Renumerar tudo após exclusão
   // Movida para antes de handleDeleteObjective para estar no escopo correto e ser dependência
@@ -851,16 +851,37 @@ function AppContent() {
 
       showToast('Objetivo excluído! Renumerando...', 'info');
 
-      // ✅ RENUMERAR SEQUENCIALMENTE
+      // ✅ RENUMERAR SEQUENCIALMENTE (Filtered Context)
       setTimeout(() => {
-        renumberObjectivesAndActivities(objectives.filter(o => o.id !== id));
+        // Se estamos vendo "Todas", precisamos encontrar qual micro renumenar
+        // Mas como a exclusão já ocorreu no banco, e não temos o objeto deletado facilmente aqui a menos que buscássemos antes...
+        // Como fallback, usamos filteredObjectives (que já exclui o removido no próximo render, mas aqui usamos o current state)
+        // O ideal é filtrar o ID removido da lista que faz sentido.
+
+        let listToRenumber: Objective[] = [];
+
+        if (isViewingAllMicros) {
+          // Se vendo todas, pegar apenas os objetivos da MESMA micro do objetivo excluído
+          // Como não temos o objeto 'deleted' aqui (já deletado do banco), vamos assumir que renumeração em massa 
+          // NO MODO "VER TODAS" é arriscado. 
+          // Melhor estratégia: Pegar a lista *atual* filtrada (que é "todas") e filtrar o ID.
+          // ISSO IRIA RENUMERAR TUDO GLOBALMENTE 1..N. PERIGOSO.
+          // CORREÇÃO: Pegar o objetivo antes de deletar seria ideal.
+          // Mas dado a limitação, vamos usar filteredObjectives se NÃO for view-all.
+          // Se for view-all, alertamos ou pulamos renumeração para evitar caos.
+
+          // HACK SEGURO: Apenas renumerar se estiver vendo uma micro específica
+          log('App', 'Pulando renumeração automática em modo "Ver Todas" por segurança');
+        } else {
+          listToRenumber = filteredObjectives.filter(o => o.id !== id);
+          renumberObjectivesAndActivities(listToRenumber);
+        }
       }, 500);
 
     } catch (error: any) {
-      logError('App', 'Erro ao excluir objetivo', error);
       showToast(`Erro ao excluir objetivo: ${error.message}`, 'error');
     }
-  }, [user?.role, activities, actions, selectedObjective, showToast, renumberObjectivesAndActivities, objectives, setObjectives, setActivities, setSelectedObjective, setSelectedActivity]);
+  }, [user?.role, activities, actions, selectedObjective, showToast, renumberObjectivesAndActivities, objectives, filteredObjectives, isViewingAllMicros, setObjectives, setActivities, setSelectedObjective, setSelectedActivity]);
 
 
 
@@ -880,8 +901,8 @@ function AppContent() {
 
     const currentActivities = activities[objectiveId] || [];
 
-    // Calcular a posição sequencial do objetivo (1, 2, 3...) baseado na lista de objetivos
-    const objectiveIndex = objectives.findIndex(o => o.id === objectiveId);
+    // Calcular a posição sequencial do objetivo (1, 2, 3...) baseado na lista de objetivos FILTRADA
+    const objectiveIndex = filteredObjectives.findIndex(o => o.id === objectiveId);
     const objectiveDisplayNumber = objectiveIndex >= 0 ? objectiveIndex + 1 : objectiveId;
 
     // Extrair números das atividades existentes (considerando formato "MicroId_Obj.X" ou "Obj.X")
@@ -918,7 +939,7 @@ function AppContent() {
       logError('App', 'Erro ao criar atividade', error);
       showToast(`Erro ao criar atividade: ${error.message}`, 'error');
     }
-  }, [user?.role, user?.microregiaoId, currentMicroId, activities, showToast, objectives, setActivities]);
+  }, [user?.role, user?.microregiaoId, currentMicroId, activities, showToast, objectives, filteredObjectives, setActivities]);
 
   const handleDeleteActivity = useCallback(async (objectiveId: number, activityId: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {

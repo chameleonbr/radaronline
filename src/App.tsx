@@ -1645,6 +1645,8 @@ function AppContent() {
                     actions={microActions}
                     selectedActivity={selectedActivity}
                     team={currentTeam}
+                    objectives={filteredObjectives}
+                    activities={filteredActivities}
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
                     statusFilter={statusFilter}

@@ -3,7 +3,7 @@ import { format, differenceInDays, isToday, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { Action, Activity, Objective } from '../../../types';
 import { MICROREGIOES } from '../../../data/microregioes';
-import { getActionDisplayId } from '../../../lib/text';
+import { getActionDisplayId, getCorrectActionDisplayId, findObjectiveIdByActivityId } from '../../../lib/text';
 import { filterOrphanedActions, hasValidDate, createActivityToObjectiveMap } from '../../../lib/actionValidation';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, ZoomIn, ZoomOut, Target, X, AlertCircle, CalendarDays, Clock, ArrowRight } from 'lucide-react';
 
@@ -91,6 +91,29 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
         if (!selectedMicro || selectedMicro === 'all') return 'Todas as Microrregiões';
         return MICROREGIOES.find(m => m.id === selectedMicro)?.nome || 'Microrregião Selecionada';
     }, [selectedMicro]);
+
+    // ✅ CORREÇÃO: Filtrar objetivos pela microrregião selecionada
+    const filteredObjectives = useMemo(() => {
+        if (!selectedMicro || selectedMicro === 'all') return objectives;
+        return objectives.filter(o => o.microregiaoId === selectedMicro);
+    }, [objectives, selectedMicro]);
+
+    // ✅ CORREÇÃO: Helper para calcular ID de exibição correto
+    const getCorrectId = (action: Action): string => {
+        const objectiveId = findObjectiveIdByActivityId(action.activityId, activities);
+        if (objectiveId === null) {
+            return getActionDisplayId(action.id);
+        }
+        return getCorrectActionDisplayId(
+            action.id,
+            action.activityId,
+            objectiveId,
+            filteredObjectives,
+            activities,
+            filteredActions
+        );
+    };
+
 
     // --- HELPERS DE DATA ---
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -250,13 +273,13 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
         return { actionsPerDay: map, ganttSlotsMap: slots };
     }, [filteredActions, gridData]);
 
-    // Retorna o número sequencial do objetivo (1, 2, 3...) baseado na posição na lista
+    // Retorna o número sequencial do objetivo (1, 2, 3...) baseado na posição na lista FILTRADA
     const getObjectiveDisplayNumber = (action: Action): number => {
         const objectiveDbId = activityToObjective[action.activityId];
         if (!objectiveDbId) return 1;
 
-        // Encontra a posição (índice + 1) do objetivo na lista
-        const index = objectives.findIndex(o => o.id === objectiveDbId);
+        // Encontra a posição (índice + 1) do objetivo na lista FILTRADA
+        const index = filteredObjectives.findIndex(o => o.id === objectiveDbId);
         return index >= 0 ? index + 1 : 1;
     };
 
@@ -337,7 +360,7 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                             >
                                 Todos
                             </button>
-                            {objectives.map((obj, objIndex) => {
+                            {filteredObjectives.map((obj, objIndex) => {
                                 const displayNum = objIndex + 1;
                                 const colors = OBJECTIVE_COLORS[displayNum] || OBJECTIVE_COLORS[1];
                                 const isSelected = selectedObjective === obj.id;
@@ -519,7 +542,7 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                                     {getObjectiveDisplayNumber(selectedAction)}
                                 </div>
                                 <div>
-                                    <span className="text-xs font-mono text-slate-500 dark:text-slate-400">A{getActionDisplayId(selectedAction.id)}</span>
+                                    <span className="text-xs font-mono text-slate-500 dark:text-slate-400">A{getCorrectId(selectedAction)}</span>
                                     <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg leading-tight">{selectedAction.title}</h3>
                                 </div>
                             </div>
@@ -735,7 +758,7 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
                                                                                 <div className="flex-1 min-w-0">
                                                                                     <div className="flex items-center gap-2 mb-1">
                                                                                         <span className="text-xs font-mono text-slate-400 dark:text-slate-500">
-                                                                                            A{getActionDisplayId(action.id)}
+                                                                                            A{getCorrectId(action)}
                                                                                         </span>
                                                                                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${action.status === 'Concluído' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
                                                                                             action.status === 'Em Andamento' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :

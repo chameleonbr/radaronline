@@ -4,7 +4,14 @@ import { Calendar, Plus, Trash2, Lock, Eye, MessageCircle, Send, CheckCircle2 } 
 import { staggerContainerFast, staggerItem } from '../../lib/motion';
 import { Action, Status, RaciRole, TeamMember, ActionComment } from '../../types';
 import { formatDateBr, getTodayStr } from '../../lib/date';
-import { getActionNumber, getActivityPrefixFromActionId, getActionDisplayId } from '../../lib/text';
+import {
+  getActionDisplayId,
+  getCorrectActivityPrefix,
+  getCorrectActionDisplayId,
+  findObjectiveIdByActivityId,
+  getActivityPrefixFromActionId
+} from '../../lib/text';
+import { Activity, Objective } from '../../types';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { RaciCompactPill, RaciTag } from '../../components/common/RaciPill';
 import { SearchFilter } from '../../components/common/SearchFilter';
@@ -21,6 +28,9 @@ interface ActionTableProps {
   actions: Action[];
   selectedActivity: string;
   team: TeamMember[];
+  // Para IDs dinâmicos baseados na posição atual
+  objectives?: Objective[];
+  activities?: Record<number, Activity[]>;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   statusFilter: Status | 'all';
@@ -112,6 +122,8 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
   actions,
   selectedActivity,
   team,
+  objectives = [],
+  activities = {},
   searchTerm,
   setSearchTerm,
   statusFilter,
@@ -140,6 +152,38 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
   const [commentDrafts, setCommentDrafts] = React.useState<Record<string, string>>({});
 
   const todayLabel = useMemo(() => formatDateBr(getTodayStr()), []);
+
+  // Helper para calcular ID dinâmico (baseado na posição atual do objetivo)
+  const getCorrectId = useCallback((action: Action): string => {
+    if (objectives.length === 0 || Object.keys(activities).length === 0) {
+      // Fallback: usar ID estático se não tiver dados de contexto
+      return getActionDisplayId(action.id);
+    }
+    const objectiveId = findObjectiveIdByActivityId(action.activityId, activities);
+    if (objectiveId === null) {
+      return getActionDisplayId(action.id);
+    }
+    return getCorrectActionDisplayId(
+      action.id,
+      action.activityId,
+      objectiveId,
+      objectives,
+      activities,
+      actions
+    );
+  }, [objectives, activities, actions]);
+
+  // Helper para prefixo do cabeçalho (objetivo.atividade)
+  const getCorrectPrefix = useCallback((action: Action): string => {
+    if (objectives.length === 0 || Object.keys(activities).length === 0) {
+      return getActivityPrefixFromActionId(action.id);
+    }
+    const objectiveId = findObjectiveIdByActivityId(action.activityId, activities);
+    if (objectiveId === null) {
+      return getActivityPrefixFromActionId(action.id);
+    }
+    return getCorrectActivityPrefix(action.activityId, objectiveId, objectives, activities);
+  }, [objectives, activities]);
 
   // Ações filtradas
   const filteredActions = useMemo(() => {
@@ -221,7 +265,7 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
             ID
             {filteredActions.length > 0 && (
               <span className="ml-1 text-[10px] normal-case opacity-70">
-                {getActivityPrefixFromActionId(filteredActions[0].id)}.x
+                {getCorrectPrefix(filteredActions[0])}.x
               </span>
             )}
           </div>
@@ -277,9 +321,9 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
                   onKeyDown={e => { if (e.key === 'Enter') toggleRow(action.uid); }}
                 >
                   <div className="col-span-1">
-                    <Tooltip content={`ID: ${getActionDisplayId(action.id)}`}>
+                    <Tooltip content={`ID: ${getCorrectId(action)}`}>
                       <span className="inline-block font-mono text-[10px] font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-600 cursor-help min-w-[24px] text-center">
-                        {getActionNumber(action.id)}
+                        {getCorrectId(action).split('.').pop()}
                       </span>
                     </Tooltip>
                   </div>
@@ -357,9 +401,9 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <Tooltip content={`ID: ${getActionDisplayId(action.id)}`}>
+                        <Tooltip content={`ID: ${getCorrectId(action)}`}>
                           <span className="inline-block font-mono text-[10px] font-black text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-600 cursor-help min-w-[24px] text-center">
-                            {getActionNumber(action.id)}
+                            {getCorrectId(action).split('.').pop()}
                           </span>
                         </Tooltip>
                         <StatusBadge status={action.status} />

@@ -50,10 +50,10 @@ export const getActionDisplayId = (fullId: string): string => {
  */
 export const getActionNumber = (fullId: string): string => {
   if (!fullId) return '';
-  
+
   // Primeiro extrair o ID de exibição (remove prefixo MR)
   const displayId = getActionDisplayId(fullId);
-  
+
   // Pegar o último número após o último ponto
   const parts = displayId.split('.');
   return parts[parts.length - 1] || displayId;
@@ -69,16 +69,16 @@ export const getActionNumber = (fullId: string): string => {
  */
 export const getActivityPrefixFromActionId = (fullId: string): string => {
   if (!fullId) return '';
-  
+
   // Primeiro extrair o ID de exibição (remove prefixo MR)
   const displayId = getActionDisplayId(fullId);
-  
+
   // Remover o último segmento (número da ação)
   const parts = displayId.split('.');
   if (parts.length > 1) {
     return parts.slice(0, -1).join('.');
   }
-  
+
   return displayId;
 };
 
@@ -101,13 +101,13 @@ export const getObjectiveDisplayNumber = (objectives: { id: number }[], objectiv
  */
 export const getObjectiveTitleWithoutNumber = (title: string): string => {
   if (!title) return '';
-  
+
   // Remove prefixo no formato "X. " ou "X." onde X é um número
   const match = title.match(/^\d+\.\s*/);
   if (match) {
     return title.substring(match[0].length);
   }
-  
+
   return title;
 };
 
@@ -116,5 +116,103 @@ export const getInitials = (name: string) => {
   const parts = name.split(" ");
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+// =====================================
+// FUNÇÕES DE ID DINÂMICO
+// Calculam IDs de exibição baseados na posição atual
+// =====================================
+
+/**
+ * Calcula o ID de exibição CORRETO de uma atividade baseado na posição atual do objetivo
+ * @param activityId - ID interno da atividade (ex: "MR070_2.1")
+ * @param objectiveId - ID do objetivo no banco
+ * @param objectives - Lista de objetivos (filtrada por micro)
+ * @param activities - Mapa de atividades por objetivo
+ * @returns ID de exibição corrigido (ex: "3.1" se o objetivo está na posição 3)
+ */
+export const getCorrectActivityDisplayId = (
+  activityId: string,
+  objectiveId: number,
+  objectives: { id: number }[],
+  activities: Record<number, { id: string }[]>
+): string => {
+  if (!activityId) return '';
+
+  // 1. Encontrar posição atual do objetivo
+  const objIndex = objectives.findIndex(o => o.id === objectiveId);
+  const objNum = objIndex >= 0 ? objIndex + 1 : '?';
+
+  // 2. Encontrar posição da atividade dentro do objetivo
+  const objActivities = activities[objectiveId] || [];
+  const actIndex = objActivities.findIndex(a => a.id === activityId);
+  const actNum = actIndex >= 0 ? actIndex + 1 : '?';
+
+  return `${objNum}.${actNum}`;
+};
+
+/**
+ * Calcula o ID de exibição CORRETO de uma ação baseado na posição atual do objetivo e atividade
+ * @param actionId - ID interno da ação (ex: "MR070_2.1.1")
+ * @param activityId - ID interno da atividade
+ * @param objectiveId - ID do objetivo no banco
+ * @param objectives - Lista de objetivos (filtrada por micro)
+ * @param activities - Mapa de atividades por objetivo
+ * @param actions - Lista de ações (filtrada por micro)
+ * @returns ID de exibição corrigido (ex: "3.1.1" se o objetivo está na posição 3)
+ */
+export const getCorrectActionDisplayId = (
+  actionId: string,
+  activityId: string,
+  objectiveId: number,
+  objectives: { id: number }[],
+  activities: Record<number, { id: string }[]>,
+  actions: { id: string; activityId: string }[]
+): string => {
+  if (!actionId) return '';
+
+  // 1. Encontrar posição atual do objetivo
+  const objIndex = objectives.findIndex(o => o.id === objectiveId);
+  const objNum = objIndex >= 0 ? objIndex + 1 : '?';
+
+  // 2. Encontrar posição da atividade dentro do objetivo
+  const objActivities = activities[objectiveId] || [];
+  const actIndex = objActivities.findIndex(a => a.id === activityId);
+  const actNum = actIndex >= 0 ? actIndex + 1 : '?';
+
+  // 3. Encontrar posição da ação dentro da atividade
+  const actActions = actions.filter(a => a.activityId === activityId);
+  const actionIndex = actActions.findIndex(a => a.id === actionId);
+  const actionNum = actionIndex >= 0 ? actionIndex + 1 : getActionNumber(actionId);
+
+  return `${objNum}.${actNum}.${actionNum}`;
+};
+
+/**
+ * Helper simplificado: Calcula apenas o prefixo corrigido (objetivo.atividade) para ações
+ * Útil para cabeçalhos de tabela
+ */
+export const getCorrectActivityPrefix = (
+  activityId: string,
+  objectiveId: number,
+  objectives: { id: number }[],
+  activities: Record<number, { id: string }[]>
+): string => {
+  return getCorrectActivityDisplayId(activityId, objectiveId, objectives, activities);
+};
+
+/**
+ * Encontra o objectiveId dado um activityId, pesquisando no mapa de atividades
+ */
+export const findObjectiveIdByActivityId = (
+  activityId: string,
+  activities: Record<number, { id: string }[]>
+): number | null => {
+  for (const [objIdStr, acts] of Object.entries(activities)) {
+    if (acts.some(a => a.id === activityId)) {
+      return parseInt(objIdStr, 10);
+    }
+  }
+  return null;
 };
 

@@ -206,6 +206,8 @@ export function MainView({
                 actions={microActions}
                 selectedActivity={selectedActivity}
                 team={currentTeam}
+                objectives={objectives}
+                activities={activities}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
                 statusFilter={statusFilter}

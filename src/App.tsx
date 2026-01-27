@@ -428,6 +428,14 @@ function AppContent() {
     }
   }, [viewMode, expandedActionUid]);
 
+  // ✅ CORREÇÃO: Resetar navegação para o Dashboard ao selecionar uma microrregião
+  // Isso evita que o usuário caia na tela "Objetivos" vazia se a aba anterior era essa
+  useEffect(() => {
+    if (viewingMicroregiaoId) {
+      setCurrentNav('dashboard');
+    }
+  }, [viewingMicroregiaoId]);
+
   // =====================================
   // CARREGAR DADOS DO SUPABASE (Delegado para useAppData)
   // =====================================
@@ -942,6 +950,95 @@ function AppContent() {
     }
   }, [user?.role, user?.microregiaoId, currentMicroId, activities, showToast, filteredObjectives, setActivities]);
 
+  // ✅ Helper para renumerar atividades de um ÚNICO objetivo (defrag)
+  const renumberActivitiesOfObjective = useCallback(async (objectiveId: number) => {
+    try {
+      // 1. Calcular o número de exibição do objetivo (1, 2, 3...)
+      const objectiveIndex = filteredObjectives.findIndex(o => o.id === objectiveId);
+      if (objectiveIndex === -1) return; // Objetivo não encontrado na view atual
+      const targetObjNumber = objectiveIndex + 1;
+
+      // 2. Pegar todas as atividades desse objetivo (estado atualizado)
+      // Como acabamos de deletar e atualizar o state, precisamos pegar do state (que já deve estar sem o item deletado)
+      // MAS, como setState é assíncrono, talvez seja melhor passar a lista 'fresh' ou esperar.
+      // Melhor estratégia: Ler do DataService ou confiar no setter funcional se estivéssemos dentro dele.
+      // Aqui, vamos fazer um fetch fresco do DataService para garantir 'single source of truth' pós-delete.
+      const freshActivitiesMap = await dataService.loadActivities();
+      const objActivities = freshActivitiesMap[objectiveId] || [];
+
+      // 3. Ordenar por ID atual para manter a ordem relativa
+      // Ex: [2.1, 2.3] -> O 2.3 vira 2.2
+      // Precisamos parsear o sufixo numérico
+      const sortedActivities = [...objActivities].sort((a, b) => {
+        const getSuffix = (id: string) => {
+          const parts = id.split('.');
+          return parseInt(parts[parts.length - 1], 10) || 0;
+        };
+        return getSuffix(a.id) - getSuffix(b.id);
+      });
+
+      let activitiesChanged = false;
+
+      // 4. Iterar e corrigir
+      for (let i = 0; i < sortedActivities.length; i++) {
+        const act = sortedActivities[i];
+        const targetSuffix = i + 1;
+
+        // Construir o ID esperado: "Micro_Obj.Act" ou "Obj.Act"
+        // Preservar prefixo se existir
+        let prefix = '';
+        if (act.id.includes('_')) {
+          prefix = act.id.split('_')[0] + '_';
+        }
+
+        // targetDisplayId: "2.1"
+        const targetDisplayId = `${targetObjNumber}.${targetSuffix}`;
+        const targetFullId = `${prefix}${targetDisplayId}`;
+
+        // Se o ID é diferente, migrar
+        if (act.id !== targetFullId) {
+          log('App', `Auto-Renumber: ${act.id} -> ${targetFullId}`);
+          activitiesChanged = true;
+
+          // A. Criar NOVA atividade (cópia)
+          const microToUse = prefix ? prefix.replace('_', '') : (currentMicroId || user?.microregiaoId || '');
+
+          await dataService.createActivity(
+            objectiveId,
+            targetFullId,
+            act.title,
+            microToUse,
+            act.description
+          );
+
+          // B. Mover Ações
+          // Buscar todas as ações no banco que apontam para act.id
+          // (DataService helper seria ideal, mas vamos usar o que temos)
+          // Vamos varrer 'actions' local para achar UIDs e disparar updates
+          const relatedActions = actions.filter(a => a.activityId === act.id);
+          for (const action of relatedActions) {
+            await dataService.updateActionActivityId(action.uid, targetFullId);
+          }
+
+          // C. Deletar atividade antiga
+          await dataService.deleteActivity(act.id);
+        }
+      }
+
+      if (activitiesChanged) {
+        // Refresh na UI
+        const finalActivities = await dataService.loadActivities();
+        const finalActions = await dataService.loadActions();
+        setActivities(finalActivities);
+        setActions(finalActions);
+        showToast('Atividades renumeradas automaticamente.', 'success');
+      }
+
+    } catch (error) {
+      logError('App', 'Erro ao renumerar atividades do objetivo', error);
+    }
+  }, [filteredObjectives, actions, currentMicroId, user?.microregiaoId, setActivities, setActions, showToast]);
+
   const handleDeleteActivity = useCallback(async (objectiveId: number, activityId: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {
       showToast('Apenas administradores podem excluir atividades', 'error');
@@ -959,6 +1056,7 @@ function AppContent() {
       // Excluir do banco
       await dataService.deleteActivity(activityId);
 
+      // Atualizar state local (otimista/imediato)
       setActivities(prev => ({
         ...prev,
         [objectiveId]: (prev[objectiveId] || []).filter(a => a.id !== activityId),
@@ -973,11 +1071,18 @@ function AppContent() {
       }
 
       showToast('Atividade excluída!', 'success');
+
+      // ✅ Trigger Auto-Renumbering (Async)
+      // Pequeno delay para garantir propagação do delete no banco antes do fetch do renumber
+      setTimeout(() => {
+        renumberActivitiesOfObjective(objectiveId);
+      }, 500);
+
     } catch (error: any) {
       logError('App', 'Erro ao excluir atividade', error);
       showToast(`Erro ao excluir atividade: ${error.message}`, 'error');
     }
-  }, [user?.role, actions, activities, selectedActivity, showToast, setActivities, setSelectedActivity]);
+  }, [user?.role, actions, activities, selectedActivity, showToast, setActivities, setSelectedActivity, renumberActivitiesOfObjective]);
 
   const handleUpdateObjective = useCallback(async (id: number, newTitle: string) => {
     if (user?.role !== 'admin' && user?.role !== 'superadmin') {

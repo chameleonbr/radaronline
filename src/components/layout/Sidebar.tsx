@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronLeft, ChevronRight, Home, Target, Settings, LogOut, Shield, Trash2, Plus, Edit2, LayoutDashboard, Activity as ActivityIcon, Users, Trophy, Triangle, Calendar, ClipboardList, MapPin, Newspaper, BarChart3, Megaphone } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Target, Settings, LogOut, Shield, Trash2, Plus, Edit2, LayoutDashboard, Activity as ActivityIcon, Users, Trophy, Triangle, Calendar, ClipboardList, MapPin, Newspaper, BarChart3, Megaphone } from 'lucide-react';
 
-import { slideInLeft, staggerContainer, staggerItem, buttonTap } from '../../lib/motion';
+import { slideInLeft, staggerItem, buttonTap } from '../../lib/motion';
 import { Objective, Activity as _ActivityType } from '../../types';
 import { getActivityDisplayId, getObjectiveTitleWithoutNumber } from '../../lib/text';
 import { UserRole } from '../../types/auth.types';
@@ -252,7 +252,6 @@ const SidebarContent: React.FC<SidebarProps> = ({
   setViewMode,
   objectives,
   activities,
-  onProfileClick,
   isMobile = false,
   userName,
   userRole,
@@ -280,10 +279,11 @@ const SidebarContent: React.FC<SidebarProps> = ({
 
   const toggleObjective = (id: number) => {
     setExpandedObjectives(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+      // Accordion behavior: if already open, close it. If closed, open it and close others.
+      if (prev.has(id)) {
+        return new Set();
+      }
+      return new Set([id]);
     });
   };
 
@@ -616,7 +616,21 @@ const SidebarContent: React.FC<SidebarProps> = ({
                       icon={Target}
                       label="Objetivos"
                       isActive={currentNav === 'strategy' && viewMode !== 'calendar'}
-                      onClick={() => { setCurrentNav('strategy'); setViewMode('table'); }}
+                      onClick={() => {
+                        setCurrentNav('strategy');
+                        // Auto-select first objective if none is selected or if switching back to strategy
+                        if (objectives.length > 0) {
+                          // Always defaulting to first if nothing selected feels safer, 
+                          // or if we just clicked the main header.
+                          // User complaint: "stays creating a new tab where there is nothing" 
+                          // implies they see an empty state.
+                          const firstObj = objectives[0];
+                          setSelectedObjective(firstObj.id);
+                          const firstAct = activities[firstObj.id]?.[0];
+                          if (firstAct) setSelectedActivity(firstAct.id);
+                        }
+                        setViewMode('table');
+                      }}
                       collapsed={!isOpen}
                     />
                     {!isOpen && <div className="absolute top-0 right-0 w-2 h-2 bg-emerald-400 rounded-full border border-white sm:hidden"></div>}

@@ -19,6 +19,8 @@ export type ActionTag = {
   id: string;
   name: string;
   color: string;
+  isFavorite?: boolean; // Computado no frontend/service baseado na micro
+  favorite_micros?: string[]; // Coluna do banco
 };
 
 // --- COMENTÁRIO (estilo Reddit/thread) ---

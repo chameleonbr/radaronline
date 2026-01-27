@@ -178,7 +178,11 @@ export async function loadActions(microregiaoId?: string): Promise<Action[]> {
         // Mapear para formato da aplicação
         return data.map((item: any) => {
             // Extrair tags do formato aninhado do join
-            const tags = item.tags?.map((t: any) => t.tag).filter(Boolean) || [];
+            // Supabase joins podem retornar objeto ou array dependendo da relação
+            const rawTags = item.tags || [];
+            const tags = Array.isArray(rawTags)
+                ? rawTags.map((t: any) => t.tag).filter(Boolean)
+                : (rawTags.tag ? [rawTags.tag] : []);
 
             // Extrair count de comentários (formato [{count: N}])
             const commentCount = (item.comments && item.comments[0] && item.comments[0].count) || 0;
@@ -255,7 +259,7 @@ export async function createAction(input: {
     activityId: string;
     actionNumber: number;
     title?: string;
-}): Promise<Action> {
+}): Promise<Action & { dbId: string }> {
     try {
         const actionId = `${input.activityId}.${input.actionNumber}`;
         const uid = generateActionUid(input.microregiaoId, actionId);
@@ -296,7 +300,10 @@ export async function createAction(input: {
             microregiaoId: newAction.microregiaoId
         });
 
-        return newAction;
+        return {
+            ...newAction,
+            dbId: data.id // Retorna UUID para uso imediato (ex: associar tags sem lookup)
+        };
     } catch (error) {
         logError('dataService', 'Erro inesperado ao criar ação:', error);
         throw error;
@@ -536,12 +543,11 @@ export async function upsertAction(action: Action): Promise<Action> {
         // Sincronizar TAGS (FULL SYNC: Add & Remove)
         // ============================================
         if (action.tags) {
-            // 1. Buscar assignments atuais
-            // Usa action.uid E action_id para garantir compatibilidade
+            // 1. Buscar assignments atuais pelo UID (é o identificador mais estável na relação de tags)
             const { data: currentAssignments, error: fetchTagsError } = await supabase
                 .from('action_tag_assignments')
                 .select('id, tag_id')
-                .eq('action_uid', action.uid); // Pode manter o filtro por UID ou mudar para açãoDbId se preferir
+                .eq('action_uid', action.uid);
 
             if (fetchTagsError) {
                 logError('dataService', 'Erro ao buscar tags atuais:', fetchTagsError);
@@ -554,14 +560,19 @@ export async function upsertAction(action: Action): Promise<Action> {
                 if (toAdd.length > 0) {
                     const tagInserts = toAdd.map(t => ({
                         action_uid: action.uid,
-                        action_id: actionDbId, // Adicionando action_id (UUID)
+                        action_id: actionDbId, // UUID FK (importante para integridade se existir)
                         tag_id: t.id
                     }));
                     const { error: insertError } = await supabase
                         .from('action_tag_assignments')
                         .insert(tagInserts);
 
-                    if (insertError) logError('dataService', 'Erro ao associar novas tags:', insertError);
+                    if (insertError) {
+                        // Se falhar por duplicidade silenciosa, ignoramos, senão logamos
+                        if (!insertError.message.includes('duplicate')) {
+                            logError('dataService', 'Erro ao associar novas tags:', insertError);
+                        }
+                    }
                 }
 
                 // B. Remover associações antigas
@@ -592,6 +603,8 @@ export async function upsertAction(action: Action): Promise<Action> {
  */
 export async function deleteAction(uid: string): Promise<void> {
     try {
+        const actionDbId = await getActionDbIdByUid(uid);
+
         const { error } = await supabase
             .from('actions')
             .delete()
@@ -603,7 +616,8 @@ export async function deleteAction(uid: string): Promise<void> {
         }
 
         // ✅ LOG ACTIVITY
-        loggingService.logActivity('action_deleted', 'action', uid, {});
+        // Fallback to uid if dbId fetch failed (shouldn't happen for valid deletes)
+        loggingService.logActivity('action_deleted', 'action', actionDbId || uid, { displayId: uid });
     } catch (error) {
         logError('dataService', 'Erro inesperado ao excluir ação:', error);
         throw error;
@@ -623,21 +637,16 @@ export async function addRaciMember(
     role: 'R' | 'A' | 'C' | 'I'
 ): Promise<RaciMember> {
     try {
-        // Primeiro, buscar o ID da ação pelo UID
-        const { data: actionData, error: actionError } = await supabase
-            .from('actions')
-            .select('id')
-            .eq('uid', actionUid)
-            .single();
+        const actionId = await getActionDbIdByUid(actionUid);
 
-        if (actionError || !actionData) {
+        if (!actionId) {
             throw new Error('Ação não encontrada');
         }
 
         const { data, error } = await supabase
             .from('action_raci')
             .insert({
-                action_id: actionData.id,
+                action_id: actionId,
                 member_name: memberName,
                 role,
             })
@@ -667,21 +676,16 @@ export async function removeRaciMember(
     memberName: string
 ): Promise<void> {
     try {
-        // Primeiro, buscar o ID da ação pelo UID
-        const { data: actionData, error: actionError } = await supabase
-            .from('actions')
-            .select('id')
-            .eq('uid', actionUid)
-            .single();
+        const actionId = await getActionDbIdByUid(actionUid);
 
-        if (actionError || !actionData) {
+        if (!actionId) {
             throw new Error('Ação não encontrada');
         }
 
         const { error } = await supabase
             .from('action_raci')
             .delete()
-            .eq('action_id', actionData.id)
+            .eq('action_id', actionId)
             .eq('member_name', memberName);
 
         if (error) {
@@ -726,20 +730,16 @@ export async function addComment(
         }
 
         // Buscar ID da ação
-        const { data: actionData, error: actionError } = await supabase
-            .from('actions')
-            .select('id')
-            .eq('uid', actionUid)
-            .single();
+        const actionId = await getActionDbIdByUid(actionUid);
 
-        if (actionError || !actionData) {
+        if (!actionId) {
             throw new Error('Ação não encontrada');
         }
 
         const { data, error } = await supabase
             .from('action_comments')
             .insert({
-                action_id: actionData.id,
+                action_id: actionId,
                 author_id: user.id,
                 parent_id: parentId || null,
                 content,
@@ -856,7 +856,9 @@ export async function loadTeams(microregiaoId?: string): Promise<Record<string, 
             if (!teamsByMicro[microId]) teamsByMicro[microId] = [];
 
             // Procurar se existe registro deste email na tabela teams para pegar o município
-            const teamRecord = (teamsData || []).find(t => t.email?.toLowerCase() === p.email.toLowerCase());
+            // Fix: Safe lower case for email
+            const pEmail = (p.email || '').toLowerCase();
+            const teamRecord = (teamsData || []).find(t => (t.email || '').toLowerCase() === pEmail);
 
             teamsByMicro[microId].push({
                 id: p.id,
@@ -1269,7 +1271,11 @@ interface ActivityDTO {
  * Carrega objetivos do banco filtrados por microrregião
  * @param microregiaoId - ID da microrregião para filtrar
  */
-export async function loadObjectives(microregiaoId?: string): Promise<{ id: number; title: string; status: 'on-track' | 'delayed' }[]> {
+
+
+// ... inside loadObjectives ...
+
+export async function loadObjectives(microregiaoId?: string): Promise<{ id: number; title: string; status: 'on-track' | 'delayed'; microregiaoId: string }[]> {
     try {
         let query = supabase
             .from('objectives')
@@ -1481,11 +1487,20 @@ function generateTagColor(name: string): string {
 /**
  * Carrega todas as tags disponíveis
  */
-export async function loadTags(): Promise<ActionTag[]> {
+/**
+ * Carrega todas as tags disponíveis
+ * @param microId - Opcional. Se fornecido, preenche o campo isFavorite
+ */
+/**
+ * Carrega todas as tags disponíveis
+ * Utiliza estratégia Híbrida: Banco de Dados + LocalStorage
+ */
+export async function loadTags(microId?: string): Promise<ActionTag[]> {
     try {
+        // 1. Carregar Tags do Banco
         const { data, error } = await supabase
             .from('action_tags')
-            .select('*')
+            .select('id, name, color, favorite_micros')
             .order('name', { ascending: true });
 
         if (error) {
@@ -1493,14 +1508,123 @@ export async function loadTags(): Promise<ActionTag[]> {
             throw new Error(`Erro ao carregar tags: ${error.message}`);
         }
 
-        return (data || []).map((t: ActionTagDTO) => ({
-            id: t.id,
-            name: t.name,
-            color: t.color,
-        }));
+        // 2. Carregar Favoritos Locais (LocalStorage) - Fallback para RLS/Permissões
+        let localFavorites: string[] = [];
+        if (microId) {
+            try {
+                const stored = localStorage.getItem(`favorite_tags_${microId}`);
+                if (stored) {
+                    localFavorites = JSON.parse(stored);
+                }
+            } catch (e) {
+                console.warn('[dataService] Erro ao ler localStorage:', e);
+            }
+        }
+
+        return (data || []).map((t: any) => {
+            // Verifica se o microId está no array de favoritos (Banco)
+            const dbFavorites: string[] = t.favorite_micros || [];
+            const isDbFavorite = microId ? dbFavorites.includes(microId) : false;
+
+            // Verifica se está nos favoritos locais
+            const isLocalFavorite = localFavorites.includes(t.id);
+
+            return {
+                id: t.id,
+                name: t.name,
+                color: t.color,
+                isFavorite: isDbFavorite || isLocalFavorite, // União dos dois mundos
+            };
+        }).sort((a, b) => {
+            // Ordenação: Favoritos primeiro, depois alfabético
+            if (a.isFavorite === b.isFavorite) return a.name.localeCompare(b.name);
+            return a.isFavorite ? -1 : 1;
+        });
     } catch (error) {
         logError('dataService', 'Erro inesperado ao carregar tags:', error);
         throw error;
+    }
+}
+
+/**
+ * Alterna favorito com Persistência Híbrida (Local First)
+ * Garante que a UI nunca "bugue e volte" mesmo se o banco bloquear
+ */
+export async function toggleTagFavorite(tagId: string, microId: string): Promise<boolean> {
+    try {
+        console.log(`[dataService] Alternando favorito (Híbrido) para tag ${tagId} e micro ${microId}`);
+
+        // ===============================================
+        // 1. LOCAL STORAGE (GARANTIA DE UX IMEDIATA)
+        // ===============================================
+        let newLocalState = false;
+        try {
+            const key = `favorite_tags_${microId}`;
+            const stored = localStorage.getItem(key);
+            let localList: string[] = stored ? JSON.parse(stored) : [];
+
+            if (localList.includes(tagId)) {
+                localList = localList.filter(id => id !== tagId);
+                newLocalState = false;
+            } else {
+                localList.push(tagId);
+                newLocalState = true;
+            }
+            localStorage.setItem(key, JSON.stringify(localList));
+            console.log('[dataService] Persistência Local OK. Novo estado:', newLocalState);
+        } catch (e) {
+            console.error('[dataService] Falha no LocalStorage:', e);
+            // Non-blocking
+        }
+
+        // ===============================================
+        // 2. BANCO DE DADOS (MELHOR ESFORÇO)
+        // ===============================================
+        // Se conseguimos chegar aqui e o user não tiver permissão no banco,
+        // pelo menos a UX local está garantida.
+
+        // Buscar estado atual no banco para tentar sincronizar
+        const { data: tag, error: fetchError } = await supabase
+            .from('action_tags')
+            .select('favorite_micros')
+            .eq('id', tagId)
+            .single();
+
+        // Se falhar a leitura do banco, mas salvou local, retornamos SUCESSO.
+        if (fetchError) {
+            console.warn('[dataService] Aviso: Não foi possível ler do banco para sync. Usando apenas local.', fetchError);
+            return newLocalState;
+        }
+
+        const currentMicros: string[] = tag.favorite_micros || [];
+        const isDbFavorited = currentMicros.includes(microId);
+
+        let newMicros: string[];
+        if (isDbFavorited) {
+            newMicros = currentMicros.filter(id => id !== microId);
+        } else {
+            newMicros = [...currentMicros, microId];
+        }
+
+        // Tentar update no banco
+        const { error: updateError } = await supabase
+            .from('action_tags')
+            .update({ favorite_micros: newMicros })
+            .eq('id', tagId);
+
+        if (updateError) {
+            // Logamos como aviso, mas NÃO lançamos erro para a UI.
+            // A UI confia no nosso retorno de sucesso (garantido pelo LocalStorage).
+            console.warn('[dataService] Aviso: Falha ao persistir no DB (RLS?). Mantendo persistência local.', updateError);
+        } else {
+            console.log('[dataService] Sync com banco realizado com sucesso.');
+        }
+
+        return newLocalState;
+    } catch (error) {
+        // Se algo catastrófico acontecer, logamos mas tentamos não quebrar a UI se possível
+        logError('dataService', 'Erro híbrido ao alternar favorito:', error);
+        return false; // Fallback
     }
 }
 
@@ -1537,25 +1661,73 @@ export async function createTag(name: string): Promise<ActionTag> {
     }
 }
 
+// Helper cache for action UUIDs
+const actionUuidCache = new Map<string, { id: string, timestamp: number }>();
+
+/**
+ * Helper to get Action DB UUID from UID with short caching
+ */
+async function getActionDbIdByUid(uid: string): Promise<string | null> {
+    const now = Date.now();
+    const cached = actionUuidCache.get(uid);
+
+    // Cache valid for 60 seconds
+    if (cached && (now - cached.timestamp < 60000)) {
+        return cached.id;
+    }
+
+    try {
+        const { data } = await supabase
+            .from('actions')
+            .select('id')
+            .eq('uid', uid)
+            .maybeSingle();
+
+        if (data) {
+            actionUuidCache.set(uid, { id: data.id, timestamp: now });
+            return data.id;
+        }
+    } catch (e) {
+        console.warn('[dataService] Error fetching UUID for unique ID:', uid, e);
+    }
+    return null;
+}
+
+// ... existing code ...
+
 /**
  * Adiciona uma tag a uma ação
+ * @param actionDbUuid - Opcional. Se fornecido, evita o lookup do ID (útil para ações recém-criadas)
  */
-export async function addTagToAction(actionUid: string, tagId: string): Promise<void> {
+export async function addTagToAction(actionUid: string, tagId: string, actionDbUuid?: string): Promise<void> {
     try {
+        // 1. Tentar buscar o ID interno (UUID) usando helper ou o argumento
+        let actionDbId: string | null = actionDbUuid || null;
+
+        if (!actionDbId) {
+            actionDbId = await getActionDbIdByUid(actionUid);
+        }
+
+        // 2. Inserir (action_uid é a chave principal da relação histórica)
+        const insertPayload: any = {
+            action_uid: actionUid,
+            tag_id: tagId,
+        };
+        if (actionDbId) insertPayload.action_id = actionDbId;
+
+        // console.log(`[dataService] addTagToAction: Upserting payload:`, insertPayload);
+
         const { error } = await supabase
             .from('action_tag_assignments')
-            .insert({
-                action_uid: actionUid,
-                tag_id: tagId,
-            });
+            .upsert(insertPayload, { onConflict: 'action_uid,tag_id' }) // FIXED: removed space in onConflict
+            .select();
 
         if (error) {
-            // Ignora erro de duplicidade
-            if (!error.message.includes('duplicate')) {
-                logError('dataService', 'Erro ao adicionar tag à ação:', error);
-                throw new Error(`Erro ao adicionar tag: ${error.message}`);
-            }
+            logError('dataService', 'Erro ao adicionar tag à ação:', error);
+            throw new Error(`Erro ao adicionar tag: ${error.message}`);
         }
+
+        // console.log(`[dataService] addTagToAction: Result:`, data);
     } catch (error) {
         logError('dataService', 'Erro inesperado ao adicionar tag:', error);
         throw error;

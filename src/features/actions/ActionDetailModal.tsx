@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     X, Save, Trash2, Calendar, MessageCircle, Send,
-    Users, Target, Clock, ChevronDown, Plus, Lock, Eye, Reply, CornerDownRight, Pencil, Check, Hash
+    Users, Target, Clock, ChevronDown, Plus, Lock, Eye, Reply, CornerDownRight, Pencil, Check, Hash, Heart
 } from 'lucide-react';
 import { Action, Status, RaciRole, TeamMember, ActionComment, ActionTag } from '../../types';
 import { LoadingButton } from '../../components/common/LoadingSpinner';
@@ -14,7 +14,7 @@ import { ConfirmModal } from '../../components/common/ConfirmModal';
 import { useResponsive } from '../../hooks/useResponsive';
 import { getActionDisplayId } from '../../lib/text';
 import { applyActionRules, canSaveAction, ActionRuleErrors } from '../../lib/actionRules';
-import { loadTags, createTag, deleteTag } from '../../services/dataService';
+import { loadTags, createTag, deleteTag, toggleTagFavorite } from '../../services/dataService';
 
 // =====================================
 // PROPS DO COMPONENTE
@@ -316,6 +316,8 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     const userCanEdit = !readOnly && canEdit;
     const userCanDelete = !readOnly && canDelete;
 
+    const [tagStatusMsg, setTagStatusMsg] = useState('');
+
     // Handler para responder comentário (thread)
     const handleReply = useCallback((commentId: string, authorName: string) => {
         setReplyingTo({ id: commentId, authorName });
@@ -331,7 +333,7 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     useEffect(() => {
         if (showTagPopover) {
             setIsLoadingTags(true);
-            loadTags()
+            loadTags(draftAction?.microregiaoId)
                 .then(tags => setAvailableTags(tags))
                 .catch(() => setAvailableTags([]))
                 .finally(() => setIsLoadingTags(false));
@@ -348,22 +350,31 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
     }, [showTagPopover, draftAction?.tags]);
 
     // Toggle tag - adiciona ou remove imediatamente da ação
-    const toggleTagSelection = useCallback((tag: ActionTag) => {
+    const toggleTagSelection = useCallback((tag: ActionTag, e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (!draftAction) return;
 
-        const hasTag = draftAction.tags.some(t => t.id === tag.id);
+        const currentTags = draftAction.tags || [];
+        const hasTag = currentTags.some(t => t.id === tag.id);
 
         if (hasTag) {
             // Remove
             setDraftAction(prev => {
                 if (!prev) return null;
-                return { ...prev, tags: prev.tags.filter(t => t.id !== tag.id) };
+                const safeTags = prev.tags || [];
+                return { ...prev, tags: safeTags.filter(t => t.id !== tag.id) };
             });
         } else {
             // Adiciona
             setDraftAction(prev => {
                 if (!prev) return null;
-                return { ...prev, tags: [...prev.tags, tag] };
+                const safeTags = prev.tags || [];
+                // Evitar duplicatas
+                if (safeTags.some(t => t.id === tag.id)) return prev;
+                return { ...prev, tags: [...safeTags, tag] };
             });
         }
         setIsDirty(true);
@@ -415,6 +426,47 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
             setTagToDelete(null);
         }
     }, [tagToDelete]);
+
+    // Alternar favorito
+    const handleToggleFavorite = useCallback(async (tag: ActionTag, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!draftAction?.microregiaoId) {
+            setTagStatusMsg('Erro: Sem ID');
+            return;
+        }
+
+        setTagStatusMsg('Salvando...');
+
+        try {
+            // Optimistic update locally
+            setAvailableTags(prev => {
+                const updated = prev.map(t =>
+                    t.id === tag.id ? { ...t, isFavorite: !t.isFavorite } : t
+                );
+
+                // Re-sort immediately: Favorites first, then Name
+                return updated.sort((a, b) => {
+                    if (a.isFavorite === b.isFavorite) return a.name.localeCompare(b.name);
+                    return a.isFavorite ? -1 : 1;
+                });
+            });
+
+            await toggleTagFavorite(tag.id, draftAction.microregiaoId);
+
+            // SUCCESS!
+            // We do NOT reload from server here because 'toggleTagFavorite' already verified the persistence.
+            // Reloading immediately might hit a stale read replica and revert the UI (causing the "glitch back").
+            setTagStatusMsg('Salvo!');
+            setTimeout(() => setTagStatusMsg(''), 1500);
+        } catch (error) {
+            console.error('Erro ao favoritar tag:', error);
+            setTagStatusMsg('Erro: ' + (error instanceof Error ? error.message : 'Falha'));
+
+            // Revert optimistic update on error
+            const fresh = await loadTags(draftAction.microregiaoId);
+            setAvailableTags(fresh);
+        }
+    }, [draftAction?.microregiaoId]);
 
     // =================================================================================
     // LOCAL HANDLERS (ATUALIZAM O DRAFT)
@@ -1117,7 +1169,12 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                         {showTagPopover && userCanEdit && (
                             <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-3 z-40 animate-fade-in">
                                 <div className="flex items-center justify-between mb-2">
-                                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">Gerenciar Áreas Envolvidas</h4>
+                                    <div>
+                                        <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                                            Gerenciar Áreas ({draftAction?.microregiaoId || 'SEM MICRO'})
+                                        </h4>
+                                        {tagStatusMsg && <p className="text-[10px] text-teal-600 dark:text-teal-400 font-bold animate-pulse">{tagStatusMsg}</p>}
+                                    </div>
                                     <button onClick={() => setShowTagPopover(false)} className="text-slate-400 hover:text-slate-600 p-1">
                                         <X size={14} />
                                     </button>
@@ -1149,37 +1206,98 @@ export const ActionDetailModal: React.FC<ActionDetailModalProps> = ({
                                     ) : availableTags.length === 0 ? (
                                         <p className="text-xs text-slate-400 text-center py-2">Nenhuma área salva</p>
                                     ) : (
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {availableTags.map(tag => {
-                                                const isOnAction = action.tags?.some(at => at.id === tag.id);
-                                                return (
-                                                    <div key={tag.id} className="flex items-center">
-                                                        {/* Tag principal - clique para adicionar/remover */}
-                                                        <button
-                                                            onClick={() => toggleTagSelection(tag)}
-                                                            className={`relative px-2 py-0.5 rounded-l-full text-[10px] font-bold text-white transition-all hover:brightness-110`}
-                                                            style={{ backgroundColor: tag.color }}
-                                                        >
-                                                            {isOnAction && (
-                                                                <Check size={8} className="inline mr-0.5 -mt-0.5 text-green-300" />
-                                                            )}
-                                                            #{tag.name}
-                                                        </button>
-                                                        {/* Botão X com cor mais clara */}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag); }}
-                                                            className="px-1 py-0.5 rounded-r-full text-[10px] hover:bg-red-500 transition-colors"
-                                                            style={{
-                                                                backgroundColor: `color-mix(in srgb, ${tag.color} 60%, white)`,
-                                                                color: tag.color
-                                                            }}
-                                                            title="Excluir área"
-                                                        >
-                                                            <X size={10} />
-                                                        </button>
+                                        <div className="space-y-3">
+                                            {/* SECTION: FAVORITES */}
+                                            {availableTags.some(t => t.isFavorite) && (
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 flex items-center gap-1">
+                                                        <Heart size={10} className="text-rose-400 fill-current" /> Favoritos
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {availableTags.filter(t => t.isFavorite).map(tag => {
+                                                            const isOnAction = action.tags?.some(at => at.id === tag.id);
+                                                            return (
+                                                                <div key={tag.id} className="flex items-center">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => handleToggleFavorite(tag, e)}
+                                                                        className="mr-1 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors text-rose-500"
+                                                                        title="Remover destaque"
+                                                                    >
+                                                                        <Heart size={10} fill="currentColor" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => toggleTagSelection(tag, e)}
+                                                                        className={`relative px-2 py-0.5 rounded-l-full text-[10px] font-bold text-white transition-all hover:brightness-110`}
+                                                                        style={{ backgroundColor: tag.color }}
+                                                                    >
+                                                                        {isOnAction && (
+                                                                            <Check size={8} className="inline mr-0.5 -mt-0.5 text-green-300" />
+                                                                        )}
+                                                                        #{tag.name}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag); }}
+                                                                        className="px-1 py-0.5 rounded-r-full text-[10px] hover:bg-red-500 transition-colors"
+                                                                        style={{
+                                                                            backgroundColor: `color-mix(in srgb, ${tag.color} 60%, white)`,
+                                                                            color: tag.color
+                                                                        }}
+                                                                        title="Excluir área"
+                                                                    >
+                                                                        <X size={10} />
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
-                                                );
-                                            })}
+                                                </div>
+                                            )}
+
+                                            {/* SECTION: OTHERS */}
+                                            <div>
+                                                {availableTags.some(t => t.isFavorite) && (
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 mt-2">Outras Áreas</p>
+                                                )}
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {availableTags.filter(t => !t.isFavorite).map(tag => {
+                                                        const isOnAction = action.tags?.some(at => at.id === tag.id);
+                                                        return (
+                                                            <div key={tag.id} className="flex items-center opacity-80 hover:opacity-100 transition-opacity">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => handleToggleFavorite(tag, e)}
+                                                                    className="mr-1 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors text-slate-300 hover:text-rose-300"
+                                                                    title="Destacar"
+                                                                >
+                                                                    <Heart size={10} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => toggleTagSelection(tag, e)}
+                                                                    className={`relative px-2 py-0.5 rounded-l-full text-[10px] font-bold text-white transition-all hover:brightness-110`}
+                                                                    style={{ backgroundColor: tag.color }}
+                                                                >
+                                                                    {isOnAction && (
+                                                                        <Check size={8} className="inline mr-0.5 -mt-0.5 text-green-300" />
+                                                                    )}
+                                                                    #{tag.name}
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteTag(tag); }}
+                                                                    className="px-1 py-0.5 rounded-r-full text-[10px] hover:bg-red-500 transition-colors"
+                                                                    style={{
+                                                                        backgroundColor: `color-mix(in srgb, ${tag.color} 60%, white)`,
+                                                                        color: tag.color
+                                                                    }}
+                                                                    title="Excluir área"
+                                                                >
+                                                                    <X size={10} />
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>

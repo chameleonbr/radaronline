@@ -180,8 +180,13 @@ export const getCorrectActionDisplayId = (
   const actIndex = objActivities.findIndex(a => a.id === activityId);
   const actNum = actIndex >= 0 ? actIndex + 1 : '?';
 
-  // 3. Encontrar posição da ação dentro da atividade
-  const actActions = actions.filter(a => a.activityId === activityId);
+
+  // IMPORTANTE: Ordenar numericamente para garantir que 1.2.10 venha após 1.2.2
+  // Caso contrário, "1.2.10" pode ganhar índice menor que "1.2.2" se a lista original for alfabética
+  const actActions = actions
+    .filter(a => a.activityId === activityId)
+    .sort((a, b) => naturalSortComparator(a.id, b.id));
+
   const actionIndex = actActions.findIndex(a => a.id === actionId);
   const actionNum = actionIndex >= 0 ? actionIndex + 1 : getActionNumber(actionId);
 
@@ -214,5 +219,28 @@ export const findObjectiveIdByActivityId = (
     }
   }
   return null;
+};
+
+/**
+ * Comparador para ordenação natural de strings (ex: "1.2.2" vem antes de "1.2.10")
+ */
+export const naturalSortComparator = (idA: string, idB: string): number => {
+  const partsA = idA.split(/[^a-zA-Z0-9]+/);
+  const partsB = idB.split(/[^a-zA-Z0-9]+/);
+  const len = Math.min(partsA.length, partsB.length);
+
+  for (let i = 0; i < len; i++) {
+    const valA = partsA[i];
+    const valB = partsB[i];
+    const numA = parseInt(valA, 10);
+    const numB = parseInt(valB, 10);
+
+    if (!isNaN(numA) && !isNaN(numB)) {
+      if (numA !== numB) return numA - numB;
+    } else {
+      if (valA !== valB) return valA.localeCompare(valB, undefined, { numeric: true });
+    }
+  }
+  return partsA.length - partsB.length;
 };
 

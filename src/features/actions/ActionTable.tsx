@@ -9,7 +9,8 @@ import {
   getCorrectActivityPrefix,
   getCorrectActionDisplayId,
   findObjectiveIdByActivityId,
-  getActivityPrefixFromActionId
+  getActivityPrefixFromActionId,
+  naturalSortComparator
 } from '../../lib/text';
 import { Activity, Objective } from '../../types';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -197,11 +198,16 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
       .filter(a => {
         if (searchTerm && !a.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
         if (statusFilter !== 'all' && a.status !== statusFilter) return false;
-        if (responsibleFilter && !a.raci.some(r => r.name === responsibleFilter)) return false;
+        if (responsibleFilter && !a.raci.some(r => r.name === responsibleFilter && r.role === 'R')) return false;
         return true;
       })
-      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-  }, [actions, selectedActivity, searchTerm, statusFilter, responsibleFilter]);
+      .sort((a, b) => {
+        // Use the DISPLAYED ID for sorting to match visual order
+        const idA = getCorrectId(a);
+        const idB = getCorrectId(b);
+        return naturalSortComparator(idA, idB);
+      });
+  }, [actions, selectedActivity, searchTerm, statusFilter, responsibleFilter, getCorrectId]);
 
   // Toggle usando UID
   const toggleRow = useCallback((uid: string) => {
@@ -685,3 +691,4 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
 };
 
 export const ActionTable = React.memo(ActionTableImpl);
+

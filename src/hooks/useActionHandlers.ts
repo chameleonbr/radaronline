@@ -445,7 +445,7 @@ export function useActionHandlers({
 
     try {
       // 1. Carregar tags existentes para evitar duplicatas e minimizar calls
-      const existingTags = await dataService.loadTags();
+      const existingTags = await dataService.loadTags(currentMicroId);
       // Mapa para busca rápida: NAME_UPPER -> Tag
       const tagMap = new Map<string, ActionTag>();
       existingTags.forEach(t => tagMap.set(t.name.toUpperCase(), t));
@@ -492,16 +492,37 @@ export function useActionHandlers({
                 try {
                   tag = await dataService.createTag(areaName);
                   tagMap.set(upperName, tag); // Atualiza cache local
-                } catch (e) {
-                  console.error(`Erro ao criar tag '${areaName}':`, e);
-                  continue; // Pula essa tag se falhar
+                } catch (e: any) {
+                  // Se falhar (ex: duplicidade não pega no load inicial), tenta buscar do banco
+                  console.warn(`Tentativa de criar tag '${areaName}' falhou, buscando existente...`);
+                  try {
+                    const existingData = await dataService.loadTags();
+                    const found = existingData.find(t => t.name.toUpperCase() === upperName);
+                    if (found) {
+                      tag = found;
+                      tagMap.set(upperName, tag);
+                    } else {
+                      console.error(`Erro fatal: Tag '${areaName}' não criada e não encontrada.`);
+                      continue;
+                    }
+                  } catch (retryErr) {
+                    console.error(`Erro ao recuperar tag existente '${areaName}':`, retryErr);
+                    continue; // Pula essa tag se falhar
+                  }
                 }
               }
 
               // Associa tag à ação
+              // Associa tag à ação
               if (tag) {
                 try {
-                  await dataService.addTagToAction(savedAction.uid, tag.id);
+                  const dbId = (savedAction as any).dbId;
+                  if (!dbId) console.warn(`[BulkImport] ALERTA: dbId hiante para ação ${savedAction.uid}`);
+                  else console.log(`[BulkImport] Associando tag ${tag.name} à ação ${savedAction.uid} (DB ID: ${dbId})`);
+
+                  // Passamos o dbId (UUID) diretamente para evitar lookup e race conditions
+                  await dataService.addTagToAction(savedAction.uid, tag.id, dbId);
+
                   // Verifica duplicidade no array local
                   if (!actionTags.some(t => t.id === tag!.id)) {
                     actionTags.push(tag);

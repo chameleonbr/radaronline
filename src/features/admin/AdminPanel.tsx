@@ -1040,6 +1040,7 @@ export function AdminPanel(props: AdminPanelProps) {
                     filters={dashboardFilters}
                     onTabChange={setActiveTab}
                     pendingCount={pendingRegistrations.length}
+                    onViewMicro={handleViewMicrorregiao}
                   >
                     {/* Mapa de Microrregiões (Inserido entre KPIs e Gráficos) */}
                     <MinasMicroMap

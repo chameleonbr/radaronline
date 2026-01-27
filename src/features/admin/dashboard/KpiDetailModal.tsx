@@ -70,6 +70,7 @@ interface KpiDetailModalProps {
     completedActions?: number;
     completionRate?: number;
     coverageRate?: number;
+    onViewMicro?: (id: string) => void;
 }
 
 export function KpiDetailModal({
@@ -85,6 +86,7 @@ export function KpiDetailModal({
     completedActions = 0,
     completionRate = 0,
     coverageRate = 0,
+    onViewMicro,
 }: KpiDetailModalProps) {
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
@@ -509,7 +511,8 @@ export function KpiDetailModal({
                                         className={`p-3 rounded-lg border transition-colors ${micro.hasActions
                                             ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50'
                                             : 'bg-slate-50 dark:bg-slate-700/30 border-slate-200 dark:border-slate-700'
-                                            }`}
+                                            } ${onViewMicro ? 'cursor-pointer hover:shadow-md hover:scale-[1.01] transition-transform' : ''}`}
+                                        onClick={() => onViewMicro?.(micro.id)}
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className={`font-medium text-sm ${micro.hasActions

@@ -105,6 +105,7 @@ interface AdminOverviewProps {
   children?: React.ReactNode;
   onTabChange?: (tab: 'usuarios' | 'ranking') => void;
   pendingCount?: number;
+  onViewMicro?: (id: string) => void;
 }
 
 // ==========================================
@@ -211,7 +212,7 @@ const CleanTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export function AdminOverview({ actions, users, filters, children, onTabChange, pendingCount }: AdminOverviewProps) {
+export function AdminOverview({ actions, users, filters, children, onTabChange, pendingCount, onViewMicro }: AdminOverviewProps) {
   // Filter actions and users based on selected filters
   const filteredData = useMemo(() => {
     let filteredActions = actions;
@@ -628,7 +629,7 @@ export function AdminOverview({ actions, users, filters, children, onTabChange, 
 
       <KpiDetailModal type="conclusao" isOpen={openModal === 'conclusao'} onClose={() => setOpenModal(null)} objectiveProgress={detailedData.objectiveProgress} totalActions={metrics.totalAcoes} completedActions={metrics.concluidas} completionRate={metrics.taxaConclusao} />
       <KpiDetailModal type="risco" isOpen={openModal === 'risco'} onClose={() => setOpenModal(null)} overdueActions={detailedData.overdueActions} />
-      <KpiDetailModal type="cobertura" isOpen={openModal === 'cobertura'} onClose={() => setOpenModal(null)} microCoverage={detailedData.microCoverage} coverageRate={metrics.taxaCobertura} />
+      <KpiDetailModal type="cobertura" isOpen={openModal === 'cobertura'} onClose={() => setOpenModal(null)} microCoverage={detailedData.microCoverage} coverageRate={metrics.taxaCobertura} onViewMicro={onViewMicro} />
       <KpiDetailModal type="horizonte" isOpen={openModal === 'horizonte'} onClose={() => setOpenModal(null)} deadlineHorizon={detailedData.deadlineHorizonWithActions} />
       <KpiDetailModal type="status" isOpen={openModal === 'status'} onClose={() => setOpenModal(null)} statusData={detailedData.statusWithActions} totalActions={metrics.totalAcoes} />
 

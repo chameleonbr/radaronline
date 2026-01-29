@@ -123,14 +123,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
     ].filter(d => d.value > 0);
 
     // Progresso por objetivo
-    const progressoPorObjetivo = objectives.map(obj => {
+    const progressoPorObjetivo = objectives.map((obj, index) => {
       const actIds = activities[obj.id]?.map(a => a.id) || [];
       const objActions = actions.filter(a => actIds.includes(a.activityId));
       const percentage = objActions.length > 0
         ? Math.round(objActions.reduce((sum, a) => sum + a.progress, 0) / objActions.length)
         : 0;
       return {
-        name: `Obj ${obj.id}`,
+        id: obj.id, // Keep original ID for navigation
+        name: `Obj ${index + 1}`, // Sequential numbering (1, 2, 3...)
         fullName: obj.title,
         progress: percentage,
         count: objActions.length

@@ -226,7 +226,7 @@ function AppContent() {
     isOpen: boolean;
     title: string;
     initialValue: string;
-    inputType: 'text' | 'textarea';
+    inputType: 'text' | 'textarea' | 'number';
     label: string;
     onSave: (value: string) => void;
   }>({
@@ -1134,6 +1134,63 @@ function AppContent() {
     });
   };
 
+  const handleUpdateObjectiveField = useCallback(async (id: number, field: 'eixo' | 'description' | 'eixoLabel' | 'eixoColor', value: string | number) => {
+    if (user?.role !== 'admin' && user?.role !== 'superadmin' && user?.role !== 'gestor') {
+      showToast('Você não tem permissão para editar objetivos', 'error');
+      return;
+    }
+
+    // 1. Otimista no estado local
+    setObjectives(prev => prev.map(o => {
+      if (o.id === id) {
+        return { ...o, [field]: value };
+      }
+      return o;
+    }));
+
+    // 2. Persistir no banco
+    try {
+      const updates = {
+        [field]: value
+      };
+      await dataService.updateObjective(id, updates as any);
+      showToast('Objetivo atualizado!', 'success');
+    } catch (error: any) {
+      logError('App', 'Erro ao atualizar objetivo', error);
+      showToast(`Erro ao atualizar: ${error.message}`, 'error');
+    }
+  }, [user?.role, setObjectives, showToast]);
+
+  // Abre o modal para editar um campo específico do objetivo, ou salva direto se for cor
+  const handleEditObjectiveField = (id: number, field: 'eixo' | 'description' | 'eixoLabel' | 'eixoColor', value: string | number) => {
+    // Se for alteração de cor, salva direto (o componente já mandou o novo valor)
+    if (field === 'eixoColor') {
+      handleUpdateObjectiveField(id, field, value);
+      return;
+    }
+
+    const fieldConfigs: Record<string, { title: string; label: string; inputType: 'text' | 'textarea' | 'number' }> = {
+      eixo: { title: 'Editar Número do Eixo', label: 'Número do Eixo (1, 2, 3...)', inputType: 'number' },
+      eixoLabel: { title: 'Editar Nome do Eixo', label: 'Nome do Eixo (ex: Formação)', inputType: 'text' },
+      description: { title: 'Editar Descrição do Objetivo', label: 'Descrição', inputType: 'textarea' },
+    };
+
+    const config = fieldConfigs[field];
+    if (!config) return;
+
+    setEditModalConfig({
+      isOpen: true,
+      title: config.title,
+      initialValue: String(value),
+      inputType: config.inputType,
+      label: config.label,
+      onSave: (newValue) => {
+        const finalValue = field === 'eixo' ? parseInt(newValue, 10) : newValue;
+        handleUpdateObjectiveField(id, field, finalValue);
+      }
+    });
+  };
+
   const handleEditActivity = (id: string, field: 'title' | 'description', currentValue: string) => {
     setEditModalConfig({
       isOpen: true,
@@ -1621,6 +1678,8 @@ function AppContent() {
                   setSelectedActivity={setSelectedActivity}
                   isEditMode={isEditMode}
                   onUpdateActivity={(id, field, value) => handleEditActivity(id, field, value)}
+                  objective={filteredObjectives.find(o => o.id === selectedObjective)}
+                  onUpdateObjective={handleEditObjectiveField}
                 />
               )}
             </div>
@@ -1635,8 +1694,8 @@ function AppContent() {
                   <Dashboard
                     actions={microActions}
                     team={currentTeam}
-                    objectives={objectives}
-                    activities={activities}
+                    objectives={filteredObjectives}
+                    activities={filteredActivities}
                     onNavigate={handleDashboardNavigate}
                   />
                 </Suspense>
@@ -1772,9 +1831,13 @@ function AppContent() {
                   <ActionTable
                     actions={microActions}
                     selectedActivity={selectedActivity}
+                    selectedObjective={selectedObjective}
                     team={currentTeam}
                     objectives={filteredObjectives}
                     activities={filteredActivities}
+                    isEditMode={isEditMode}
+                    onUpdateObjective={handleEditObjectiveField}
+                    onUpdateActivity={(id, field, value) => handleEditActivity(id, field, value)}
                     searchTerm={searchTerm}
                     setSearchTerm={setSearchTerm}
                     statusFilter={statusFilter}

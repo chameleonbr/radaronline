@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Activity } from '../../types';
+import { Activity, Objective } from '../../types';
 import { Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useResponsive } from '../../hooks/useResponsive';
 import { getActivityDisplayId } from '../../lib/text';
@@ -10,6 +10,8 @@ interface ActivityTabsProps {
   setSelectedActivity: (id: string) => void;
   isEditMode?: boolean;
   onUpdateActivity?: (id: string, field: 'title' | 'description', value: string) => void;
+  objective?: Objective;
+  onUpdateObjective?: (id: number, field: 'eixo' | 'description' | 'eixoLabel' | 'eixoColor', value: string | number) => void;
 }
 
 export const ActivityTabs: React.FC<ActivityTabsProps> = ({
@@ -18,8 +20,9 @@ export const ActivityTabs: React.FC<ActivityTabsProps> = ({
   setSelectedActivity,
   isEditMode = false,
   onUpdateActivity,
+  objective,
+  onUpdateObjective,
 }) => {
-  const currentActivity = activities?.find(a => a.id === selectedActivity);
   const { isMobile } = useResponsive();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
@@ -141,22 +144,22 @@ export const ActivityTabs: React.FC<ActivityTabsProps> = ({
         )}
       </div>
 
-      {/* Descrição da Atividade Integrada */}
-      {(currentActivity?.description || isEditMode) && (
+      {/* Descrição do Objetivo (Exibida no Topo) */}
+      {(objective?.description || isEditMode) && (
         <div className="px-4 sm:px-6 py-2 bg-slate-50/50 dark:bg-slate-700/50 border-t border-slate-100 dark:border-slate-600 flex items-start gap-2 animate-fade-in">
           <Info size={14} className="text-teal-500 mt-0.5 shrink-0" />
           <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed max-w-4xl">
-            <span className="font-semibold text-slate-700 dark:text-slate-200 mr-1">Sobre esta atividade:</span>
-            {isEditMode && currentActivity ? (
+            <span className="font-semibold text-slate-700 dark:text-slate-200 mr-1">Sobre este objetivo:</span>
+            {isEditMode && objective ? (
               <span
                 className={`cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 px-1 rounded transition-colors border border-dashed border-slate-300 dark:border-slate-500`}
-                onClick={() => onUpdateActivity?.(currentActivity.id, 'description', currentActivity.description || '')}
-                title="Clique para editar descrição"
+                onClick={() => onUpdateObjective?.(objective.id, 'description', objective.description || '')}
+                title="Clique para editar descrição do objetivo"
               >
-                {currentActivity.description || "Clique para adicionar descrição..."}
+                {objective.description || "Clique para adicionar descrição..."}
               </span>
             ) : (
-              currentActivity?.description
+              objective?.description || <span className="opacity-50 italic">Sem descrição definida para o objetivo.</span>
             )}
           </p>
         </div>

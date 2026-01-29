@@ -1256,6 +1256,10 @@ interface ObjectiveDTO {
     status: string;
     microregiao_id: string;
     created_at: string;
+    eixo?: number;
+    description?: string;
+    eixo_label?: string;
+    eixo_color?: string;
 }
 
 interface ActivityDTO {
@@ -1275,11 +1279,11 @@ interface ActivityDTO {
 
 // ... inside loadObjectives ...
 
-export async function loadObjectives(microregiaoId?: string): Promise<{ id: number; title: string; status: 'on-track' | 'delayed'; microregiaoId: string }[]> {
+export async function loadObjectives(microregiaoId?: string): Promise<{ id: number; title: string; status: 'on-track' | 'delayed'; microregiaoId: string; eixo?: number; description?: string; eixoLabel?: string; eixoColor?: string }[]> {
     try {
         let query = supabase
             .from('objectives')
-            .select('id, title, status, microregiao_id, created_at')
+            .select('id, title, status, microregiao_id, created_at, eixo, description, eixo_label, eixo_color')
             .order('id', { ascending: true });
 
         // Filtrar por microrregião se fornecido
@@ -1299,6 +1303,10 @@ export async function loadObjectives(microregiaoId?: string): Promise<{ id: numb
             title: obj.title,
             status: (obj.status === 'delayed' ? 'delayed' : 'on-track') as 'on-track' | 'delayed',
             microregiaoId: obj.microregiao_id,
+            eixo: obj.eixo,
+            description: obj.description,
+            eixoLabel: obj.eixo_label,
+            eixoColor: obj.eixo_color,
         }));
     } catch (error) {
         logError('dataService', 'Erro inesperado ao carregar objectives:', error);
@@ -1378,10 +1386,18 @@ export async function createObjective(title: string, microregiaoId: string): Pro
 /**
  * Atualiza um objetivo
  */
-export async function updateObjective(id: number, updates: { title?: string; status?: 'on-track' | 'delayed' }): Promise<void> {
+export async function updateObjective(id: number, updates: { title?: string; status?: 'on-track' | 'delayed'; eixo?: number; description?: string; eixoLabel?: string; eixoColor?: string }): Promise<void> {
+    const dbUpdates: any = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.eixo !== undefined) dbUpdates.eixo = updates.eixo;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.eixoLabel !== undefined) dbUpdates.eixo_label = updates.eixoLabel;
+    if (updates.eixoColor !== undefined) dbUpdates.eixo_color = updates.eixoColor;
+
     const { error } = await supabase
         .from('objectives')
-        .update(updates)
+        .update(dbUpdates)
         .eq('id', id);
 
     if (error) {

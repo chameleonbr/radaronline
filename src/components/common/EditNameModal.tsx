@@ -7,7 +7,7 @@ interface EditNameModalProps {
     onSave: (newName: string) => void;
     title: string;
     initialValue: string;
-    inputType?: 'text' | 'textarea';
+    inputType?: 'text' | 'textarea' | 'number';
     label?: string;
 }
 
@@ -81,6 +81,15 @@ export const EditNameModal: React.FC<EditNameModalProps> = ({
                                         value={value}
                                         onChange={(e) => setValue(e.target.value)}
                                         className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 outline-none transition-all font-medium text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 min-h-[120px] resize-y"
+                                        placeholder={`Digite ${label.toLowerCase()}...`}
+                                    />
+                                ) : inputType === 'number' ? (
+                                    <input
+                                        ref={inputRef}
+                                        type="number"
+                                        value={value}
+                                        onChange={(e) => setValue(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-600 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/20 outline-none transition-all font-medium text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900"
                                         placeholder={`Digite ${label.toLowerCase()}...`}
                                     />
                                 ) : (

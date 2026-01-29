@@ -16,6 +16,7 @@ import { Activity, Objective } from '../../types';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { RaciCompactPill, RaciTag } from '../../components/common/RaciPill';
 import { SearchFilter } from '../../components/common/SearchFilter';
+import { ObjectiveHeader } from '../../components/common/ObjectiveHeader';
 import { LoadingButton } from '../../components/common/LoadingSpinner';
 import { Tooltip } from '../../components/common/Tooltip';
 import { Select } from '../../ui/Select';
@@ -29,10 +30,14 @@ import { SmartPasteModal, ParsedAction } from './SmartPasteModal';
 interface ActionTableProps {
   actions: Action[];
   selectedActivity: string;
+  selectedObjective?: number;  // ID do objetivo selecionado
   team: TeamMember[];
   // Para IDs dinâmicos baseados na posição atual
   objectives?: Objective[];
   activities?: Record<number, Activity[]>;
+  // Modo de edição para ObjectiveHeader
+  isEditMode?: boolean;
+  onUpdateObjective?: (id: number, field: 'eixo' | 'description' | 'eixoLabel' | 'eixoColor', value: string | number) => void;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   statusFilter: Status | 'all';
@@ -60,6 +65,8 @@ interface ActionTableProps {
   useModal?: boolean;
   // Handler para importação em massa
   onBulkImport?: (actions: ParsedAction[]) => void;
+  // Handler para atualizar atividade (descrição no header)
+  onUpdateActivity?: (id: string, field: 'title' | 'description', value: string) => void;
 }
 
 const rolePriority: Record<RaciRole, number> = { R: 0, A: 1, I: 2 };
@@ -125,9 +132,12 @@ const CommentItem: React.FC<{ comment: ActionComment }> = ({ comment }) => {
 const ActionTableImpl: React.FC<ActionTableProps> = ({
   actions,
   selectedActivity,
+  selectedObjective,
   team,
   objectives = [],
   activities = {},
+  isEditMode = false,
+  onUpdateObjective,
   searchTerm,
   setSearchTerm,
   statusFilter,
@@ -150,6 +160,7 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
   readOnly = false,
   useModal = true, // Por padrão, usa o modal (não expande inline)
   onBulkImport,
+  onUpdateActivity,
 }) => {
   const { user } = useAuth();
   const [selectedRaciMemberId, setSelectedRaciMemberId] = React.useState<string>("");
@@ -246,6 +257,32 @@ const ActionTableImpl: React.FC<ActionTableProps> = ({
           <Eye size={16} />
           <span>Modo visualização. Selecione uma microrregião específica para editar.</span>
         </div>
+      )}
+
+      {/* Objetivo Header - Eixo e Descrição (AGORA MOSTRA DESCRIÇÃO DA ATIVIDADE) */}
+      {selectedObjective && objectives.length > 0 && (
+        <ObjectiveHeader
+          objective={(() => {
+            const obj = objectives.find(o => o.id === selectedObjective);
+            if (!obj) return null;
+            // Override description with Activity Description
+            const act = activities[selectedObjective]?.find(a => a.id === selectedActivity);
+            return { ...obj, description: act?.description };
+          })()}
+          objectiveIndex={objectives.findIndex(o => o.id === selectedObjective)}
+          isEditMode={isEditMode}
+          onEdit={(field, value) => {
+            // Se for descrição, edita a ATIVIDADE. Se for eixo/cor, edita o OBJETIVO.
+            if (field === 'description') {
+              const act = activities[selectedObjective]?.find(a => a.id === selectedActivity);
+              if (act && onUpdateActivity) {
+                onUpdateActivity(act.id, 'description', String(value));
+              }
+            } else if (onUpdateObjective) {
+              onUpdateObjective(selectedObjective, field, value);
+            }
+          }}
+        />
       )}
 
       {/* Search & Filters */}

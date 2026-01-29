@@ -20,7 +20,7 @@ export const ExpandableDescription: React.FC<ExpandableDescriptionProps> = ({ te
 
       <div className="flex-1 min-w-0 pt-1">
         <div className={`text-slate-600 text-sm leading-relaxed ${!isExpanded && isLong ? "line-clamp-2" : ""}`}>
-          <span className="font-semibold text-slate-900 mr-2">Sobre esta atividade:</span>
+          <span className="font-semibold text-slate-900 mr-2">Sobre este objetivo:</span>
           {text}
         </div>
 

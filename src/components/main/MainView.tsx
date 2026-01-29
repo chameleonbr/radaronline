@@ -15,6 +15,7 @@ interface MainViewProps {
   currentNav: 'strategy' | 'home' | 'settings';
   viewMode: 'table' | 'gantt' | 'team' | 'optimized' | 'calendar';
   selectedActivity: string;
+  selectedObjective?: number;
   microActions: Action[];
   ganttActions: Action[];
   currentTeam: TeamMember[];
@@ -55,12 +56,14 @@ interface MainViewProps {
   setTeamsByMicro: React.Dispatch<React.SetStateAction<Record<string, TeamMember[]>>>;
   onNavigate: (view: 'list' | 'team', filters?: { status?: string; objectiveId?: number }) => void;
   onBulkImport?: (actions: ParsedAction[]) => void;
+  isEditMode?: boolean;
 }
 
 export function MainView({
   currentNav,
   viewMode,
   selectedActivity,
+  selectedObjective,
   microActions,
   ganttActions,
   currentTeam,
@@ -101,6 +104,7 @@ export function MainView({
   setTeamsByMicro,
   onNavigate,
   onBulkImport,
+  isEditMode = false,
 }: MainViewProps) {
   // Encontrar a ação selecionada para o modal
   const selectedAction = expandedActionUid
@@ -208,9 +212,11 @@ export function MainView({
               <ActionTable
                 actions={microActions}
                 selectedActivity={selectedActivity}
+                selectedObjective={selectedObjective}
                 team={currentTeam}
                 objectives={objectives}
                 activities={activities}
+                isEditMode={isEditMode}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
                 statusFilter={statusFilter}

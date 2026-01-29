@@ -72,6 +72,10 @@ export type Objective = {
   title: string;
   status: 'on-track' | 'delayed';
   microregiaoId?: string;
+  eixo?: number;           // Eixo (Axis) - agrupamento do objetivo (ex: 1, 2, 3)
+  eixoLabel?: string;      // Nome personalizado do Eixo (ex: "Formação")
+  eixoColor?: string;      // Cor personalizada (ex: 'blue', 'amber', 'emerald')
+  description?: string;    // Descrição do objetivo
 };
 
 // TeamMember agora pertence a uma microrregião específica

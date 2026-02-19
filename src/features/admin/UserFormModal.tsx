@@ -139,7 +139,7 @@ export function UserFormModal({ user, onClose, onSave, isSaving = false, initial
     <React.Fragment>
       {/* Modal de confirmação para gerar senha */}
       {showConfirmGenerate && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="p-6">
               <div className="flex items-start gap-4">
@@ -198,7 +198,7 @@ export function UserFormModal({ user, onClose, onSave, isSaving = false, initial
       )}
 
       {/* Modal principal */}
-      <div className={`fixed inset-0 z-50 flex ${fullScreen ? 'items-start justify-start p-0' : 'items-center justify-center p-4'} bg-black/50 backdrop-blur-sm`}>
+      <div className={`fixed inset-0 z-50 flex ${fullScreen ? 'items-start justify-start p-0' : 'items-center justify-center p-4'} bg-black/50`}>
         <div className={`bg-white dark:bg-slate-800 ${fullScreen ? 'w-full h-full rounded-none' : 'w-full max-w-lg max-h-[90vh] rounded-2xl'} overflow-hidden shadow-2xl`}>
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">

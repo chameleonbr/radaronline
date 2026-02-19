@@ -534,7 +534,7 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
             {/* Action Detail Modal (Read-Only) */}
             {selectedAction && (
                 <>
-                    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50" onClick={() => setSelectedAction(null)} />
+                    <div className="fixed inset-0 bg-black/40 z-50" onClick={() => setSelectedAction(null)} />
                     <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-50 w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700">
                         <div className={`px-5 py-4 ${OBJECTIVE_COLORS[getObjectiveDisplayNumber(selectedAction)]?.bg || 'bg-slate-50'} border-b ${OBJECTIVE_COLORS[getObjectiveDisplayNumber(selectedAction)]?.border || 'border-slate-200'} flex items-center justify-between`}>
                             <div className="flex items-center gap-3">
@@ -643,7 +643,7 @@ export function LinearCalendar({ actions, activities, objectives, microId }: Lin
 
                 return (
                     <>
-                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setSelectedDay(null)} />
+                        <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setSelectedDay(null)} />
                         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl z-50 w-full max-w-lg max-h-[85vh] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col">
                             {/* Header with date info */}
                             <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-5 py-4 text-white shrink-0">

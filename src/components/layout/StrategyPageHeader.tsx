@@ -73,7 +73,7 @@ export const StrategyPageHeader: React.FC<StrategyPageHeaderProps> = ({
                 </div>
 
                 {/* Descrição do Objetivo */}
-                {(objective?.description || isEditMode) && (
+                {objective && (objective.description || isEditMode) && (
                     <div className="flex items-start gap-1.5 max-w-5xl animate-fade-in pl-1 opacity-90">
                         <div className="mt-[3px] text-teal-500 shrink-0">
                             <Info size={12} />

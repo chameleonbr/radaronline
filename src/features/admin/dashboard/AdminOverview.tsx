@@ -636,7 +636,7 @@ export function AdminOverview({ actions, users, filters, children, onTabChange, 
       {/* Modal Reprogramadas - Inline */}
       {openModal === 'reprogramadas' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpenModal(null)} />
+          <div className="absolute inset-0 bg-black/50" onClick={() => setOpenModal(null)} />
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}

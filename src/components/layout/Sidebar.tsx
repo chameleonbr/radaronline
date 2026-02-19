@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, ChevronRight, Target, Settings, LogOut, Shield, Trash2, Plus, Edit2, LayoutDashboard, Activity as ActivityIcon, Users, Trophy, Triangle, Calendar, ClipboardList, MapPin, Newspaper, BarChart3, Megaphone, Search } from 'lucide-react';
@@ -278,7 +278,7 @@ const SidebarContent: React.FC<SidebarProps> = ({
   const [expandedObjectives, setExpandedObjectives] = useState<Set<number>>(new Set());
   const [microSearchTerm, setMicroSearchTerm] = useState('');
 
-  const toggleObjective = (id: number) => {
+  const toggleObjective = useCallback((id: number) => {
     setExpandedObjectives(prev => {
       // Accordion behavior: if already open, close it. If closed, open it and close others.
       if (prev.has(id)) {
@@ -286,7 +286,7 @@ const SidebarContent: React.FC<SidebarProps> = ({
       }
       return new Set([id]);
     });
-  };
+  }, []);
 
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
@@ -315,10 +315,10 @@ const SidebarContent: React.FC<SidebarProps> = ({
     // console.log('[Sidebar] mounted'); 
   }, []);
 
-  // No mobile, sidebar começa fechada e é overlay
-  const sidebarClasses = isMobile
+  // No mobile, sidebar começa fechada e é overlay - memoizado para evitar recálculos
+  const sidebarClasses = useMemo(() => isMobile
     ? `fixed inset-y-0 left-0 z-50 ${isOpen ? 'w-[280px]' : 'w-0 overflow-hidden'}`
-    : `${isOpen ? 'w-[280px]' : 'w-[80px]'} shrink-0`;
+    : `${isOpen ? 'w-[280px]' : 'w-[80px]'} shrink-0`, [isMobile, isOpen]);
 
   const getRoleLabel = (role?: UserRole) => {
     if (!role) return 'Usuário';
@@ -344,7 +344,7 @@ const SidebarContent: React.FC<SidebarProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 z-40"
           onClick={onToggle}
           aria-hidden="true"
         />
@@ -421,7 +421,7 @@ const SidebarContent: React.FC<SidebarProps> = ({
         <div className="relative z-10 flex flex-col h-full">
           {/* Header */}
           <div className={`p-6 flex items-center gap-4 ${!isOpen && 'justify-center'}`}>
-            <div className={`rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-inner border border-white/30 transition-all duration-300 ${isOpen ? 'w-10 h-10' : 'w-10 h-10 p-2'}`}>
+            <div className={`rounded-xl bg-white/30 flex items-center justify-center text-white shadow-inner border border-white/30 transition-all duration-150 ${isOpen ? 'w-10 h-10' : 'w-10 h-10 p-2'}`}>
               <Triangle size={isOpen ? 22 : 24} fill="currentColor" className="text-white" />
             </div>
             {isOpen && (
@@ -790,7 +790,7 @@ const SidebarContent: React.FC<SidebarProps> = ({
           </div>
 
           {/* User profile section - Fixed at bottom */}
-          <div className="p-4 bg-black/20 mt-auto relative z-30 space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.1)] backdrop-blur-sm border-t border-white/5">
+          <div className="p-4 bg-black/30 mt-auto relative z-30 space-y-3 shadow-[0_-10px_20px_rgba(0,0,0,0.1)] border-t border-white/10">
             {/* System Links */}
             <div className="space-y-1">
               <SidebarItem

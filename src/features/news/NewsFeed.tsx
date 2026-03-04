@@ -19,8 +19,9 @@ import {
 import { Button } from '../../ui/Button';
 import confetti from 'canvas-confetti';
 
-import { loadAnnouncements, loadAutomatedEvents } from '../../services/dataService';
-import type { AutomatedEvent } from '../../services/dataService';
+import { loadAnnouncements } from '../../services/announcementsService';
+import { loadAutomatedEvents } from '../../services/automatedEventsService';
+import type { AutomatedEvent } from '../../services/automatedEventsService';
 import { useAuth } from '../../auth/AuthContext';
 import { Announcement } from '../../types/announcement.types';
 

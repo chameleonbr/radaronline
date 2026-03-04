@@ -3,11 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, 
   Search, 
-  ChevronDown, 
   ChevronRight, 
   CheckCircle2, 
   AlertCircle,
-  TrendingUp,
   X
 } from 'lucide-react';
 import { MICROREGIOES, getMacrorregioes, getMicroregioesByMacro } from '../../data/microregioes';

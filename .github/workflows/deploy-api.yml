@@ -1,0 +1,56 @@
+name: Deploy API
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        type: choice
+        options:
+          - dev
+          - hml
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Azure Container Registry login
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/radar-api:${{ github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/radar-api:${{ inputs.environment }}
+
+      - name: Update Container App
+        run: |
+          az containerapp update \
+            --name "${{ vars.API_CONTAINER_APP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ secrets.ACR_LOGIN_SERVER }}/radar-api:${{ github.sha }}"

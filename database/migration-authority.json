@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "authoritativePath": "supabase/migrations",
+  "authoritativeReason": "As migrations timestamped do provider atual sao a trilha versionada primaria para bootstrap, rollback e replay de schema durante a transicao para Azure PostgreSQL.",
+  "bootstrapArtifacts": [
+    "database/schema.sql",
+    "database/security.sql",
+    "database/setup.sql",
+    "database/seed.sql"
+  ],
+  "legacySupplementalPaths": [
+    "database/migrations",
+    "database/fixes"
+  ],
+  "operationalRules": [
+    "Toda mudanca permanente de schema deve entrar primeiro em supabase/migrations.",
+    "Scripts em database/migrations e database/fixes devem ser promovidos para a trilha autoritativa ou explicitamente aposentados.",
+    "database/schema.sql e database/security.sql sao snapshots/bootstrap e nao fonte primaria de alteracao."
+  ]
+}

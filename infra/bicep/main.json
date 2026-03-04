@@ -1,0 +1,1398 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.41.2.15936",
+      "templateHash": "3653430404774160596"
+    }
+  },
+  "parameters": {
+    "appName": {
+      "type": "string",
+      "defaultValue": "radar",
+      "metadata": {
+        "description": "Nome da aplicacao"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "hml",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Ambiente de deploy"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Localizacao dos recursos"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Tags obrigatorias"
+      }
+    },
+    "publisherName": {
+      "type": "string",
+      "defaultValue": "Radar Platform Team",
+      "metadata": {
+        "description": "Nome do publisher do API Management"
+      }
+    },
+    "publisherEmail": {
+      "type": "string",
+      "defaultValue": "radar@example.gov.br",
+      "metadata": {
+        "description": "Email do publisher do API Management"
+      }
+    },
+    "apiImage": {
+      "type": "string",
+      "defaultValue": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+      "metadata": {
+        "description": "Imagem do container da API"
+      }
+    },
+    "workerImage": {
+      "type": "string",
+      "defaultValue": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+      "metadata": {
+        "description": "Imagem do container do worker"
+      }
+    },
+    "postgresqlAdminLogin": {
+      "type": "string",
+      "defaultValue": "radaradmin",
+      "metadata": {
+        "description": "Login administrador do PostgreSQL"
+      }
+    },
+    "postgresqlAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Senha administradora do PostgreSQL"
+      }
+    },
+    "postgresqlDatabaseName": {
+      "type": "string",
+      "defaultValue": "radar",
+      "metadata": {
+        "description": "Nome do banco principal"
+      }
+    },
+    "bridgeSupabaseUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "URL do provider atual para bridge de transicao"
+      }
+    },
+    "bridgeSupabaseServiceRoleKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Service role key do provider atual para bridge de transicao"
+      }
+    },
+    "entraTenantId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Tenant do Entra para a trilha final de identidade"
+      }
+    },
+    "entraAudience": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Audience do Entra para validacao de token"
+      }
+    },
+    "entraIssuer": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Issuer do Entra para validacao de token"
+      }
+    },
+    "entraJwksUri": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "JWKS URI do Entra para validacao de token"
+      }
+    },
+    "webOriginHost": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Hostname do frontend publicado para uso no Front Door"
+      }
+    },
+    "frontDoorCustomDomainResourceIds": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Ids de custom domains do Front Door para associacao do WAF"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[parameters('appName')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "2462087572783042772"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            }
+          },
+          "variables": {
+            "suffix": "[format('{0}-{1}', parameters('appName'), parameters('environment'))]",
+            "logAnalyticsName": "[take(toLower(format('log-{0}', variables('suffix'))), 63)]",
+            "appInsightsName": "[take(toLower(format('appi-{0}', variables('suffix'))), 63)]",
+            "keyVaultName": "[take(toLower(replace(format('kv-{0}', variables('suffix')), '-', '')), 24)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[variables('logAnalyticsName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": "[if(equals(parameters('environment'), 'prod'), 90, 30)]"
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[variables('appInsightsName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[variables('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "enabledForTemplateDeployment": false,
+                "enableRbacAuthorization": true,
+                "publicNetworkAccess": "Enabled"
+              }
+            }
+          ],
+          "outputs": {
+            "appInsightsName": {
+              "type": "string",
+              "value": "[variables('appInsightsName')]"
+            },
+            "appInsightsConnectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            "logAnalyticsName": {
+              "type": "string",
+              "value": "[variables('logAnalyticsName')]"
+            },
+            "logAnalyticsResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+            },
+            "logAnalyticsCustomerId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2023-09-01').customerId]"
+            },
+            "keyVaultName": {
+              "type": "string",
+              "value": "[variables('keyVaultName')]"
+            },
+            "keyVaultResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('workload-data-{0}-{1}', parameters('appName'), parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[parameters('appName')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "postgresqlAdminLogin": {
+            "value": "[parameters('postgresqlAdminLogin')]"
+          },
+          "postgresqlAdminPassword": {
+            "value": "[parameters('postgresqlAdminPassword')]"
+          },
+          "postgresqlDatabaseName": {
+            "value": "[parameters('postgresqlDatabaseName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "5108913199942168184"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "postgresqlAdminLogin": {
+              "type": "string"
+            },
+            "postgresqlAdminPassword": {
+              "type": "securestring"
+            },
+            "postgresqlDatabaseName": {
+              "type": "string",
+              "defaultValue": "radar"
+            },
+            "postgresqlVersion": {
+              "type": "string",
+              "defaultValue": "16"
+            },
+            "postgresqlSkuName": {
+              "type": "string",
+              "defaultValue": "[if(equals(parameters('environment'), 'prod'), 'Standard_D2ds_v4', 'Standard_B1ms')]"
+            },
+            "postgresqlSkuTier": {
+              "type": "string",
+              "defaultValue": "[if(equals(parameters('environment'), 'prod'), 'GeneralPurpose', 'Burstable')]"
+            },
+            "postgresqlStorageSizeGb": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environment'), 'prod'), 128, 32)]"
+            },
+            "serviceBusQueueNames": {
+              "type": "array",
+              "defaultValue": [
+                "notifications",
+                "audit",
+                "jobs"
+              ]
+            }
+          },
+          "variables": {
+            "suffix": "[toLower(format('{0}-{1}', parameters('appName'), parameters('environment')))]",
+            "postgresServerName": "[take(format('psql-{0}', variables('suffix')), 63)]",
+            "serviceBusNamespaceName": "[take(format('sb-{0}', variables('suffix')), 50)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2023-06-01-preview",
+              "name": "[variables('postgresServerName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('postgresqlSkuName')]",
+                "tier": "[parameters('postgresqlSkuTier')]"
+              },
+              "properties": {
+                "administratorLogin": "[parameters('postgresqlAdminLogin')]",
+                "administratorLoginPassword": "[parameters('postgresqlAdminPassword')]",
+                "version": "[parameters('postgresqlVersion')]",
+                "storage": {
+                  "storageSizeGB": "[parameters('postgresqlStorageSizeGb')]"
+                },
+                "backup": {
+                  "backupRetentionDays": "[if(equals(parameters('environment'), 'prod'), 14, 7)]",
+                  "geoRedundantBackup": "[if(equals(parameters('environment'), 'prod'), 'Enabled', 'Disabled')]"
+                },
+                "network": {
+                  "publicNetworkAccess": "Enabled"
+                },
+                "createMode": "Default"
+              }
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2023-06-01-preview",
+              "name": "[format('{0}/{1}', variables('postgresServerName'), parameters('postgresqlDatabaseName'))]",
+              "properties": {},
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.ServiceBus/namespaces",
+              "apiVersion": "2024-01-01",
+              "name": "[variables('serviceBusNamespaceName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[if(equals(parameters('environment'), 'prod'), 'Standard', 'Basic')]",
+                "tier": "[if(equals(parameters('environment'), 'prod'), 'Standard', 'Basic')]"
+              },
+              "properties": {
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "copy": {
+                "name": "serviceBusQueues",
+                "count": "[length(parameters('serviceBusQueueNames'))]"
+              },
+              "type": "Microsoft.ServiceBus/namespaces/queues",
+              "apiVersion": "2024-01-01",
+              "name": "[format('{0}/{1}', variables('serviceBusNamespaceName'), parameters('serviceBusQueueNames')[copyIndex()])]",
+              "properties": {
+                "maxDeliveryCount": 10,
+                "deadLetteringOnMessageExpiration": true,
+                "lockDuration": "PT1M",
+                "defaultMessageTimeToLive": "P14D"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespaceName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "postgresqlServerName": {
+              "type": "string",
+              "value": "[variables('postgresServerName')]"
+            },
+            "postgresqlHost": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2023-06-01-preview').fullyQualifiedDomainName]"
+            },
+            "postgresqlDatabaseName": {
+              "type": "string",
+              "value": "[parameters('postgresqlDatabaseName')]"
+            },
+            "serviceBusNamespaceName": {
+              "type": "string",
+              "value": "[variables('serviceBusNamespaceName')]"
+            },
+            "serviceBusNamespaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespaceName'))]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('workload-app-{0}-{1}', parameters('appName'), parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[parameters('appName')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "apiImage": {
+            "value": "[parameters('apiImage')]"
+          },
+          "workerImage": {
+            "value": "[parameters('workerImage')]"
+          },
+          "keyVaultName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.keyVaultName.value]"
+          },
+          "logAnalyticsWorkspaceName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.logAnalyticsName.value]"
+          },
+          "logAnalyticsCustomerId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.logAnalyticsCustomerId.value]"
+          },
+          "appInsightsConnectionString": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.appInsightsConnectionString.value]"
+          },
+          "serviceBusNamespace": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-data-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.serviceBusNamespaceName.value]"
+          },
+          "postgresqlHost": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-data-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.postgresqlHost.value]"
+          },
+          "postgresqlDatabaseName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-data-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.postgresqlDatabaseName.value]"
+          },
+          "postgresqlAdminLogin": {
+            "value": "[parameters('postgresqlAdminLogin')]"
+          },
+          "postgresqlAdminPassword": {
+            "value": "[parameters('postgresqlAdminPassword')]"
+          },
+          "bridgeSupabaseUrl": {
+            "value": "[parameters('bridgeSupabaseUrl')]"
+          },
+          "bridgeSupabaseServiceRoleKey": {
+            "value": "[parameters('bridgeSupabaseServiceRoleKey')]"
+          },
+          "entraTenantId": {
+            "value": "[parameters('entraTenantId')]"
+          },
+          "entraAudience": {
+            "value": "[parameters('entraAudience')]"
+          },
+          "entraIssuer": {
+            "value": "[parameters('entraIssuer')]"
+          },
+          "entraJwksUri": {
+            "value": "[parameters('entraJwksUri')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "9600885648842356195"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "apiImage": {
+              "type": "string"
+            },
+            "workerImage": {
+              "type": "string"
+            },
+            "keyVaultName": {
+              "type": "string"
+            },
+            "logAnalyticsWorkspaceName": {
+              "type": "string"
+            },
+            "logAnalyticsCustomerId": {
+              "type": "string"
+            },
+            "appInsightsConnectionString": {
+              "type": "string"
+            },
+            "serviceBusNamespace": {
+              "type": "string"
+            },
+            "postgresqlHost": {
+              "type": "string"
+            },
+            "postgresqlDatabaseName": {
+              "type": "string"
+            },
+            "postgresqlAdminLogin": {
+              "type": "string"
+            },
+            "postgresqlAdminPassword": {
+              "type": "securestring"
+            },
+            "bridgeSupabaseUrl": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "bridgeSupabaseServiceRoleKey": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "entraTenantId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "entraAudience": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "entraIssuer": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "entraJwksUri": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "apiMinReplicas": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environment'), 'prod'), 2, 1)]"
+            },
+            "apiMaxReplicas": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environment'), 'prod'), 5, 2)]"
+            },
+            "workerMinReplicas": {
+              "type": "int",
+              "defaultValue": 0
+            },
+            "workerMaxReplicas": {
+              "type": "int",
+              "defaultValue": "[if(equals(parameters('environment'), 'prod'), 3, 1)]"
+            }
+          },
+          "variables": {
+            "suffix": "[toLower(format('{0}-{1}', parameters('appName'), parameters('environment')))]",
+            "managedEnvironmentName": "[take(format('cae-{0}', variables('suffix')), 32)]",
+            "apiAppName": "[take(format('ca-api-{0}', variables('suffix')), 32)]",
+            "workerAppName": "[take(format('ca-worker-{0}', variables('suffix')), 32)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2024-03-01",
+              "name": "[variables('managedEnvironmentName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "appLogsConfiguration": {
+                  "destination": "log-analytics",
+                  "logAnalyticsConfiguration": {
+                    "customerId": "[parameters('logAnalyticsCustomerId')]",
+                    "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').primarySharedKey]"
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[variables('apiAppName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('managedEnvironmentName'))]",
+                "configuration": {
+                  "activeRevisionsMode": "Single",
+                  "ingress": {
+                    "external": true,
+                    "allowInsecure": false,
+                    "targetPort": 3001,
+                    "transport": "auto"
+                  },
+                  "secrets": [
+                    {
+                      "name": "postgres-admin-password",
+                      "value": "[parameters('postgresqlAdminPassword')]"
+                    },
+                    {
+                      "name": "bridge-supabase-service-role-key",
+                      "value": "[parameters('bridgeSupabaseServiceRoleKey')]"
+                    }
+                  ]
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "api",
+                      "image": "[parameters('apiImage')]",
+                      "env": [
+                        {
+                          "name": "APP_NAME",
+                          "value": "[format('{0}-api', parameters('appName'))]"
+                        },
+                        {
+                          "name": "NODE_ENV",
+                          "value": "[if(equals(parameters('environment'), 'prod'), 'production', 'development')]"
+                        },
+                        {
+                          "name": "HOST",
+                          "value": "0.0.0.0"
+                        },
+                        {
+                          "name": "PORT",
+                          "value": "3001"
+                        },
+                        {
+                          "name": "APPINSIGHTS_CONNECTION_STRING",
+                          "value": "[parameters('appInsightsConnectionString')]"
+                        },
+                        {
+                          "name": "KEY_VAULT_NAME",
+                          "value": "[parameters('keyVaultName')]"
+                        },
+                        {
+                          "name": "SERVICE_BUS_NAMESPACE",
+                          "value": "[parameters('serviceBusNamespace')]"
+                        },
+                        {
+                          "name": "POSTGRES_HOST",
+                          "value": "[parameters('postgresqlHost')]"
+                        },
+                        {
+                          "name": "POSTGRES_DB",
+                          "value": "[parameters('postgresqlDatabaseName')]"
+                        },
+                        {
+                          "name": "POSTGRES_USER",
+                          "value": "[parameters('postgresqlAdminLogin')]"
+                        },
+                        {
+                          "name": "POSTGRES_PASSWORD",
+                          "secretRef": "postgres-admin-password"
+                        },
+                        {
+                          "name": "SUPABASE_URL",
+                          "value": "[parameters('bridgeSupabaseUrl')]"
+                        },
+                        {
+                          "name": "SUPABASE_SERVICE_ROLE_KEY",
+                          "secretRef": "bridge-supabase-service-role-key"
+                        },
+                        {
+                          "name": "ENTRA_TENANT_ID",
+                          "value": "[parameters('entraTenantId')]"
+                        },
+                        {
+                          "name": "ENTRA_AUDIENCE",
+                          "value": "[parameters('entraAudience')]"
+                        },
+                        {
+                          "name": "ENTRA_ISSUER",
+                          "value": "[parameters('entraIssuer')]"
+                        },
+                        {
+                          "name": "ENTRA_JWKS_URI",
+                          "value": "[parameters('entraJwksUri')]"
+                        }
+                      ],
+                      "resources": {
+                        "cpu": "[if(equals(parameters('environment'), 'prod'), json('1.0'), json('0.5'))]",
+                        "memory": "[if(equals(parameters('environment'), 'prod'), '2Gi', '1Gi')]"
+                      }
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": "[parameters('apiMinReplicas')]",
+                    "maxReplicas": "[parameters('apiMaxReplicas')]"
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments', variables('managedEnvironmentName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[variables('workerAppName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('managedEnvironmentName'))]",
+                "configuration": {
+                  "activeRevisionsMode": "Single",
+                  "secrets": [
+                    {
+                      "name": "postgres-admin-password",
+                      "value": "[parameters('postgresqlAdminPassword')]"
+                    },
+                    {
+                      "name": "bridge-supabase-service-role-key",
+                      "value": "[parameters('bridgeSupabaseServiceRoleKey')]"
+                    }
+                  ]
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "worker",
+                      "image": "[parameters('workerImage')]",
+                      "env": [
+                        {
+                          "name": "APP_NAME",
+                          "value": "[format('{0}-worker', parameters('appName'))]"
+                        },
+                        {
+                          "name": "NODE_ENV",
+                          "value": "[if(equals(parameters('environment'), 'prod'), 'production', 'development')]"
+                        },
+                        {
+                          "name": "APPINSIGHTS_CONNECTION_STRING",
+                          "value": "[parameters('appInsightsConnectionString')]"
+                        },
+                        {
+                          "name": "SERVICE_BUS_NAMESPACE",
+                          "value": "[parameters('serviceBusNamespace')]"
+                        },
+                        {
+                          "name": "POSTGRES_HOST",
+                          "value": "[parameters('postgresqlHost')]"
+                        },
+                        {
+                          "name": "POSTGRES_DB",
+                          "value": "[parameters('postgresqlDatabaseName')]"
+                        },
+                        {
+                          "name": "POSTGRES_USER",
+                          "value": "[parameters('postgresqlAdminLogin')]"
+                        },
+                        {
+                          "name": "POSTGRES_PASSWORD",
+                          "secretRef": "postgres-admin-password"
+                        },
+                        {
+                          "name": "SUPABASE_SERVICE_ROLE_KEY",
+                          "secretRef": "bridge-supabase-service-role-key"
+                        }
+                      ],
+                      "resources": {
+                        "cpu": "[if(equals(parameters('environment'), 'prod'), json('0.5'), json('0.25'))]",
+                        "memory": "0.5Gi"
+                      }
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": "[parameters('workerMinReplicas')]",
+                    "maxReplicas": "[parameters('workerMaxReplicas')]"
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments', variables('managedEnvironmentName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "containerAppsEnvironmentName": {
+              "type": "string",
+              "value": "[variables('managedEnvironmentName')]"
+            },
+            "apiContainerAppName": {
+              "type": "string",
+              "value": "[variables('apiAppName')]"
+            },
+            "workerContainerAppName": {
+              "type": "string",
+              "value": "[variables('workerAppName')]"
+            },
+            "apiIngressFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/containerApps', variables('apiAppName')), '2024-03-01').configuration.ingress.fqdn]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('workload-data-{0}-{1}', parameters('appName'), parameters('environment')))]",
+        "[resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('workload-apim-{0}-{1}', parameters('appName'), parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[parameters('appName')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "publisherName": {
+            "value": "[parameters('publisherName')]"
+          },
+          "publisherEmail": {
+            "value": "[parameters('publisherEmail')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "56804140985186898"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "publisherName": {
+              "type": "string"
+            },
+            "publisherEmail": {
+              "type": "string"
+            },
+            "apiManagementSkuName": {
+              "type": "string",
+              "defaultValue": "[if(equals(parameters('environment'), 'prod'), 'Standard', 'Developer')]"
+            }
+          },
+          "variables": {
+            "suffix": "[toLower(format('{0}-{1}', parameters('appName'), parameters('environment')))]",
+            "apiManagementName": "[take(format('apim-{0}', variables('suffix')), 50)]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ApiManagement/service",
+              "apiVersion": "2022-08-01",
+              "name": "[variables('apiManagementName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('apiManagementSkuName')]",
+                "capacity": 1
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "publisherEmail": "[parameters('publisherEmail')]",
+                "publisherName": "[parameters('publisherName')]",
+                "publicNetworkAccess": "Enabled",
+                "virtualNetworkType": "None"
+              }
+            }
+          ],
+          "outputs": {
+            "apiManagementName": {
+              "type": "string",
+              "value": "[variables('apiManagementName')]"
+            },
+            "apiManagementGatewayUrl": {
+              "type": "string",
+              "value": "[format('https://{0}.azure-api.net', variables('apiManagementName'))]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('workload-edge-{0}-{1}', parameters('appName'), parameters('environment'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "appName": {
+            "value": "[parameters('appName')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "apiOriginHost": {
+            "value": "[replace(reference(resourceId('Microsoft.Resources/deployments', format('workload-apim-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.apiManagementGatewayUrl.value, 'https://', '')]"
+          },
+          "webOriginHost": {
+            "value": "[parameters('webOriginHost')]"
+          },
+          "frontDoorCustomDomainResourceIds": {
+            "value": "[parameters('frontDoorCustomDomainResourceIds')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.41.2.15936",
+              "templateHash": "2364423365896616879"
+            }
+          },
+          "parameters": {
+            "appName": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "apiOriginHost": {
+              "type": "string"
+            },
+            "webOriginHost": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "frontDoorSkuName": {
+              "type": "string",
+              "defaultValue": "Premium_AzureFrontDoor"
+            },
+            "frontDoorCustomDomainResourceIds": {
+              "type": "array",
+              "defaultValue": []
+            }
+          },
+          "variables": {
+            "suffix": "[toLower(format('{0}-{1}', parameters('appName'), parameters('environment')))]",
+            "frontDoorProfileName": "[take(format('fd-{0}', variables('suffix')), 50)]",
+            "frontDoorEndpointName": "[take(format('ep-{0}', variables('suffix')), 50)]",
+            "apiOriginGroupName": "api-origin-group",
+            "apiOriginName": "api-origin",
+            "webOriginGroupName": "web-origin-group",
+            "webOriginName": "web-origin",
+            "frontDoorWafPolicyName": "[take(format('fdwaf-{0}', variables('suffix')), 128)]",
+            "frontDoorSecurityPolicyName": "waf-default"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Cdn/profiles",
+              "apiVersion": "2021-06-01",
+              "name": "[variables('frontDoorProfileName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('frontDoorSkuName')]"
+              },
+              "properties": {
+                "originResponseTimeoutSeconds": 120
+              }
+            },
+            {
+              "type": "Microsoft.Cdn/profiles/afdEndpoints",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}', variables('frontDoorProfileName'), variables('frontDoorEndpointName'))]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "enabledState": "Enabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles', variables('frontDoorProfileName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Cdn/profiles/originGroups",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}', variables('frontDoorProfileName'), variables('apiOriginGroupName'))]",
+              "properties": {
+                "healthProbeSettings": {
+                  "probeIntervalInSeconds": 120,
+                  "probePath": "/health",
+                  "probeProtocol": "Https",
+                  "probeRequestType": "GET"
+                },
+                "loadBalancingSettings": {
+                  "additionalLatencyInMilliseconds": 0,
+                  "sampleSize": 4,
+                  "successfulSamplesRequired": 3
+                },
+                "sessionAffinityState": "Disabled",
+                "trafficRestorationTimeToHealedOrNewEndpointsInMinutes": 10
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles', variables('frontDoorProfileName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Cdn/profiles/originGroups/origins",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}/{2}', variables('frontDoorProfileName'), variables('apiOriginGroupName'), variables('apiOriginName'))]",
+              "properties": {
+                "enabledState": "Enabled",
+                "enforceCertificateNameCheck": true,
+                "hostName": "[parameters('apiOriginHost')]",
+                "httpPort": 80,
+                "httpsPort": 443,
+                "originHostHeader": "[parameters('apiOriginHost')]",
+                "priority": 1,
+                "weight": 1000
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles/originGroups', variables('frontDoorProfileName'), variables('apiOriginGroupName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Cdn/profiles/afdEndpoints/routes",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}/{2}', variables('frontDoorProfileName'), variables('frontDoorEndpointName'), 'api-route')]",
+              "properties": {
+                "enabledState": "Enabled",
+                "forwardingProtocol": "HttpsOnly",
+                "httpsRedirect": "Enabled",
+                "linkToDefaultDomain": "Enabled",
+                "originGroup": {
+                  "id": "[resourceId('Microsoft.Cdn/profiles/originGroups', variables('frontDoorProfileName'), variables('apiOriginGroupName'))]"
+                },
+                "patternsToMatch": [
+                  "/v1/*",
+                  "/health",
+                  "/ready",
+                  "/docs/*",
+                  "/openapi/*"
+                ],
+                "supportedProtocols": [
+                  "Http",
+                  "Https"
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles/originGroups', variables('frontDoorProfileName'), variables('apiOriginGroupName'))]",
+                "[resourceId('Microsoft.Cdn/profiles/afdEndpoints', variables('frontDoorProfileName'), variables('frontDoorEndpointName'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('webOriginHost')))]",
+              "type": "Microsoft.Cdn/profiles/originGroups",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}', variables('frontDoorProfileName'), variables('webOriginGroupName'))]",
+              "properties": {
+                "healthProbeSettings": {
+                  "probeIntervalInSeconds": 120,
+                  "probePath": "/",
+                  "probeProtocol": "Https",
+                  "probeRequestType": "HEAD"
+                },
+                "loadBalancingSettings": {
+                  "additionalLatencyInMilliseconds": 0,
+                  "sampleSize": 4,
+                  "successfulSamplesRequired": 3
+                },
+                "sessionAffinityState": "Disabled",
+                "trafficRestorationTimeToHealedOrNewEndpointsInMinutes": 10
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles', variables('frontDoorProfileName'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('webOriginHost')))]",
+              "type": "Microsoft.Cdn/profiles/originGroups/origins",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}/{2}', variables('frontDoorProfileName'), variables('webOriginGroupName'), variables('webOriginName'))]",
+              "properties": {
+                "enabledState": "Enabled",
+                "enforceCertificateNameCheck": true,
+                "hostName": "[parameters('webOriginHost')]",
+                "httpPort": 80,
+                "httpsPort": 443,
+                "originHostHeader": "[parameters('webOriginHost')]",
+                "priority": 1,
+                "weight": 1000
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles/originGroups', variables('frontDoorProfileName'), variables('webOriginGroupName'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('webOriginHost')))]",
+              "type": "Microsoft.Cdn/profiles/afdEndpoints/routes",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}/{2}', variables('frontDoorProfileName'), variables('frontDoorEndpointName'), 'web-route')]",
+              "properties": {
+                "enabledState": "Enabled",
+                "forwardingProtocol": "HttpsOnly",
+                "httpsRedirect": "Enabled",
+                "linkToDefaultDomain": "Enabled",
+                "originGroup": {
+                  "id": "[resourceId('Microsoft.Cdn/profiles/originGroups', variables('frontDoorProfileName'), variables('webOriginGroupName'))]"
+                },
+                "patternsToMatch": [
+                  "/*"
+                ],
+                "supportedProtocols": [
+                  "Http",
+                  "Https"
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles/afdEndpoints', variables('frontDoorProfileName'), variables('frontDoorEndpointName'))]",
+                "[resourceId('Microsoft.Cdn/profiles/originGroups', variables('frontDoorProfileName'), variables('webOriginGroupName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Network/FrontDoorWebApplicationFirewallPolicies",
+              "apiVersion": "2021-06-01",
+              "name": "[variables('frontDoorWafPolicyName')]",
+              "location": "global",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "managedRules": {
+                  "managedRuleSets": [
+                    {
+                      "ruleSetAction": "Block",
+                      "ruleSetType": "DefaultRuleSet",
+                      "ruleSetVersion": "2.1"
+                    }
+                  ]
+                },
+                "policySettings": {
+                  "customBlockResponseStatusCode": 403,
+                  "enabledState": "Enabled",
+                  "mode": "[if(equals(parameters('environment'), 'prod'), 'Prevention', 'Detection')]",
+                  "requestBodyCheck": "Enabled"
+                }
+              },
+              "sku": {
+                "name": "[parameters('frontDoorSkuName')]"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('frontDoorCustomDomainResourceIds')))]",
+              "type": "Microsoft.Cdn/profiles/securityPolicies",
+              "apiVersion": "2021-06-01",
+              "name": "[format('{0}/{1}', variables('frontDoorProfileName'), variables('frontDoorSecurityPolicyName'))]",
+              "properties": {
+                "parameters": {
+                  "associations": [
+                    {
+                      "copy": [
+                        {
+                          "name": "domains",
+                          "count": "[length(parameters('frontDoorCustomDomainResourceIds'))]",
+                          "input": {
+                            "id": "[parameters('frontDoorCustomDomainResourceIds')[copyIndex('domains')]]"
+                          }
+                        }
+                      ],
+                      "patternsToMatch": [
+                        "/*"
+                      ]
+                    }
+                  ],
+                  "type": "WebApplicationFirewall",
+                  "wafPolicy": {
+                    "id": "[resourceId('Microsoft.Network/FrontDoorWebApplicationFirewallPolicies', variables('frontDoorWafPolicyName'))]"
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Cdn/profiles', variables('frontDoorProfileName'))]",
+                "[resourceId('Microsoft.Network/FrontDoorWebApplicationFirewallPolicies', variables('frontDoorWafPolicyName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "frontDoorProfileName": {
+              "type": "string",
+              "value": "[variables('frontDoorProfileName')]"
+            },
+            "frontDoorEndpointName": {
+              "type": "string",
+              "value": "[variables('frontDoorEndpointName')]"
+            },
+            "frontDoorEndpointHostName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Cdn/profiles/afdEndpoints', variables('frontDoorProfileName'), variables('frontDoorEndpointName')), '2021-06-01').hostName]"
+            },
+            "frontDoorWafPolicyName": {
+              "type": "string",
+              "value": "[variables('frontDoorWafPolicyName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', format('workload-apim-{0}-{1}', parameters('appName'), parameters('environment')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "appInsightsName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.appInsightsName.value]"
+    },
+    "logAnalyticsName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.logAnalyticsName.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-core-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.keyVaultName.value]"
+    },
+    "apiManagementName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-apim-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.apiManagementName.value]"
+    },
+    "apiManagementGatewayUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-apim-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.apiManagementGatewayUrl.value]"
+    },
+    "frontDoorProfileName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-edge-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.frontDoorProfileName.value]"
+    },
+    "frontDoorEndpointName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-edge-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.frontDoorEndpointName.value]"
+    },
+    "frontDoorEndpointHostName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-edge-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.frontDoorEndpointHostName.value]"
+    },
+    "frontDoorWafPolicyName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-edge-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.frontDoorWafPolicyName.value]"
+    },
+    "containerAppsEnvironmentName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-app-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.containerAppsEnvironmentName.value]"
+    },
+    "apiContainerAppName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-app-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.apiContainerAppName.value]"
+    },
+    "workerContainerAppName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-app-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.workerContainerAppName.value]"
+    },
+    "apiIngressFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-app-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.apiIngressFqdn.value]"
+    },
+    "postgresqlServerName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-data-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.postgresqlServerName.value]"
+    },
+    "postgresqlHost": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-data-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.postgresqlHost.value]"
+    },
+    "serviceBusNamespaceName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', format('workload-data-{0}-{1}', parameters('appName'), parameters('environment'))), '2025-04-01').outputs.serviceBusNamespaceName.value]"
+    }
+  }
+}

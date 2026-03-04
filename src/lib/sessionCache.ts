@@ -34,7 +34,7 @@ export function setCache<T>(key: string, data: T, microId?: string): void {
             timestamp: Date.now(),
         };
         sessionStorage.setItem(finalKey, JSON.stringify(entry));
-    } catch (e) {
+    } catch {
         // sessionStorage cheio - tentar limpar caches antigos
         try {
             invalidateExpiredCaches();

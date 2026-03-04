@@ -1,45 +1,26 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
     Action,
     TeamMember,
     Objective,
     Activity,
 } from '../types';
-import * as dataService from '../services/dataService';
+import * as actionsService from '../services/actionsService';
+import { loadObjectives, loadActivities } from '../services/objectivesActivitiesService';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/common/Toast';
+import { log, logError } from '../lib/logger';
+import { CACHE_KEYS, getCache, setCache } from '../lib/sessionCache';
+import { isAdminLike } from '../lib/authHelpers';
 import {
     DEMO_ACTIONS,
     DEMO_TEAM,
     DEMO_OBJECTIVES,
     DEMO_ACTIVITIES
 } from '../data/mockData';
+import { loadTeams } from '../services/teamsService';
 
-// Mock utils for now to ensure compilation, or import if identified
-const CACHE_KEYS = {
-    ACTIONS: 'actions',
-    TEAMS: 'teams',
-    OBJECTIVES: 'objectives',
-    ACTIVITIES: 'activities'
-};
-
-const getCache = <T>(key: string, micro: string): T | null => {
-    try {
-        const item = sessionStorage.getItem(`radar_${key}_${micro}`);
-        return item ? JSON.parse(item) : null;
-    } catch { return null; }
-};
-
-const setCache = (key: string, data: any, micro: string) => {
-    try {
-        sessionStorage.setItem(`radar_${key}_${micro}`, JSON.stringify(data));
-    } catch { }
-};
-
-const log = (scope: string, msg: string) => console.log(`[${scope}] ${msg}`);
-const logError = (scope: string, msg: string, err: any) => console.error(`[${scope}] ${msg}`, err);
-
-// Helper para filtrar ações órfãs
+// Helper para filtrar aÃ§Ãµes Ã³rfÃ£s
 const filterOrphanedActions = (actions: Action[], activitiesByObj: Record<number, Activity[]>) => {
     const allActivityIds = new Set<string>();
     Object.values(activitiesByObj).forEach(activities => {
@@ -64,6 +45,16 @@ export function useAppData() {
     // Selection State
     const [selectedObjective, setSelectedObjective] = useState<number>(0);
     const [selectedActivity, setSelectedActivity] = useState<string>('');
+    const selectedObjectiveRef = useRef(selectedObjective);
+    const selectedActivityRef = useRef(selectedActivity);
+
+    useEffect(() => {
+        selectedObjectiveRef.current = selectedObjective;
+    }, [selectedObjective]);
+
+    useEffect(() => {
+        selectedActivityRef.current = selectedActivity;
+    }, [selectedActivity]);
 
     // Derived State (memoized logic should happen in components, but base getters here)
     const currentTeam = user?.microregiaoId ? (teamsByMicro[user.microregiaoId] || []) : [];
@@ -71,13 +62,17 @@ export function useAppData() {
     // -- Actions --
 
     const loadData = useCallback(async (forceRefresh = false) => {
-        // Se não estiver autenticado, não carrega (o AuthContext deve lidar com redirect)
+        // Se nÃ£o estiver autenticado, nÃ£o carrega (o AuthContext deve lidar com redirect)
         if (!user && !isDemo) return;
 
         setIsDataLoading(true);
         setDataError(null);
+        let hydratedFromCache = false;
 
         try {
+            const currentSelectedObjective = selectedObjectiveRef.current;
+            const currentSelectedActivity = selectedActivityRef.current;
+
             // 1. DEMO MODE
             if (isDemo) {
                 setActions(DEMO_ACTIONS);
@@ -97,31 +92,45 @@ export function useAppData() {
             }
 
             // 2. REAL MODE
-            const microId = user?.role === 'admin' || user?.role === 'superadmin' ? undefined : user?.microregiaoId;
-            const cacheKey = microId || 'all';
+            const microId = isAdminLike(user?.role) ? undefined : user?.microregiaoId;
+            const cacheMicroId = microId;
 
             // Cache Check
             if (!forceRefresh) {
                 const [cachedActions, cachedTeams, cachedObjs, cachedActs] = [
-                    getCache<Action[]>(CACHE_KEYS.ACTIONS, cacheKey),
-                    getCache<Record<string, TeamMember[]>>(CACHE_KEYS.TEAMS, cacheKey),
-                    getCache<Objective[]>(CACHE_KEYS.OBJECTIVES, cacheKey),
-                    getCache<Record<number, Activity[]>>(CACHE_KEYS.ACTIVITIES, cacheKey)
+                    getCache<Action[]>(CACHE_KEYS.ACTIONS, cacheMicroId),
+                    getCache<Record<string, TeamMember[]>>(CACHE_KEYS.TEAMS, cacheMicroId),
+                    getCache<Objective[]>(CACHE_KEYS.OBJECTIVES, cacheMicroId),
+                    getCache<Record<number, Activity[]>>(CACHE_KEYS.ACTIVITIES, cacheMicroId)
                 ];
 
                 if (cachedActions && cachedTeams && cachedObjs && cachedActs) {
-                    log('useAppData', '⚡ Using cached data');
+                    log('useAppData', 'âš¡ Using cached data');
                     setActions(cachedActions);
                     setTeamsByMicro(cachedTeams);
                     setObjectives(cachedObjs);
                     setActivities(cachedActs);
                     setIsDataLoading(false);
+                    hydratedFromCache = true;
 
-                    // Initial selection from cache
-                    if (cachedObjs.length > 0 && selectedObjective === 0) {
-                        setSelectedObjective(cachedObjs[0].id);
-                        const firstActs = cachedActs[cachedObjs[0].id] || [];
-                        if (firstActs.length > 0) setSelectedActivity(firstActs[0].id);
+                    // Keep selection consistent with cached dataset
+                    if (cachedObjs.length > 0) {
+                        const nextObjId = cachedObjs.some((o: Objective) => o.id === currentSelectedObjective)
+                            ? currentSelectedObjective
+                            : cachedObjs[0].id;
+
+                        if (nextObjId !== currentSelectedObjective) setSelectedObjective(nextObjId);
+
+                        const acts = cachedActs[nextObjId] || [];
+                        if (acts.length > 0) {
+                            const actExists = acts.some((a: Activity) => a.id === currentSelectedActivity);
+                            if (!actExists) setSelectedActivity(acts[0].id);
+                        } else {
+                            setSelectedActivity('');
+                        }
+                    } else {
+                        setSelectedObjective(0);
+                        setSelectedActivity('');
                     }
 
                     // Background refresh implicitly handled by next steps if we wanted "stale-while-revalidate",
@@ -136,19 +145,19 @@ export function useAppData() {
 
             // Fetch
             const [actionsData, teamsData, objectivesData, activitiesData] = await Promise.all([
-                dataService.loadActions(microId),
-                dataService.loadTeams(microId),
-                dataService.loadObjectives(microId),
-                dataService.loadActivities(microId),
+                actionsService.loadActions(microId),
+                loadTeams(microId),
+                loadObjectives(microId),
+                loadActivities(microId),
             ]);
 
             const validActions = filterOrphanedActions(actionsData, activitiesData);
 
             // Save Cache
-            setCache(CACHE_KEYS.ACTIONS, validActions, cacheKey);
-            setCache(CACHE_KEYS.TEAMS, teamsData, cacheKey);
-            setCache(CACHE_KEYS.OBJECTIVES, objectivesData, cacheKey);
-            setCache(CACHE_KEYS.ACTIVITIES, activitiesData, cacheKey);
+            setCache(CACHE_KEYS.ACTIONS, validActions, cacheMicroId);
+            setCache(CACHE_KEYS.TEAMS, teamsData, cacheMicroId);
+            setCache(CACHE_KEYS.OBJECTIVES, objectivesData, cacheMicroId);
+            setCache(CACHE_KEYS.ACTIVITIES, activitiesData, cacheMicroId);
 
             // Update State
             setActions(validActions);
@@ -159,16 +168,16 @@ export function useAppData() {
             // Fix Selection Logic
             if (objectivesData.length > 0) {
                 // Keep current if valid, else first
-                const nextObjId = objectivesData.some((o: Objective) => o.id === selectedObjective)
-                    ? selectedObjective
+                const nextObjId = objectivesData.some((o: Objective) => o.id === currentSelectedObjective)
+                    ? currentSelectedObjective
                     : objectivesData[0].id;
 
                 // We only change if it's different (react handles this check too but good for logic)
-                if (nextObjId !== selectedObjective) setSelectedObjective(nextObjId);
+                if (nextObjId !== currentSelectedObjective) setSelectedObjective(nextObjId);
 
                 const acts = activitiesData[nextObjId] || [];
                 if (acts.length > 0) {
-                    const actExists = acts.some((a: Activity) => a.id === selectedActivity);
+                    const actExists = acts.some((a: Activity) => a.id === currentSelectedActivity);
                     if (!actExists) setSelectedActivity(acts[0].id);
                 } else {
                     setSelectedActivity('');
@@ -180,12 +189,16 @@ export function useAppData() {
 
         } catch (error: any) {
             logError('useAppData', 'Error loading data', error);
-            setDataError(error.message || 'Erro ao carregar dados');
-            showToast('Erro ao atualizar dados. Verifique a conexão.', 'error');
+            if (!hydratedFromCache) {
+                setDataError(error.message || 'Erro ao carregar dados');
+                showToast('Erro ao atualizar dados. Verifique a conexÃ£o.', 'error');
+            }
         } finally {
-            setIsDataLoading(false);
+            if (!hydratedFromCache) {
+                setIsDataLoading(false);
+            }
         }
-    }, [user, isDemo, selectedObjective, selectedActivity, showToast]);
+    }, [user, isDemo, showToast]);
 
     // Initial Load
     useEffect(() => {
@@ -196,14 +209,14 @@ export function useAppData() {
     // Actions CRUD Helpers (Wrappers needing access to state for optimistic updates)
     const refreshActions = async () => {
         // Simplistic refresh for now - ideally we specific optimized updates
-        const microId = user?.role === 'admin' || user?.role === 'superadmin' ? undefined : user?.microregiaoId;
+        const microId = isAdminLike(user?.role) ? undefined : user?.microregiaoId;
         if (!microId && !user && !isDemo) return;
 
-        const newActions = await dataService.loadActions(microId);
+        const newActions = await actionsService.loadActions(microId);
         // We need activities to filter orphans, using current state
         const valid = filterOrphanedActions(newActions, activities);
         setActions(valid);
-        setCache(CACHE_KEYS.ACTIONS, valid, microId || 'all');
+        setCache(CACHE_KEYS.ACTIONS, valid, microId);
     };
 
     return {
@@ -231,3 +244,4 @@ export function useAppData() {
         setSelectedActivity,
     };
 }
+

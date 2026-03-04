@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { captureException } from '../../lib/observability';
 
 interface Props {
   children: ReactNode;
@@ -22,21 +23,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Logging robusto para debug e monitoramento
-    const errorDetails = {
-      message: error.message,
-      stack: error.stack,
+    captureException('ErrorBoundary', error, {
       componentStack: errorInfo.componentStack,
-      timestamp: new Date().toISOString(),
       userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'N/A',
       url: typeof window !== 'undefined' ? window.location.href : 'N/A',
-    };
-
-    // Em produção, você pode enviar para um serviço de logging (ex: Sentry, LogRocket)
-    // logService.captureException(error, { extra: errorDetails });
-    
-    // Manter errorDetails para possível uso futuro
-    void errorDetails;
+    });
   }
 
   private handleRetry = () => {
@@ -86,7 +77,6 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
-
 
 
 

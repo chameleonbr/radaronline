@@ -1,0 +1,1772 @@
+openapi: 3.1.0
+info:
+  title: Radar 2.0 API
+  version: 0.1.0
+  description: Backend oficial do Radar 2.0 para operacao enterprise em Azure.
+servers:
+  - url: https://api.radar.example.gov.br
+    description: Producao
+  - url: https://api-hml.radar.example.gov.br
+    description: Homologacao
+tags:
+  - name: Health
+  - name: Auth
+  - name: Users
+  - name: Actions
+  - name: Requests
+  - name: Announcements
+  - name: Comments
+  - name: Tags
+  - name: Teams
+  - name: ObjectivesActivities
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Verifica disponibilidade basica do servico
+      responses:
+        "200":
+          description: Servico disponivel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /ready:
+    get:
+      tags: [Health]
+      summary: Verifica dependencias criticas do servico
+      responses:
+        "200":
+          description: Servico pronto para receber trafego
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+        "503":
+          description: Dependencia critica indisponivel
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/auth/session:
+    get:
+      tags: [Auth]
+      summary: Retorna sessao atual do usuario autenticado
+      responses:
+        "200":
+          description: Sessao atual
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+  /v1/auth/profile:
+    get:
+      tags: [Auth]
+      summary: Retorna o perfil aplicacional do usuario autenticado
+      responses:
+        "200":
+          description: Perfil autenticado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthProfile"
+        "401":
+          description: Nao autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/auth/lgpd/accept:
+    post:
+      tags: [Auth]
+      summary: Registra aceite de LGPD do usuario autenticado
+      responses:
+        "204":
+          description: Aceite registrado
+        "401":
+          description: Nao autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/auth/first-access/complete:
+    post:
+      tags: [Auth]
+      summary: Conclui o primeiro acesso do usuario autenticado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteFirstAccessRequest"
+      responses:
+        "204":
+          description: Primeiro acesso concluido
+        "400":
+          description: Payload invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "403":
+          description: Usuario nao pode concluir o fluxo informado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/users:
+    get:
+      tags: [Users]
+      summary: Lista usuarios cadastrados
+      responses:
+        "200":
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+        "403":
+          description: Perfil sem privilegio administrativo
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    post:
+      tags: [Users]
+      summary: Cria um novo usuario administrativo ou operacional
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: Usuario criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Payload invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "409":
+          description: Email ja cadastrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/users/{userId}:
+    get:
+      tags: [Users]
+      summary: Busca um usuario por id
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Usuario encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Usuario nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    patch:
+      tags: [Users]
+      summary: Atualiza dados de um usuario
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Usuario atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Usuario nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Users]
+      summary: Remove um usuario
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Usuario removido
+        "403":
+          description: Operacao restrita a superadmin
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/users/{userId}/reset-password:
+    post:
+      tags: [Users]
+      summary: Reseta a senha de um usuario
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "204":
+          description: Senha resetada
+        "400":
+          description: Payload invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/teams:
+    get:
+      tags: [Teams]
+      summary: Lista equipe agrupada por microrregiao
+      parameters:
+        - name: microregionId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Equipe agrupada por microrregiao
+    post:
+      tags: [Teams]
+      summary: Adiciona membro a equipe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamMemberRequest"
+      responses:
+        "201":
+          description: Membro criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+  /v1/teams/status:
+    get:
+      tags: [Teams]
+      summary: Verifica se email ja possui vinculacao com equipe
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema:
+            type: string
+            format: email
+      responses:
+        "200":
+          description: Status atual
+  /v1/teams/user-municipality:
+    post:
+      tags: [Teams]
+      summary: Salva ou atualiza municipio do usuario na equipe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveUserMunicipalityRequest"
+      responses:
+        "204":
+          description: Municipio salvo
+  /v1/teams/{memberId}:
+    delete:
+      tags: [Teams]
+      summary: Remove membro da equipe
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Membro removido
+  /v1/teams/pending-registrations:
+    get:
+      tags: [Teams]
+      summary: Lista membros pendentes de cadastro
+      responses:
+        "200":
+          description: Pendencias de cadastro
+  /v1/teams/pending-registrations/{id}:
+    delete:
+      tags: [Teams]
+      summary: Exclui pendencia de cadastro
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Pendencia excluida
+  /v1/objectives:
+    get:
+      tags: [ObjectivesActivities]
+      summary: Lista objetivos
+      parameters:
+        - name: microregionId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de objetivos
+    post:
+      tags: [ObjectivesActivities]
+      summary: Cria objetivo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateObjectiveRequest"
+      responses:
+        "201":
+          description: Objetivo criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Objective"
+  /v1/objectives/{id}:
+    patch:
+      tags: [ObjectivesActivities]
+      summary: Atualiza objetivo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateObjectiveRequest"
+      responses:
+        "204":
+          description: Objetivo atualizado
+    delete:
+      tags: [ObjectivesActivities]
+      summary: Exclui objetivo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Objetivo excluido
+  /v1/activities:
+    get:
+      tags: [ObjectivesActivities]
+      summary: Lista atividades agrupadas por objetivo
+      parameters:
+        - name: microregionId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Atividades agrupadas
+    post:
+      tags: [ObjectivesActivities]
+      summary: Cria atividade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActivityRequest"
+      responses:
+        "201":
+          description: Atividade criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activity"
+  /v1/activities/{id}:
+    patch:
+      tags: [ObjectivesActivities]
+      summary: Atualiza atividade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateActivityRequest"
+      responses:
+        "204":
+          description: Atividade atualizada
+    delete:
+      tags: [ObjectivesActivities]
+      summary: Exclui atividade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Atividade excluida
+  /v1/actions/move-activity:
+    post:
+      tags: [ObjectivesActivities]
+      summary: Move acao para outra atividade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveActionActivityRequest"
+      responses:
+        "204":
+          description: Acao movida
+  /v1/actions:
+    get:
+      tags: [Actions]
+      summary: Lista acoes conforme filtros autorizados
+      parameters:
+        - name: microregionId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de acoes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Action"
+        "401":
+          description: Nao autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    post:
+      tags: [Actions]
+      summary: Cria uma nova acao
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateActionRequest"
+      responses:
+        "201":
+          description: Acao criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Action"
+        "400":
+          description: Payload invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/actions/{actionUid}:
+    get:
+      tags: [Actions]
+      summary: Busca uma acao pelo uid
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Acao encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Action"
+        "404":
+          description: Acao nao encontrada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    patch:
+      tags: [Actions]
+      summary: Atualiza uma acao
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateActionRequest"
+      responses:
+        "200":
+          description: Acao atualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Action"
+        "400":
+          description: Payload invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Actions]
+      summary: Remove uma acao
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Acao removida
+        "404":
+          description: Acao nao encontrada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/actions/{actionUid}/comments:
+    get:
+      tags: [Comments]
+      summary: Lista comentarios de uma acao
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de comentarios
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentListResponse"
+    post:
+      tags: [Comments]
+      summary: Adiciona comentario em uma acao
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: Comentario criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionComment"
+        "404":
+          description: Acao nao encontrada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/comments/{commentId}:
+    patch:
+      tags: [Comments]
+      summary: Atualiza um comentario
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommentRequest"
+      responses:
+        "200":
+          description: Comentario atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionComment"
+        "403":
+          description: Usuario nao pode alterar o comentario
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "404":
+          description: Comentario nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Comments]
+      summary: Remove um comentario
+      parameters:
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Comentario removido
+        "403":
+          description: Usuario nao pode remover o comentario
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "404":
+          description: Comentario nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/requests:
+    get:
+      tags: [Requests]
+      summary: Lista requests do usuario, gerenciais ou notificacoes
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [user, managed, notifications]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+        - name: statusFilter
+          in: query
+          schema:
+            type: string
+            enum: [pending, resolved, rejected, all]
+        - name: typeFilter
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista ou paginacao de requests
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/RequestListResponse"
+                  - $ref: "#/components/schemas/ManagedRequestListResponse"
+        "401":
+          description: Nao autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    post:
+      tags: [Requests]
+      summary: Cria um novo request de usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRequestRequest"
+      responses:
+        "201":
+          description: Request criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserRequest"
+        "400":
+          description: Payload invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/requests/pending-count:
+    get:
+      tags: [Requests]
+      summary: Conta requests pendentes visiveis ao usuario
+      responses:
+        "200":
+          description: Contagem retornada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count]
+                properties:
+                  count:
+                    type: integer
+  /v1/requests/{requestId}:
+    patch:
+      tags: [Requests]
+      summary: Atualiza status de um request
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRequestRequest"
+      responses:
+        "204":
+          description: Request atualizado
+        "403":
+          description: Perfil sem privilegio administrativo
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "404":
+          description: Request nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Requests]
+      summary: Remove um request
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Request removido
+        "403":
+          description: Perfil sem privilegio administrativo
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "404":
+          description: Request nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/announcements:
+    get:
+      tags: [Announcements]
+      summary: Lista anuncios ativos ou todos os anuncios para administracao
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [active, admin]
+        - name: microregionId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de anuncios
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnouncementListResponse"
+        "401":
+          description: Nao autenticado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "403":
+          description: Perfil sem privilegio administrativo para scope admin
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    post:
+      tags: [Announcements]
+      summary: Cria um anuncio
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAnnouncementRequest"
+      responses:
+        "201":
+          description: Anuncio criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+        "400":
+          description: Payload invalido
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/announcements/{announcementId}:
+    patch:
+      tags: [Announcements]
+      summary: Atualiza um anuncio
+      parameters:
+        - name: announcementId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAnnouncementRequest"
+      responses:
+        "204":
+          description: Anuncio atualizado
+        "404":
+          description: Anuncio nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+    delete:
+      tags: [Announcements]
+      summary: Remove um anuncio
+      parameters:
+        - name: announcementId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Anuncio removido
+        "404":
+          description: Anuncio nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/announcements/{announcementId}/toggle-active:
+    post:
+      tags: [Announcements]
+      summary: Alterna o estado ativo de um anuncio
+      parameters:
+        - name: announcementId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToggleAnnouncementRequest"
+      responses:
+        "204":
+          description: Estado do anuncio atualizado
+        "404":
+          description: Anuncio nao encontrado
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/tags:
+    get:
+      tags: [Tags]
+      summary: Lista tags disponiveis
+      parameters:
+        - name: microregionId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Lista de tags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagListResponse"
+    post:
+      tags: [Tags]
+      summary: Cria uma nova tag
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTagRequest"
+      responses:
+        "201":
+          description: Tag criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionTag"
+  /v1/tags/{tagId}:
+    delete:
+      tags: [Tags]
+      summary: Remove uma tag
+      parameters:
+        - name: tagId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Tag removida
+        "404":
+          description: Tag nao encontrada
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+  /v1/tags/{tagId}/toggle-favorite:
+    post:
+      tags: [Tags]
+      summary: Alterna favorito da tag na microrregiao informada
+      parameters:
+        - name: tagId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToggleFavoriteTagRequest"
+      responses:
+        "200":
+          description: Estado de favorito atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [isFavorite]
+                properties:
+                  isFavorite:
+                    type: boolean
+  /v1/actions/{actionUid}/tags:
+    get:
+      tags: [Tags]
+      summary: Lista tags associadas a uma acao
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: microregionId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tags da acao
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagListResponse"
+  /v1/actions/{actionUid}/tags/{tagId}:
+    put:
+      tags: [Tags]
+      summary: Associa tag a uma acao
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tagId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Tag associada
+    delete:
+      tags: [Tags]
+      summary: Remove tag de uma acao
+      parameters:
+        - name: actionUid
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tagId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Tag removida da acao
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, timestamp]
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: radar-api
+        timestamp:
+          type: string
+          format: date-time
+    ReadinessResponse:
+      type: object
+      required: [status, dependencies]
+      properties:
+        status:
+          type: string
+          example: ready
+        dependencies:
+          type: object
+          additionalProperties:
+            type: string
+    SessionResponse:
+      type: object
+      required: [authenticated]
+      properties:
+        authenticated:
+          type: boolean
+        traceId:
+          type: string
+        user:
+          $ref: "#/components/schemas/SessionUser"
+    SessionUser:
+      type: object
+      required: [id, email, role, name]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+    AuthProfile:
+      type: object
+      required: [id, email, name, role, active, lgpdAccepted, firstAccess, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [superadmin, admin, gestor, usuario]
+        microregionId:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        lgpdAccepted:
+          type: boolean
+        lgpdAcceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+        avatarId:
+          type: string
+          nullable: true
+        municipality:
+          type: string
+          nullable: true
+        firstAccess:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+    CompleteFirstAccessRequest:
+      type: object
+      required: [userId, userEmail, municipio, newPassword, microregionId]
+      properties:
+        userId:
+          type: string
+        userEmail:
+          type: string
+          format: email
+        municipio:
+          type: string
+        newPassword:
+          type: string
+        microregionId:
+          type: string
+    Action:
+      type: object
+      required: [dbId, uid, actionId, activityId, microregionId, title, status, progress, notes]
+      properties:
+        dbId:
+          type: string
+        uid:
+          type: string
+        actionId:
+          type: string
+        activityId:
+          type: string
+        microregionId:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [Concluido, Em Andamento, Nao Iniciado, Atrasado]
+        startDate:
+          type: string
+          nullable: true
+        plannedEndDate:
+          type: string
+          nullable: true
+        endDate:
+          type: string
+          nullable: true
+        progress:
+          type: number
+        notes:
+          type: string
+    CreateActionRequest:
+      type: object
+      required: [activityId, microregionId, actionNumber, title]
+      properties:
+        activityId:
+          type: string
+        microregionId:
+          type: string
+        actionNumber:
+          type: integer
+        title:
+          type: string
+    UpdateActionRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        status:
+          type: string
+          enum: [Concluido, Em Andamento, Nao Iniciado, Atrasado]
+        startDate:
+          type: string
+          nullable: true
+        plannedEndDate:
+          type: string
+          nullable: true
+        endDate:
+          type: string
+          nullable: true
+        progress:
+          type: number
+        notes:
+          type: string
+    User:
+      type: object
+      required: [id, email, name, role, active, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+        microregionId:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TeamMember:
+      type: object
+      required: [id, microregionId, name, role, email, municipality, isRegistered]
+      properties:
+        id:
+          type: string
+        microregionId:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        email:
+          type: string
+        municipality:
+          type: string
+        isRegistered:
+          type: boolean
+    PendingRegistration:
+      type: object
+      required: [id, name, microregionId, role, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        municipality:
+          type: string
+          nullable: true
+        microregionId:
+          type: string
+        role:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CreateTeamMemberRequest:
+      type: object
+      required: [microregionId, name, role]
+      properties:
+        microregionId:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        email:
+          type: string
+          format: email
+        municipality:
+          type: string
+    SaveUserMunicipalityRequest:
+      type: object
+      required: [microregionId, email, municipality, userName]
+      properties:
+        microregionId:
+          type: string
+        email:
+          type: string
+          format: email
+        municipality:
+          type: string
+        userName:
+          type: string
+    Objective:
+      type: object
+      required: [id, title, status, microregionId]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+          enum: [on-track, delayed]
+        microregionId:
+          type: string
+        eixo:
+          type: integer
+        description:
+          type: string
+        eixoLabel:
+          type: string
+        eixoColor:
+          type: string
+    Activity:
+      type: object
+      required: [id, objectiveId, title, description, microregionId]
+      properties:
+        id:
+          type: string
+        objectiveId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        microregionId:
+          type: string
+    CreateObjectiveRequest:
+      type: object
+      required: [title, microregionId]
+      properties:
+        title:
+          type: string
+        microregionId:
+          type: string
+    UpdateObjectiveRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        status:
+          type: string
+          enum: [on-track, delayed]
+        eixo:
+          type: integer
+        description:
+          type: string
+        eixoLabel:
+          type: string
+        eixoColor:
+          type: string
+    CreateActivityRequest:
+      type: object
+      required: [objectiveId, id, title, microregionId]
+      properties:
+        objectiveId:
+          type: integer
+        id:
+          type: string
+        title:
+          type: string
+        microregionId:
+          type: string
+        description:
+          type: string
+    UpdateActivityRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+    MoveActionActivityRequest:
+      type: object
+      required: [uid, newActivityId]
+      properties:
+        uid:
+          type: string
+        newActivityId:
+          type: string
+    CreateUserRequest:
+      type: object
+      required: [email, password, name, role, microregionId]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [superadmin, admin, gestor, usuario]
+        microregionId:
+          type: string
+          nullable: true
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [superadmin, admin, gestor, usuario]
+        microregionId:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+    ResetPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+    RequestUserSummary:
+      type: object
+      properties:
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+        cargo:
+          type: string
+        municipio:
+          type: string
+        microregiao_id:
+          type: string
+    UserRequest:
+      type: object
+      required: [id, user_id, request_type, content, status, created_at]
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        request_type:
+          type: string
+        content:
+          type: string
+        status:
+          type: string
+          enum: [pending, resolved, rejected]
+        admin_notes:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        resolved_by:
+          type: string
+          nullable: true
+        resolved_at:
+          type: string
+          nullable: true
+        user:
+          $ref: "#/components/schemas/RequestUserSummary"
+    RequestListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserRequest"
+    ManagedRequestListResponse:
+      type: object
+      required: [items, totalCount]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserRequest"
+        totalCount:
+          type: integer
+    CreateRequestRequest:
+      type: object
+      required: [requestType, content]
+      properties:
+        userId:
+          type: string
+        requestType:
+          type: string
+        content:
+          type: string
+        status:
+          type: string
+          enum: [pending, resolved, rejected]
+        adminNotes:
+          type: string
+    UpdateRequestRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, resolved, rejected]
+        adminNotes:
+          type: string
+    Announcement:
+      type: object
+      required: [id, title, content, type, priority, displayDate, targetMicros, isActive, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          enum: [news, alert, maintenance, tutorial]
+        priority:
+          type: string
+          enum: [normal, high]
+        displayDate:
+          type: string
+        targetMicros:
+          type: array
+          items:
+            type: string
+        linkUrl:
+          type: string
+        imageUrl:
+          type: string
+        isActive:
+          type: boolean
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expirationDate:
+          type: string
+          nullable: true
+    AnnouncementListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Announcement"
+    CreateAnnouncementRequest:
+      type: object
+      required: [title, content, type, priority, displayDate, targetMicros, isActive]
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          enum: [news, alert, maintenance, tutorial]
+        priority:
+          type: string
+          enum: [normal, high]
+        displayDate:
+          type: string
+        targetMicros:
+          type: array
+          items:
+            type: string
+        linkUrl:
+          type: string
+        imageUrl:
+          type: string
+        isActive:
+          type: boolean
+        expirationDate:
+          type: string
+          nullable: true
+    UpdateAnnouncementRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          enum: [news, alert, maintenance, tutorial]
+        priority:
+          type: string
+          enum: [normal, high]
+        displayDate:
+          type: string
+        targetMicros:
+          type: array
+          items:
+            type: string
+        linkUrl:
+          type: string
+        imageUrl:
+          type: string
+        isActive:
+          type: boolean
+        expirationDate:
+          type: string
+          nullable: true
+    ToggleAnnouncementRequest:
+      type: object
+      required: [currentState]
+      properties:
+        currentState:
+          type: boolean
+    ActionComment:
+      type: object
+      required: [id, actionUid, authorId, authorName, authorMunicipio, authorAvatarId, content, createdAt]
+      properties:
+        id:
+          type: string
+        actionUid:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+        authorId:
+          type: string
+        authorName:
+          type: string
+        authorMunicipio:
+          type: string
+        authorAvatarId:
+          type: string
+        authorRole:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    CommentListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionComment"
+    CreateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+        parentId:
+          type: string
+          nullable: true
+    UpdateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+    ActionTag:
+      type: object
+      required: [id, name, color]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+        isFavorite:
+          type: boolean
+    TagListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActionTag"
+    CreateTagRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+    ToggleFavoriteTagRequest:
+      type: object
+      required: [microregionId]
+      properties:
+        microregionId:
+          type: string
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        traceId:
+          type: string

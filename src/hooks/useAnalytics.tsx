@@ -32,6 +32,7 @@ let sessionStarted = false;
 let timeSpentInterval: ReturnType<typeof setInterval> | null = null;
 let currentPageStartTime: number = Date.now();
 let currentPage: string = '';
+const analyticsEndBeaconUrl = import.meta.env.VITE_ANALYTICS_END_BEACON_URL;
 
 export const useAnalytics = () => {
     const { user } = useAuth();
@@ -243,7 +244,12 @@ export const useAnalytics = () => {
                     user_id: userId
                 };
 
-                navigator.sendBeacon('/api/analytics-end', JSON.stringify(data));
+                if (analyticsEndBeaconUrl && typeof navigator.sendBeacon === 'function') {
+                    navigator.sendBeacon(
+                        analyticsEndBeaconUrl,
+                        new Blob([JSON.stringify(data)], { type: 'application/json' })
+                    );
+                }
                 endSession();
             }
         };

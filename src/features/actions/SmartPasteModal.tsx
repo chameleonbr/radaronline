@@ -128,6 +128,12 @@ export const SmartPasteModal: React.FC<SmartPasteModalProps> = ({
         setStep('preview');
     }, [rawText]);
 
+    const handleReset = useCallback(() => {
+        setRawText('');
+        setParsedActions([]);
+        setStep('paste');
+    }, []);
+
     const handleImport = useCallback(() => {
         const validActions = parsedActions.filter(a => a.isValid);
         if (validActions.length > 0) {
@@ -135,13 +141,7 @@ export const SmartPasteModal: React.FC<SmartPasteModalProps> = ({
             handleReset();
             onClose();
         }
-    }, [parsedActions, onImport, onClose]);
-
-    const handleReset = useCallback(() => {
-        setRawText('');
-        setParsedActions([]);
-        setStep('paste');
-    }, []);
+    }, [parsedActions, onImport, onClose, handleReset]);
 
     const handleClose = useCallback(() => {
         handleReset();

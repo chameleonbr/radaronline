@@ -1,273 +1,247 @@
-import { ErrorBoundary } from '../common/ErrorBoundary';
-import { Dashboard } from '../../features/dashboard/Dashboard';
-import { GanttChart } from '../../features/gantt/GanttChart';
-import { TeamView } from '../../features/team/TeamView';
-import { OptimizedView } from '../../features/dashboard/OptimizedView';
-import { ActionTable } from '../../features/actions/ActionTable';
-import { ActionDetailModal } from '../../features/actions/ActionDetailModal';
-import { ActivityTabs } from '../../features/actions/ActivityTabs';
-import { LinearCalendar } from '../../features/admin/dashboard/LinearCalendar';
-// ExpandableDescription removido
-import { Action, TeamMember, Objective, Activity, GanttRange } from '../../types';
+﻿import React, { RefObject, Suspense, lazy, useMemo } from 'react';
+import { useActionPatchHandler } from '../../hooks/useActionPatchHandler';
+import { Action, ActionComment, Activity, GanttRange, Objective, RaciRole, Status, TeamMember } from '../../types';
 import { ParsedAction } from '../../features/actions/SmartPasteModal';
+import { MainViewContentSwitch } from './MainViewContentSwitch';
+import { MainViewStrategySection } from './MainViewStrategySection';
+
+const ActionDetailModal = lazy(() => import('../../features/actions/ActionDetailModal').then(m => ({ default: m.ActionDetailModal })));
 
 interface MainViewProps {
-  currentNav: 'strategy' | 'home' | 'settings';
-  viewMode: 'table' | 'gantt' | 'team' | 'optimized' | 'calendar';
-  selectedActivity: string;
-  selectedObjective?: number;
-  microActions: Action[];
-  ganttActions: Action[];
+  activityTabsRef: RefObject<HTMLDivElement>;
+  chartContainerRef: RefObject<HTMLDivElement>;
+  containerWidth: number;
+  currentActivity?: Activity;
+  currentMicroId: string;
+  currentNav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news' | 'forums' | 'mentorship' | 'education' | 'repository';
+  userId?: string;
   currentTeam: TeamMember[];
+  expandedActionUid: string | null;
+  filteredActivities: Record<number, Activity[]>;
+  filteredObjectives: Objective[];
+  ganttActions: Action[];
+  ganttRange: GanttRange;
+  ganttStatusFilter: Status | 'all';
+  involvedAreaFilter: string;
+  isEditMode: boolean;
+  isMobile: boolean;
+  isSaving: boolean;
+  microActions: Action[];
   objectives: Objective[];
   activities: Record<number, Activity[]>;
-  currentActivity: Activity | undefined;
-  searchTerm: string;
-  setSearchTerm: (term: string) => void;
-  statusFilter: 'Não Iniciado' | 'Em Andamento' | 'Concluído' | 'Atrasado' | 'all';
-  setStatusFilter: (status: 'Não Iniciado' | 'Em Andamento' | 'Concluído' | 'Atrasado' | 'all') => void;
+  readOnly: boolean;
   responsibleFilter: string;
-  setResponsibleFilter: (responsible: string) => void;
-  expandedActionUid: string | null;
-  setExpandedActionUid: (uid: string | null) => void;
-  involvedAreaFilter: string;
-  setInvolvedAreaFilter: (area: string) => void;
-  ganttRange: GanttRange;
-  setGanttRange: (range: GanttRange) => void;
-  containerWidth: number;
-  ganttStatusFilter: 'Não Iniciado' | 'Em Andamento' | 'Concluído' | 'Atrasado' | 'all';
-  setGanttStatusFilter: (status: 'Não Iniciado' | 'Em Andamento' | 'Concluído' | 'Atrasado' | 'all') => void;
-  onGanttActionClick: (action: Action) => void;
-  showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
-  isMobile: boolean;
-  currentMicroId: string;
-  isViewingAllMicros: boolean;
-  isAdmin: boolean;
-  onUpdateAction: (uid: string, field: string, value: string | number) => void;
-  onSaveAction: () => void;
+  searchTerm: string;
+  selectedActivity: string;
+  selectedObjective: number;
+  statusFilter: Status | 'all';
+  viewMode: 'table' | 'gantt' | 'team' | 'optimized' | 'calendar';
+  canCreateObjective: boolean;
+  onAddComment: (uid: string, content: string, parentId?: string | null) => Promise<ActionComment | null>;
+  onAddMember: (member: Omit<TeamMember, 'id'>) => Promise<TeamMember | null>;
+  onAddObjective: () => void;
+  onAddRaci: (uid: string, memberId: string, role: RaciRole) => void;
+  onBulkImport: (actions: ParsedAction[]) => Promise<void>;
+  onCloseActionModal: () => void;
   onCreateAction: () => void;
   onDeleteAction: (uid: string) => void;
-  onAddRaci: (uid: string, memberId: string, role: 'R' | 'A' | 'C' | 'I') => void;
+  onDashboardNavigate: (view: 'list' | 'team', filters?: { status?: string; objectiveId?: number }) => void;
+  onExpandAction: (uid: string | null) => void;
+  onGanttActionClick: (action: Action) => void;
+  onOpenRoadmapSettings: () => void;
+  onRemoveMember: (memberId: string) => Promise<boolean>;
   onRemoveRaci: (uid: string, idx: number, memberName: string) => void;
-  onAddComment: (uid: string, content: string) => void;
-  isSaving: boolean;
+  onSaveAction: (uid?: string) => Promise<void>;
+  onSaveAndNewAction: (updatedAction: Action) => Promise<void>;
+  onSaveFullAction: (updatedAction: Action) => Promise<void>;
+  onSetGanttRange: (range: GanttRange) => void;
+  onSetGanttStatusFilter: (status: Status | 'all') => void;
+  onSetInvolvedAreaFilter: (area: string) => void;
+  onSetResponsibleFilter: (responsible: string) => void;
+  onSetSearchTerm: (term: string) => void;
+  onSetSelectedActivity: (activityId: string) => void;
+  onSetStatusFilter: (status: Status | 'all') => void;
+  onShowToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  onUpdateAction: (uid: string, field: string, value: string | number) => void;
+  onUpdateActivity: (id: string, field: 'title' | 'description', value: string) => void;
+  onUpdateObjectiveField: (id: number, field: 'eixo' | 'description' | 'eixoLabel' | 'eixoColor', value: string | number) => void;
+  onUpdateTeam: (microId: string, updatedTeam: TeamMember[]) => void;
   checkCanCreate: () => boolean;
-  checkCanEdit: (action: Action) => boolean;
   checkCanDelete: (action: Action) => boolean;
-  onUpdateTeam?: (microId: string, updatedTeam: TeamMember[]) => void;
-  setTeamsByMicro: React.Dispatch<React.SetStateAction<Record<string, TeamMember[]>>>;
-  onNavigate: (view: 'list' | 'team', filters?: { status?: string; objectiveId?: number }) => void;
-  onBulkImport?: (actions: ParsedAction[]) => void;
-  isEditMode?: boolean;
+  checkCanEdit: (action: Action) => boolean;
 }
 
 export function MainView({
+  activityTabsRef,
+  chartContainerRef,
+  containerWidth,
+  currentActivity,
+  currentMicroId,
   currentNav,
-  viewMode,
-  selectedActivity,
-  selectedObjective,
-  microActions,
-  ganttActions,
+  userId,
   currentTeam,
+  expandedActionUid,
+  filteredActivities,
+  filteredObjectives,
+  ganttActions,
+  ganttRange,
+  ganttStatusFilter,
+  involvedAreaFilter,
+  isEditMode,
+  isMobile,
+  isSaving,
+  microActions,
   objectives,
   activities,
-  currentActivity,
-  searchTerm,
-  setSearchTerm,
-  statusFilter,
-  setStatusFilter,
+  readOnly,
   responsibleFilter,
-  setResponsibleFilter,
-  expandedActionUid,
-  setExpandedActionUid,
-  involvedAreaFilter = '',
-  setInvolvedAreaFilter = () => { },
-  ganttRange,
-  setGanttRange,
-  containerWidth,
-  ganttStatusFilter,
-  setGanttStatusFilter,
-  onGanttActionClick,
-  showToast,
-  isMobile,
-  currentMicroId,
-  isViewingAllMicros,
-  isAdmin,
-  onUpdateAction,
-  onSaveAction,
-  onCreateAction,
-  onDeleteAction,
-  onAddRaci,
-  onRemoveRaci,
+  searchTerm,
+  selectedActivity,
+  selectedObjective,
+  statusFilter,
+  viewMode,
+  canCreateObjective,
   onAddComment,
-  isSaving,
-  checkCanCreate,
-  checkCanEdit,
-  checkCanDelete,
-  onUpdateTeam,
-  setTeamsByMicro,
-  onNavigate,
+  onAddMember,
+  onAddObjective,
+  onAddRaci,
   onBulkImport,
-  isEditMode = false,
+  onCloseActionModal,
+  onCreateAction,
+  onDashboardNavigate,
+  onDeleteAction,
+  onExpandAction,
+  onGanttActionClick,
+  onOpenRoadmapSettings,
+  onRemoveMember,
+  onRemoveRaci,
+  onSaveAction,
+  onSaveAndNewAction,
+  onSaveFullAction,
+  onSetGanttRange,
+  onSetGanttStatusFilter,
+  onSetInvolvedAreaFilter,
+  onSetResponsibleFilter,
+  onSetSearchTerm,
+  onSetSelectedActivity,
+  onSetStatusFilter,
+  onShowToast,
+  onUpdateAction,
+  onUpdateActivity,
+  onUpdateObjectiveField,
+  onUpdateTeam,
+  checkCanCreate,
+  checkCanDelete,
+  checkCanEdit,
 }: MainViewProps) {
-  // Encontrar a ação selecionada para o modal
-  const selectedAction = expandedActionUid
-    ? microActions.find(a => a.uid === expandedActionUid)
-    : null;
+  const handleUpdateActionPatch = useActionPatchHandler(onUpdateAction);
+
+  const selectedAction = useMemo(() => {
+    if (!expandedActionUid) {
+      return null;
+    }
+
+    return microActions.find(action => action.uid === expandedActionUid) || null;
+  }, [expandedActionUid, microActions]);
 
   return (
     <>
-      {/* ACTIVITY TABS */}
-      {currentNav === 'strategy' && viewMode === 'table' && (
-        <div>
-          <ActivityTabs
-            activities={activities[1] || []}
+      <div
+        className={`flex-1 overflow-y-auto overflow-x-hidden relative ${isMobile
+          ? currentNav === 'strategy' && viewMode === 'table' && checkCanCreate()
+            ? 'pb-mobile-nav-with-fab'
+            : 'pb-mobile-nav'
+          : ''}`}
+      >
+        {currentNav === 'strategy' && viewMode === 'table' && (
+          <MainViewStrategySection
+            activityTabsRef={activityTabsRef}
+            canCreateObjective={canCreateObjective}
+            filteredActivities={filteredActivities}
+            filteredObjectives={filteredObjectives}
+            isEditMode={isEditMode}
             selectedActivity={selectedActivity}
-            setSelectedActivity={() => { }}
+            selectedObjective={selectedObjective}
+            onAddObjective={onAddObjective}
+            onSetSelectedActivity={onSetSelectedActivity}
+            onUpdateActivity={onUpdateActivity}
           />
-        </div>
-      )}
-
-      <div className="p-4 sm:p-6">
-        {/* DASHBOARD VIEW */}
-        {currentNav === 'home' ? (
-          <ErrorBoundary>
-            <Dashboard
-              actions={microActions}
-              team={currentTeam}
-              objectives={objectives}
-              activities={activities}
-              onNavigate={onNavigate}
-            />
-          </ErrorBoundary>
-
-          /* GANTT VIEW */
-        ) : viewMode === 'gantt' && currentNav === 'strategy' ? (
-          <ErrorBoundary>
-            <GanttChart
-              actions={ganttActions}
-              ganttRange={ganttRange}
-              setGanttRange={setGanttRange}
-              containerWidth={containerWidth}
-              statusFilter={ganttStatusFilter}
-              setStatusFilter={setGanttStatusFilter}
-              onActionClick={onGanttActionClick}
-              showToast={showToast}
-              isMobile={isMobile}
-            />
-          </ErrorBoundary>
-
-        ) : viewMode === 'team' ? (
-          <ErrorBoundary>
-            <TeamView
-              team={currentTeam}
-              microId={currentMicroId}
-              onUpdateTeam={onUpdateTeam || ((microId, updatedTeam) => {
-                if (!microId) return;
-                setTeamsByMicro(prev => ({ ...prev, [microId]: updatedTeam }));
-              })}
-              readOnly={isViewingAllMicros && !isAdmin}
-            />
-          </ErrorBoundary>
-
-        ) : viewMode === 'optimized' ? (
-          /* OPTIMIZED VIEW */
-          <ErrorBoundary>
-            <OptimizedView
-              objectives={objectives}
-              activities={activities}
-              actions={microActions}
-              team={currentTeam}
-              onUpdateAction={(uid, updates) => {
-                Object.entries(updates).forEach(([field, value]) => {
-                  if (value !== undefined) {
-                    onUpdateAction(uid, field, value as string | number);
-                  }
-                });
-              }}
-              onSaveAction={onSaveAction}
-              onDeleteAction={onDeleteAction}
-              onAddRaci={onAddRaci}
-              onRemoveRaci={onRemoveRaci}
-              onAddComment={onAddComment}
-              readOnly={isViewingAllMicros && !isAdmin}
-            />
-          </ErrorBoundary>
-
-        ) : viewMode === 'calendar' ? (
-          /* CALENDAR VIEW - Agenda de Ações da Microrregião */
-          <ErrorBoundary>
-            <div className="h-[calc(100vh-200px)] bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-              <LinearCalendar
-                actions={microActions}
-                activities={activities}
-                objectives={objectives}
-                microId={currentMicroId}
-              />
-            </div>
-          </ErrorBoundary>
-
-        ) : (
-          /* TABLE VIEW */
-          <ErrorBoundary>
-            <div className="max-w-5xl mx-auto">
-              {/* Descrição movida para ActivityTabs */}
-
-              <ActionTable
-                actions={microActions}
-                selectedActivity={selectedActivity}
-                selectedObjective={selectedObjective}
-                team={currentTeam}
-                objectives={objectives}
-                activities={activities}
-                isEditMode={isEditMode}
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                statusFilter={statusFilter}
-                setStatusFilter={setStatusFilter}
-                responsibleFilter={responsibleFilter}
-                setResponsibleFilter={setResponsibleFilter}
-                expandedActionId={expandedActionUid}
-                setExpandedActionId={setExpandedActionUid}
-                involvedAreaFilter={involvedAreaFilter}
-                setInvolvedAreaFilter={setInvolvedAreaFilter}
-                onUpdateAction={onUpdateAction}
-                onSaveAction={onSaveAction}
-                onCreateAction={onCreateAction}
-                onDeleteAction={onDeleteAction}
-                onAddRaci={onAddRaci}
-                onRemoveRaci={onRemoveRaci}
-                onAddComment={onAddComment}
-                isSaving={isSaving}
-                canCreate={checkCanCreate()}
-                canEdit={checkCanEdit}
-                canDelete={checkCanDelete}
-                readOnly={isViewingAllMicros && !isAdmin}
-                onBulkImport={onBulkImport}
-              />
-            </div>
-          </ErrorBoundary>
         )}
+
+        <MainViewContentSwitch
+          chartContainerRef={chartContainerRef}
+          containerWidth={containerWidth}
+          currentMicroId={currentMicroId}
+          currentNav={currentNav}
+          userId={userId}
+          currentTeam={currentTeam}
+          expandedActionUid={expandedActionUid}
+          filteredActivities={filteredActivities}
+          filteredObjectives={filteredObjectives}
+          ganttActions={ganttActions}
+          ganttRange={ganttRange}
+          ganttStatusFilter={ganttStatusFilter}
+          handleUpdateActionPatch={handleUpdateActionPatch}
+          involvedAreaFilter={involvedAreaFilter}
+          isEditMode={isEditMode}
+          isMobile={isMobile}
+          isSaving={isSaving}
+          microActions={microActions}
+          objectives={objectives}
+          activities={activities}
+          readOnly={readOnly}
+          responsibleFilter={responsibleFilter}
+          searchTerm={searchTerm}
+          selectedActivity={selectedActivity}
+          selectedObjective={selectedObjective}
+          statusFilter={statusFilter}
+          viewMode={viewMode}
+          checkCanCreate={checkCanCreate}
+          checkCanDelete={checkCanDelete}
+          checkCanEdit={checkCanEdit}
+          onAddComment={onAddComment}
+          onAddMember={onAddMember}
+          onBulkImport={onBulkImport}
+          onCreateAction={onCreateAction}
+          onDashboardNavigate={onDashboardNavigate}
+          onDeleteAction={onDeleteAction}
+          onExpandAction={onExpandAction}
+          onGanttActionClick={onGanttActionClick}
+          onOpenRoadmapSettings={onOpenRoadmapSettings}
+          onRemoveMember={onRemoveMember}
+          onAddRaci={onAddRaci}
+          onRemoveRaci={onRemoveRaci}
+          onSaveAction={onSaveAction}
+          onSetGanttRange={onSetGanttRange}
+          onSetGanttStatusFilter={onSetGanttStatusFilter}
+          onSetInvolvedAreaFilter={onSetInvolvedAreaFilter}
+          onSetResponsibleFilter={onSetResponsibleFilter}
+          onSetSearchTerm={onSetSearchTerm}
+          onSetStatusFilter={onSetStatusFilter}
+          onShowToast={onShowToast}
+          onUpdateAction={onUpdateAction}
+          onUpdateActivity={onUpdateActivity}
+          onUpdateObjectiveField={onUpdateObjectiveField}
+          onUpdateTeam={onUpdateTeam}
+        />
       </div>
 
-      {/* ACTION DETAIL MODAL (Drawer) */}
-      <ActionDetailModal
-        isOpen={!!selectedAction}
-        action={selectedAction || null}
-        team={currentTeam}
-        activityName={currentActivity?.title || 'Atividade'}
-        onClose={() => setExpandedActionUid(null)}
-        onUpdateAction={onUpdateAction}
-        onSaveAction={onSaveAction}
-        onDeleteAction={onDeleteAction}
-        onAddRaci={onAddRaci}
-        onRemoveRaci={onRemoveRaci}
-        onAddComment={onAddComment}
-        isSaving={isSaving}
-        canEdit={selectedAction ? checkCanEdit(selectedAction) : false}
-        canDelete={selectedAction ? checkCanDelete(selectedAction) : false}
-        readOnly={isViewingAllMicros && !isAdmin}
-      />
+      <Suspense fallback={null}>
+        <ActionDetailModal
+          isOpen={!!selectedAction}
+          action={selectedAction}
+          team={currentTeam}
+          activityName={currentActivity?.title || 'Atividade'}
+          onClose={onCloseActionModal}
+          onSaveFullAction={onSaveFullAction}
+          onSaveAndNew={onSaveAndNewAction}
+          onDeleteAction={onDeleteAction}
+          isSaving={isSaving}
+          canEdit={selectedAction ? checkCanEdit(selectedAction) : false}
+          canDelete={selectedAction ? checkCanDelete(selectedAction) : false}
+          readOnly={readOnly}
+        />
+      </Suspense>
     </>
   );
 }

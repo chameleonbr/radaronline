@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { UserPlus, Mail, MapPin, AlertTriangle, Building2, ChevronDown, ChevronUp, Trash2, X } from 'lucide-react';
-import { PendingRegistration } from '../../../services/dataService';
+import { PendingRegistration } from '../../../services/teamsService';
 import { getMicroregiaoById } from '../../../data/microregioes';
 
 interface PendingRegistrationsPanelProps {

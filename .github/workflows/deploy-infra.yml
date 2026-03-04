@@ -1,0 +1,56 @@
+name: Deploy Infra
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente alvo
+        required: true
+        type: choice
+        options:
+          - dev
+          - hml
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate Bicep
+        run: |
+          az bicep build --file infra/bicep/main.bicep
+
+      - name: Deploy workload
+        run: |
+          az deployment group create \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+            --template-file infra/bicep/main.bicep \
+            --parameters infra/bicep/parameters/${{ inputs.environment }}.bicepparam \
+            --parameters publisherEmail="${{ secrets.APIM_PUBLISHER_EMAIL }}" \
+            --parameters publisherName="${{ vars.APIM_PUBLISHER_NAME || 'Radar Platform Team' }}" \
+            --parameters postgresqlAdminPassword="${{ secrets.POSTGRESQL_ADMIN_PASSWORD }}" \
+            --parameters bridgeSupabaseServiceRoleKey="${{ secrets.BRIDGE_SUPABASE_SERVICE_ROLE_KEY }}" \
+            --parameters bridgeSupabaseUrl="${{ vars.BRIDGE_SUPABASE_URL }}" \
+            --parameters entraTenantId="${{ vars.ENTRA_TENANT_ID }}" \
+            --parameters entraAudience="${{ vars.ENTRA_AUDIENCE }}" \
+            --parameters entraIssuer="${{ vars.ENTRA_ISSUER }}" \
+            --parameters entraJwksUri="${{ vars.ENTRA_JWKS_URI }}" \
+            --parameters webOriginHost="${{ vars.WEB_ORIGIN_HOST }}" \
+            --parameters frontDoorCustomDomainResourceIds="${{ vars.FRONT_DOOR_CUSTOM_DOMAIN_RESOURCE_IDS }}" \
+            --parameters apiImage="${{ vars.API_IMAGE || 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' }}" \
+            --parameters workerImage="${{ vars.WORKER_IMAGE || 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' }}"

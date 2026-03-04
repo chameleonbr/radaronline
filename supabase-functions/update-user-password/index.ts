@@ -26,8 +26,14 @@ const getCorsHeaders = (origin: string | null) => {
 // =====================================
 // HELPERS
 // =====================================
+const INCLUDE_DEBUG_ERRORS = (Deno.env.get('EDGE_DEBUG_ERRORS') || '').toLowerCase() === 'true';
+
 const errorResponse = (message: string, status: number, origin: string | null, debug?: any) => new Response(
-    JSON.stringify({ error: message, debug }),
+    JSON.stringify(
+        INCLUDE_DEBUG_ERRORS && debug !== undefined
+            ? { error: message, debug }
+            : { error: message }
+    ),
     { status, headers: { ...getCorsHeaders(origin), 'Content-Type': 'application/json' } }
 );
 

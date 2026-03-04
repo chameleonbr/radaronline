@@ -12,7 +12,7 @@ import { EixoConfig, EIXOS_PREDEFINIDOS } from '../../lib/eixosConfig';
 interface HeaderProps {
   macro: string;
   micro?: string;
-  currentNav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news';
+  currentNav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news' | 'forums' | 'mentorship' | 'education' | 'repository';
   selectedObjective: number;
   objectives: Objective[];
   viewMode: 'table' | 'gantt' | 'team' | 'optimized' | 'calendar';
@@ -25,7 +25,7 @@ interface HeaderProps {
   isEditMode?: boolean;
   onToggleEditMode?: () => void;
   onUpdateObjective?: (id: number, field: 'eixo' | 'eixoLabel' | 'eixoColor' | 'description', value: string | number) => void;
-  onNavigate?: (nav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news') => void;
+  onNavigate?: (nav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news' | 'forums' | 'mentorship' | 'education' | 'repository') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({

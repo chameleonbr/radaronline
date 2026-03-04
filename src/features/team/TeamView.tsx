@@ -1,530 +1,218 @@
-import { useMemo, useState } from 'react';
-import { TeamMember } from '../../types';
-import { getMicroregiaoById, getMunicipiosByMicro } from '../../data/microregioes';
-import { ConfirmModal } from '../../components/common/ConfirmModal';
-import { logError } from '../../lib/logger';
-import {
-  Mail, MapPin, Edit3, Trash2, Plus,
-  User as UserIcon, Search, X,
-  ChevronDown, Filter, Loader2, AlertTriangle
-} from 'lucide-react';
+﻿import { useMemo, useState } from "react";
 
-import { useToast } from '../../components/common/Toast';
-
-// Melhores Práticas: Definir papeis padrão para evitar "Lider", "Chefe", "Resp." misturados
-const ROLES_OPTIONS = [
-  'Responsável',
-  'Aprovador',
-  'Informado',
-  'Membro'
-];
-
-// --- Componentes Auxiliares ---
-
-// Gera cor do badge baseado no cargo
-const getRoleBadgeColor = (role: string) => {
-  const normalized = role.toLowerCase();
-  if (normalized.includes('respons')) return 'bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700';
-  if (normalized.includes('aprov')) return 'bg-purple-50 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700';
-  if (normalized.includes('consult')) return 'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700';
-  if (normalized.includes('inform')) return 'bg-slate-50 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600';
-  return 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700';
-};
-
-const getInitials = (name: string) => {
-  const parts = name.trim().split(' ').filter(Boolean);
-  if (parts.length === 0) return '';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
-
-// --- Componente Principal ---
-
-type TeamViewProps = {
-  team: TeamMember[];
-  microId: string;
-  onUpdateTeam?: (microId: string, team: TeamMember[]) => void;
-  onAddMember?: (member: Omit<TeamMember, 'id'>) => Promise<TeamMember | null>;
-  onRemoveMember?: (memberId: string) => Promise<boolean>;
-  readOnly?: boolean;
-};
-
-type NewMember = Pick<TeamMember, 'name' | 'role' | 'email' | 'municipio'>;
-const emptyMember: NewMember = { name: '', role: '', email: '', municipio: '' };
+import { ConfirmModal } from "../../components/common/ConfirmModal";
+import { useToast } from "../../components/common/Toast";
+import { getMicroregiaoById, getMunicipiosByMicro } from "../../data/microregioes";
+import { logError } from "../../lib/logger";
+import type { TeamMember } from "../../types";
+import { TeamMemberCard } from "./teamView/TeamMemberCard";
+import { TeamMemberFormCard } from "./teamView/TeamMemberFormCard";
+import { TeamViewEmptyState } from "./teamView/TeamViewEmptyState";
+import { TeamViewHeader } from "./teamView/TeamViewHeader";
+import { TeamViewToolbar } from "./teamView/TeamViewToolbar";
+import { ROLES_OPTIONS, TEAM_EMAIL_REGEX } from "./teamView/teamView.constants";
+import { EMPTY_MEMBER, type NewMember, type TeamViewProps } from "./teamView/teamView.types";
 
 export function TeamView({ team, microId, onUpdateTeam, onAddMember, onRemoveMember, readOnly = false }: TeamViewProps) {
-  const { showToast } = useToast();
-  const [isAddOpen, setIsAddOpen] = useState(false); // UI State: Controla visibilidade do form
-  const [form, setForm] = useState<NewMember>(emptyMember);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<NewMember>(emptyMember);
-  const [removeConfirm, setRemoveConfirm] = useState<{ open: boolean; memberId: string | null; memberName?: string }>({ open: false, memberId: null });
-  const [isAdding, setIsAdding] = useState(false);
-  const [isRemoving, setIsRemoving] = useState(false);
+    const { showToast } = useToast();
+    const [isAddOpen, setIsAddOpen] = useState(false);
+    const [form, setForm] = useState<NewMember>(EMPTY_MEMBER);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState<NewMember>(EMPTY_MEMBER);
+    const [removeConfirm, setRemoveConfirm] = useState<{ memberId: string | null; memberName?: string; open: boolean }>({ memberId: null, open: false });
+    const [isAdding, setIsAdding] = useState(false);
+    const [isRemoving, setIsRemoving] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [roleFilter, setRoleFilter] = useState("");
 
-  // UX Melhorada: Busca única + Filtro de Role
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+    const microMeta = microId ? getMicroregiaoById(microId) : undefined;
 
-  const microMeta = microId ? getMicroregiaoById(microId) : undefined;
-
-  // Lista de municípios da microrregião selecionada, ordenados alfabeticamente
-  const municipiosOrdenados = useMemo(() => {
-    if (!microId) return [];
-    return getMunicipiosByMicro(microId)
-      .map(m => m.nome)
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [microId]);
-
-  // Filtragem Otimizada
-  const filteredTeam = useMemo(() => {
-    return team.filter(member => {
-      const searchLower = searchTerm.toLowerCase();
-
-      const matchesSearch = !searchTerm ||
-        member.name.toLowerCase().includes(searchLower) ||
-        member.email.toLowerCase().includes(searchLower) ||
-        member.municipio.toLowerCase().includes(searchLower);
-
-      const matchesRole = !roleFilter || member.role === roleFilter;
-
-      return matchesSearch && matchesRole;
-    });
-  }, [team, searchTerm, roleFilter]);
-
-  const handleAdd = async () => {
-    if (readOnly || !microId) return;
-
-    // Validação de Campos Obrigatórios
-    if (!form.name.trim() || !form.role.trim() || !form.email.trim()) {
-      showToast("Por favor, preencha todos os campos obrigatórios: Nome, Cargo e Email.", 'error');
-      return;
-    }
-
-    // Validação de Formato de Email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(form.email.trim())) {
-      showToast("Por favor, insira um endereço de email válido.", 'error');
-      return;
-    }
-
-    setIsAdding(true);
-    try {
-      // Se tiver callback de adicionar (integração com Supabase)
-      if (onAddMember) {
-        const newMember = await onAddMember({
-          name: form.name.trim(),
-          role: form.role,
-          email: form.email.trim(),
-          municipio: form.municipio.trim(),
-          microregiaoId: microId,
-        });
-        // O estado já é atualizado pelo App.tsx dentro do onAddMember
-        // Apenas limpa o form se o membro foi criado com sucesso
-        if (newMember) {
-          showToast("Membro adicionado com sucesso!", 'success');
-          setForm(emptyMember);
-          setIsAddOpen(false);
+    const municipiosOrdenados = useMemo(() => {
+        if (!microId) {
+            return [];
         }
-      } else {
-        // Fallback: apenas estado local (sem persistência)
-        const next: TeamMember = {
-          id: crypto.randomUUID(),
-          name: form.name.trim(),
-          role: form.role,
-          email: form.email.trim(),
-          municipio: form.municipio.trim(),
-          microregiaoId: microId,
-        };
-        onUpdateTeam?.(microId, [...team, next]);
-        setForm(emptyMember);
-        setIsAddOpen(false);
-      }
-    } catch (error) {
-      logError('TeamView', 'Erro ao adicionar membro', error);
-    } finally {
-      setIsAdding(false);
-    }
-  };
 
-  const handleRemove = (memberId: string) => {
-    if (readOnly || !microId) return;
-    const member = team.find(m => m.id === memberId);
-    setRemoveConfirm({ open: true, memberId, memberName: member?.name });
-  };
+        return getMunicipiosByMicro(microId)
+            .map((municipio) => municipio.nome)
+            .sort((a, b) => a.localeCompare(b, "pt-BR"));
+    }, [microId]);
 
-  const confirmRemove = async () => {
-    if (!removeConfirm.memberId || !microId) return;
+    const filteredTeam = useMemo(() => {
+        return team.filter((member) => {
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = !searchTerm
+                || member.name.toLowerCase().includes(searchLower)
+                || member.email.toLowerCase().includes(searchLower)
+                || member.municipio.toLowerCase().includes(searchLower);
+            const matchesRole = !roleFilter || member.role === roleFilter;
 
-    setIsRemoving(true);
-    try {
-      if (onRemoveMember) {
-        // O estado é atualizado pelo App.tsx dentro do onRemoveMember
-        await onRemoveMember(removeConfirm.memberId);
-      } else {
-        // Fallback: apenas estado local
-        onUpdateTeam?.(microId, team.filter(m => m.id !== removeConfirm.memberId));
-      }
-    } catch (error) {
-      logError('TeamView', 'Erro ao remover membro', error);
-    } finally {
-      setIsRemoving(false);
-      setRemoveConfirm({ open: false, memberId: null });
-    }
-  };
+            return matchesSearch && matchesRole;
+        });
+    }, [roleFilter, searchTerm, team]);
 
-  const startEdit = (member: TeamMember) => {
-    setEditingId(member.id);
-    setEditForm({ name: member.name, role: member.role, email: member.email, municipio: member.municipio });
-  };
+    const handleAdd = async () => {
+        if (readOnly || !microId) {
+            return;
+        }
 
-  const saveEdit = (memberId: string) => {
-    if (readOnly || !microId) return;
-    const updated = team.map(m =>
-      m.id === memberId ? { ...m, ...editForm } : m
+        if (!form.name.trim() || !form.role.trim() || !form.email.trim()) {
+            showToast("Por favor, preencha todos os campos obrigatórios: Nome, Cargo e Email.", "error");
+            return;
+        }
+
+        if (!TEAM_EMAIL_REGEX.test(form.email.trim())) {
+            showToast("Por favor, insira um endereço de email válido.", "error");
+            return;
+        }
+
+        setIsAdding(true);
+        try {
+            if (onAddMember) {
+                const newMember = await onAddMember({
+                    email: form.email.trim(),
+                    microregiaoId: microId,
+                    municipio: form.municipio.trim(),
+                    name: form.name.trim(),
+                    role: form.role,
+                });
+
+                if (newMember) {
+                    showToast("Membro adicionado com sucesso!", "success");
+                    setForm(EMPTY_MEMBER);
+                    setIsAddOpen(false);
+                }
+
+                return;
+            }
+
+            const nextMember: TeamMember = {
+                email: form.email.trim(),
+                id: crypto.randomUUID(),
+                microregiaoId: microId,
+                municipio: form.municipio.trim(),
+                name: form.name.trim(),
+                role: form.role,
+            };
+            onUpdateTeam?.(microId, [...team, nextMember]);
+            setForm(EMPTY_MEMBER);
+            setIsAddOpen(false);
+        } catch (error) {
+            logError("TeamView", "Erro ao adicionar membro", error);
+        } finally {
+            setIsAdding(false);
+        }
+    };
+
+    const handleRemove = (memberId: string) => {
+        if (readOnly || !microId) {
+            return;
+        }
+
+        const member = team.find((teamMember) => teamMember.id === memberId);
+        setRemoveConfirm({ memberId, memberName: member?.name, open: true });
+    };
+
+    const confirmRemove = async () => {
+        if (!removeConfirm.memberId || !microId) {
+            return;
+        }
+
+        setIsRemoving(true);
+        try {
+            if (onRemoveMember) {
+                await onRemoveMember(removeConfirm.memberId);
+            } else {
+                onUpdateTeam?.(microId, team.filter((member) => member.id !== removeConfirm.memberId));
+            }
+        } catch (error) {
+            logError("TeamView", "Erro ao remover membro", error);
+        } finally {
+            setIsRemoving(false);
+            setRemoveConfirm({ memberId: null, open: false });
+        }
+    };
+
+    const startEdit = (member: TeamMember) => {
+        setEditingId(member.id);
+        setEditForm({ email: member.email, municipio: member.municipio, name: member.name, role: member.role });
+    };
+
+    const saveEdit = (memberId: string) => {
+        if (readOnly || !microId) {
+            return;
+        }
+
+        onUpdateTeam?.(
+            microId,
+            team.map((member) => (member.id === memberId ? { ...member, ...editForm } : member)),
+        );
+        setEditingId(null);
+    };
+
+    return (
+        <div className="max-w-7xl mx-auto space-y-6 pb-20">
+            <TeamViewHeader count={filteredTeam.length} microName={microMeta?.nome} />
+
+            <TeamViewToolbar
+                isAddOpen={isAddOpen}
+                onSearchChange={setSearchTerm}
+                onToggleAdd={() => setIsAddOpen((current) => !current)}
+                readOnly={readOnly}
+                roleFilter={roleFilter}
+                roles={ROLES_OPTIONS}
+                searchTerm={searchTerm}
+                setRoleFilter={setRoleFilter}
+            />
+
+            <TeamMemberFormCard
+                form={form}
+                isAdding={isAdding}
+                isOpen={isAddOpen}
+                municipios={municipiosOrdenados}
+                onCancel={() => setIsAddOpen(false)}
+                onChange={setForm}
+                onSubmit={handleAdd}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredTeam.map((member) => (
+                    <TeamMemberCard
+                        editForm={editForm}
+                        isEditing={editingId === member.id}
+                        key={member.id}
+                        member={member}
+                        municipios={municipiosOrdenados}
+                        onCancelEdit={() => setEditingId(null)}
+                        onChangeEditForm={setEditForm}
+                        onEdit={() => startEdit(member)}
+                        onRemove={() => handleRemove(member.id)}
+                        onSaveEdit={() => saveEdit(member.id)}
+                        readOnly={readOnly}
+                    />
+                ))}
+            </div>
+
+            {filteredTeam.length === 0 ? (
+                <TeamViewEmptyState
+                    onReset={!readOnly ? () => {
+                        setSearchTerm("");
+                        setRoleFilter("");
+                        setIsAddOpen(true);
+                    } : undefined}
+                    readOnly={readOnly}
+                />
+            ) : null}
+
+            <ConfirmModal
+                cancelText="Cancelar"
+                confirmText={isRemoving ? "Removendo..." : "Sim, Remover"}
+                isOpen={removeConfirm.open}
+                message={`Você está prestes a remover ${removeConfirm.memberName} da equipe. Esta ação não pode ser desfeita.`}
+                onClose={() => setRemoveConfirm({ memberId: null, open: false })}
+                onConfirm={confirmRemove}
+                title="Remover Colaborador"
+                type="danger"
+            />
+        </div>
     );
-    onUpdateTeam?.(microId, updated);
-    setEditingId(null);
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-20">
-      {/* Header com Design Elevado */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-700">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-teal-600 mb-1">
-            <UserIcon size={20} className="stroke-[2.5]" />
-            <span className="text-xs font-bold uppercase tracking-wider">Gestão de Equipe</span>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Membros & Atribuições</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-lg">
-            Gerencie quem faz o que. Mantenha os dados de contato e atribuições RACI atualizados para a microrregião.
-          </p>
-        </div>
-
-        {microMeta && (
-          <div className="flex flex-col items-end gap-1">
-            <span className="px-3 py-1 rounded-full bg-slate-900 text-slate-50 text-xs font-medium shadow-sm">
-              {microMeta.nome}
-            </span>
-            <span className="text-xs text-slate-400 font-medium">
-              {filteredTeam.length} {filteredTeam.length === 1 ? 'membro' : 'membros'}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Barra de Ferramentas (Busca & Ações) */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-teal-500 transition-colors" size={18} />
-          <input
-            type="text"
-            placeholder="Buscar por nome, email ou cidade..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-800 focus:border-teal-400 transition-all shadow-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        <div className="relative min-w-[160px]">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-          <select
-            className="w-full pl-9 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-600 dark:text-slate-300 appearance-none focus:outline-none focus:ring-2 focus:ring-teal-100 dark:focus:ring-teal-800 focus:border-teal-400 shadow-sm cursor-pointer"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-          >
-            <option value="">Todos Cargos</option>
-            {ROLES_OPTIONS.map(role => (
-              <option key={role} value={role}>{role}</option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-        </div>
-
-        {!readOnly && (
-          <button
-            onClick={() => setIsAddOpen(!isAddOpen)}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm active:scale-95 ${isAddOpen
-              ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-              : 'bg-teal-600 text-white hover:bg-teal-700 shadow-teal-200'
-              }`}
-          >
-            {isAddOpen ? <X size={18} /> : <Plus size={18} />}
-            <span className="hidden sm:inline">{isAddOpen ? 'Cancelar' : 'Novo Membro'}</span>
-            <span className="sm:hidden">{isAddOpen ? 'Fechar' : 'Novo'}</span>
-          </button>
-        )}
-      </div>
-
-      {/* Formulário de Adição (Colapsável) */}
-      <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isAddOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 border-l-4 border-l-teal-500 rounded-2xl p-6 shadow-xl mb-6 relative">
-
-          <button
-            onClick={() => setIsAddOpen(false)}
-            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
-          >
-            <X size={20} />
-          </button>
-
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-full bg-teal-50 dark:bg-teal-900/40 flex items-center justify-center text-teal-600 dark:text-teal-400">
-              <Plus size={20} strokeWidth={2.5} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                Novo Colaborador
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Preencha os dados abaixo para adicionar um membro.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Nome Completo <span className="text-rose-500">*</span></label>
-              <input
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400"
-                placeholder="Ex: Maria Silva"
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Cargo / Função <span className="text-rose-500">*</span></label>
-              <input
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400"
-                placeholder="Ex: Gestor"
-                value={form.role}
-                onChange={e => setForm({ ...form, role: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Email <span className="text-rose-500">*</span></label>
-              <input
-                className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all placeholder:text-slate-400"
-                placeholder="maria@exemplo.com"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 ml-1">Município</label>
-              <div className="relative">
-                <select
-                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all appearance-none cursor-pointer"
-                  value={form.municipio}
-                  onChange={e => setForm({ ...form, municipio: e.target.value })}
-                >
-                  <option value="">Selecione...</option>
-                  {municipiosOrdenados.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-700">
-            <button
-              onClick={() => setIsAddOpen(false)}
-              className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleAdd}
-              disabled={!form.name.trim() || !form.role.trim() || !form.email.trim() || isAdding}
-              className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-teal-500/20 hover:shadow-teal-500/40 transform active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
-            >
-              {isAdding && <Loader2 size={16} className="animate-spin" />}
-              {isAdding ? 'Salvando...' : 'Confirmar Adição'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid de Cards (Mobile First & Responsive) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredTeam.map((member) => {
-          const isEditing = editingId === member.id;
-          // Usuário pede que 'Cadastro Pendente' seja apenas para Gestor. 
-          // Vamos assumir que 'Membro' não deve mostrar pendência.
-          const isPending = member.isRegistered === false && member.role.toLowerCase() !== 'membro';
-
-          if (isEditing) {
-            // Card em Modo de Edição
-            return (
-              <div key={member.id} className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-lg border-2 border-teal-100 dark:border-teal-800 ring-2 ring-teal-50 dark:ring-teal-900 relative animate-in fade-in zoom-in-95 duration-200">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-teal-600 uppercase tracking-wide">Editando Membro</h4>
-                  </div>
-                  <input
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700"
-                    value={editForm.name}
-                    onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                    placeholder="Nome"
-                  />
-                  <input
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700"
-                    value={editForm.role}
-                    onChange={e => setEditForm({ ...editForm, role: e.target.value })}
-                    placeholder="Cargo"
-                  />
-                  <input
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700"
-                    value={editForm.email}
-                    onChange={e => setEditForm({ ...editForm, email: e.target.value })}
-                    placeholder="Email"
-                  />
-                  <div className="relative">
-                    <select
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-teal-200 dark:focus:ring-teal-700 appearance-none cursor-pointer"
-                      value={editForm.municipio}
-                      onChange={e => setEditForm({ ...editForm, municipio: e.target.value })}
-                    >
-                      <option value="">Selecione o município...</option>
-                      {municipiosOrdenados.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <button onClick={() => saveEdit(member.id)} className="flex-1 bg-teal-600 text-white py-1.5 rounded-lg text-sm font-medium hover:bg-teal-700">Salvar</button>
-                    <button onClick={() => setEditingId(null)} className="flex-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600">Cancelar</button>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          // Card em Modo de Visualização
-          return (
-            <div key={member.id} className={`group bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border transition-all duration-300 relative ${isPending
-              ? 'border-amber-300 dark:border-amber-700/50 ring-1 ring-amber-100 dark:ring-amber-900/20'
-              : 'border-slate-100 dark:border-slate-700 hover:shadow-md hover:border-teal-100 dark:hover:border-teal-800'
-              }`}>
-
-              {/* Badge de Pendente */}
-              {isPending && (
-                <div className="absolute top-0 right-0">
-                  <div className="bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-400 text-[10px] font-bold px-3 py-1.5 rounded-bl-xl rounded-tr-xl flex items-center gap-1.5 shadow-sm border-b border-l border-amber-200 dark:border-amber-800/50">
-                    <AlertTriangle size={12} className="stroke-[2.5]" />
-                    <span>CADASTRO PENDENTE</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Cabeçalho do Card */}
-              <div className="flex items-start justify-between mb-4 mt-2">
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-2xl text-lg font-bold flex items-center justify-center shadow-inner ${isPending
-                    ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                    : 'bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-600 dark:to-slate-700 text-slate-600 dark:text-slate-200'
-                    }`}>
-                    {getInitials(member.name)}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base leading-tight group-hover:text-teal-700 dark:group-hover:text-teal-400 transition-colors">
-                      {member.name}
-                    </h3>
-                    <div className={`inline-flex items-center px-2 py-0.5 mt-1 rounded-md border text-[10px] font-bold uppercase tracking-wider ${getRoleBadgeColor(member.role)}`}>
-                      {member.role}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ações (Aparecem no hover em desktop, ou sempre visíveis se mobile) */}
-                {!readOnly && (
-                  <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => startEdit(member)} className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/40 rounded-lg transition-colors">
-                      <Edit3 size={16} />
-                    </button>
-                    <button onClick={() => handleRemove(member.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/40 rounded-lg transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Detalhes do Card */}
-              <div className="space-y-2">
-                {member.email ? (
-                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
-                    <div className="p-1.5 bg-slate-50 dark:bg-slate-700 rounded-md text-slate-400 dark:text-slate-500">
-                      <Mail size={14} />
-                    </div>
-                    <span className="truncate">{member.email}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-slate-300 dark:text-slate-500 italic">
-                    <div className="p-1.5 bg-slate-50 dark:bg-slate-700 rounded-md">
-                      <Mail size={14} />
-                    </div>
-                    Sem email
-                  </div>
-                )}
-
-                {member.municipio ? (
-                  <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
-                    <div className="p-1.5 bg-slate-50 dark:bg-slate-700 rounded-md text-slate-400 dark:text-slate-500">
-                      <MapPin size={14} />
-                    </div>
-                    <span className="truncate">{member.municipio}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm text-slate-300 dark:text-slate-500 italic">
-                    <div className="p-1.5 bg-slate-50 dark:bg-slate-700 rounded-md">
-                      <MapPin size={14} />
-                    </div>
-                    Sem município
-                  </div>
-                )}
-
-                {isPending && (
-                  <p className="text-[10px] text-amber-600 dark:text-amber-500 font-medium pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">
-                    Aguardando cadastro pelo administrador
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {filteredTeam.length === 0 && (
-        <div className="text-center py-16 bg-slate-50/50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-          <div className="mx-auto w-16 h-16 bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 rounded-full flex items-center justify-center mb-4">
-            <Search size={24} />
-          </div>
-          <h3 className="text-slate-900 dark:text-slate-100 font-semibold text-lg">Nenhum membro encontrado</h3>
-          <p className="text-slate-500 dark:text-slate-400 max-w-xs mx-auto mt-1">
-            Tente ajustar seus filtros ou adicione um novo colaborador à equipe.
-          </p>
-          {!readOnly && (
-            <button onClick={() => { setSearchTerm(''); setRoleFilter(''); setIsAddOpen(true) }} className="mt-4 text-teal-600 dark:text-teal-400 font-semibold text-sm hover:underline">
-              Limpar filtros e adicionar novo
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Modal de Confirmação */}
-      <ConfirmModal
-        isOpen={removeConfirm.open}
-        onClose={() => setRemoveConfirm({ open: false, memberId: null })}
-        onConfirm={confirmRemove}
-        title="Remover Colaborador"
-        message={`Você está prestes a remover ${removeConfirm.memberName} da equipe. Esta ação não pode ser desfeita.`}
-        confirmText={isRemoving ? 'Removendo...' : 'Sim, Remover'}
-        cancelText="Cancelar"
-        type="danger"
-      />
-    </div>
-  );
 }

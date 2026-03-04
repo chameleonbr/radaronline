@@ -3,9 +3,9 @@ import { motion } from 'framer-motion';
 import { Calendar, Users, LayoutDashboard, Zap, List, CalendarDays } from 'lucide-react';
 
 interface MobileBottomNavProps {
-  currentNav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news';
+  currentNav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news' | 'forums' | 'mentorship' | 'education' | 'repository';
   viewMode: 'table' | 'gantt' | 'team' | 'optimized' | 'calendar';
-  onNavChange: (nav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news') => void;
+  onNavChange: (nav: 'strategy' | 'home' | 'settings' | 'dashboard' | 'news' | 'forums' | 'mentorship' | 'education' | 'repository') => void;
   onViewModeChange: (mode: 'table' | 'gantt' | 'team' | 'optimized' | 'calendar') => void;
   showTeamOption?: boolean;
 }

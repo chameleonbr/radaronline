@@ -15,33 +15,31 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
-    open: true
+    open: true,
   },
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          // Core React - carregado sempre
           'vendor-react': ['react', 'react-dom'],
-          // Router - separado para não bloquear render inicial
           'vendor-router': ['react-router-dom'],
-          // Charts - lazy loaded com dashboard
           'vendor-charts': ['recharts'],
-          // Maps - lazy loaded com mapa
           'vendor-maps': ['leaflet'],
-          // Animation - usado em vários lugares mas pode ser deferido
           'vendor-motion': ['framer-motion'],
-          // Backend - carregado após auth check
           'vendor-supabase': ['@supabase/supabase-js'],
-          // Date utilities
           'vendor-date': ['date-fns'],
-          // Icons - separado pois é grande (~50KB)
           'vendor-icons': ['lucide-react'],
-        }
-
-      }
+        },
+      },
     },
-    // Aumentar limite de warning para chunks grandes durante transição
     chunkSizeWarningLimit: 600,
-  }
+  },
+  test: {
+    environment: 'jsdom',
+    globals: false,
+    setupFiles: './src/test/setup.ts',
+    css: true,
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    exclude: ['apps/**', 'dist/**', 'node_modules/**'],
+  },
 })

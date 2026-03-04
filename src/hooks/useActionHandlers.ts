@@ -1,12 +1,13 @@
-
 import { useCallback } from 'react';
-import { Action, RaciRole, ActionComment, Status, findActionByUid, getNextActionNumber, ActionTag } from '../types';
-import * as dataService from '../services/dataService';
+import { Action, RaciRole, Status, findActionByUid, getNextActionNumber, ActionTag, ActionComment } from '../types';
+import * as actionsService from '../services/actionsService';
+import * as tagsService from '../services/tagsService';
+import { addComment, loadActionComments, processMentions } from '../services/commentsService';
 import { useToast } from '../components/common/Toast';
 import { useLatest } from './useLatest';
 import { formatISODate, parseDateLocal } from '../lib/date';
 import { clampProgress } from '../lib/validation';
-import { logError } from '../lib/logger';
+import { log, logWarn, logError } from '../lib/logger';
 
 interface UseActionHandlersProps {
   // State
@@ -19,7 +20,9 @@ interface UseActionHandlersProps {
 
   // Context / Props
   selectedActivity: string;
+  setSelectedActivity: (activityId: string) => void;
   currentMicroId: string;
+  createActionMicroId: string;
   viewMode: string;
   setViewMode: (mode: 'table' | 'gantt' | 'team' | 'optimized' | 'calendar') => void;
   isDemoMode: boolean;
@@ -56,7 +59,9 @@ export function useActionHandlers({
   setPendingNewActionUid,
 
   selectedActivity,
+  setSelectedActivity,
   currentMicroId,
+  createActionMicroId,
   viewMode,
   setViewMode,
   isDemoMode,
@@ -167,7 +172,7 @@ export function useActionHandlers({
         const parts = action.id.split('.');
         const actionNumber = parseInt(parts[parts.length - 1], 10);
 
-        const savedAction = await dataService.createAction({
+        const savedAction = await actionsService.createAction({
           microregiaoId: action.microregiaoId,
           activityId: action.activityId,
           actionNumber,
@@ -176,7 +181,7 @@ export function useActionHandlers({
 
         // Update other fields
         if (action.status !== 'Não Iniciado' || action.startDate || action.plannedEndDate || action.progress > 0) {
-          await dataService.updateAction(savedAction.uid, {
+          await actionsService.updateAction(savedAction.uid, {
             status: action.status,
             startDate: action.startDate,
             plannedEndDate: action.plannedEndDate,
@@ -195,7 +200,7 @@ export function useActionHandlers({
         showToast('Ação criada com sucesso!', 'success');
       } else {
         // UPDATE
-        await dataService.updateAction(targetUid, {
+        await actionsService.updateAction(targetUid, {
           title: action.title,
           status: action.status,
           startDate: action.startDate,
@@ -226,7 +231,167 @@ export function useActionHandlers({
     setActions
   ]);
 
-  // 3. CREATE START (UI)
+  const upsertActionList = useCallback((currentActions: Action[], savedAction: Action): Action[] => {
+    const exists = currentActions.some(a => a.uid === savedAction.uid);
+    if (exists) {
+      return currentActions.map(a => (a.uid === savedAction.uid ? savedAction : a));
+    }
+    return [...currentActions, savedAction];
+  }, []);
+
+  const upsertActionInState = useCallback((savedAction: Action) => {
+    setActions(prev => upsertActionList(prev, savedAction));
+  }, [setActions, upsertActionList]);
+
+  // 3. CLOSE ACTION MODAL
+  const handleCloseActionModal = useCallback(() => {
+    if (pendingNewActionUid && expandedActionUid === pendingNewActionUid) {
+      setActions(prev => prev.filter(a => a.uid !== pendingNewActionUid));
+      setPendingNewActionUid(null);
+      showToast('Ação descartada', 'info');
+    }
+
+    setExpandedActionUid(null);
+  }, [expandedActionUid, pendingNewActionUid, setActions, setExpandedActionUid, setPendingNewActionUid, showToast]);
+
+  // 4. CREATE ACTION IN SPECIFIC MICRO
+  const handleConfirmCreateInMicro = useCallback(() => {
+    if (!createActionMicroId) {
+      showToast('Selecione uma microrregião', 'error');
+      return;
+    }
+
+    if (setIsCreateActionModalOpen) {
+      setIsCreateActionModalOpen(false);
+    }
+
+    setTimeout(() => {
+      const nextNum = getNextActionNumber(actionsRef.current, selectedActivity, createActionMicroId);
+      const actionId = `${selectedActivity}.${nextNum}`;
+      const tempUid = `${createActionMicroId}::${actionId}`;
+
+      const tempAction: Action = {
+        uid: tempUid,
+        id: actionId,
+        activityId: selectedActivity,
+        microregiaoId: createActionMicroId,
+        title: '',
+        status: 'Não Iniciado',
+        startDate: '',
+        plannedEndDate: '',
+        endDate: '',
+        progress: 0,
+        raci: [],
+        notes: '',
+        comments: [],
+        tags: [],
+      };
+
+      setActions(prev => [...prev, tempAction]);
+      setPendingNewActionUid(tempUid);
+      if (viewMode === 'gantt') setViewMode('table');
+      setExpandedActionUid(tempUid);
+      showToast('Preencha os dados e clique em Salvar', 'info');
+    }, 100);
+  }, [
+    actionsRef,
+    createActionMicroId,
+    selectedActivity,
+    setActions,
+    setExpandedActionUid,
+    setPendingNewActionUid,
+    setViewMode,
+    setIsCreateActionModalOpen,
+    showToast,
+    viewMode,
+  ]);
+
+  // 5. EXPAND ACTION
+  const handleExpandAction = useCallback(async (uid: string | null) => {
+    if (!uid) {
+      setExpandedActionUid(null);
+      return;
+    }
+
+    setExpandedActionUid(uid);
+
+    const action = findActionByUid(actionsRef.current, uid);
+    if (action && (action.commentCount || 0) > 0 && action.comments.length === 0) {
+      try {
+        const comments = await loadActionComments(uid);
+        setActions(prev => prev.map(a => (a.uid === uid ? { ...a, comments } : a)));
+      } catch (error) {
+        logError('useActionHandlers', 'Erro ao carregar comentários on-demand', error);
+      }
+    }
+  }, [actionsRef, setActions, setExpandedActionUid]);
+
+  // 6. OPEN ACTION FROM GANTT
+  const handleGanttActionClick = useCallback((action: Action) => {
+    setSelectedActivity(action.activityId);
+    setExpandedActionUid(action.uid);
+  }, [setExpandedActionUid, setSelectedActivity]);
+
+  // 7. SAVE FULL ACTION (Draft modal)
+  const handleSaveFullAction = useCallback(async (updatedAction: Action) => {
+    setIsSaving(true);
+    try {
+      const saved = await actionsService.upsertAction(updatedAction);
+      upsertActionInState(saved);
+      setPendingNewActionUid(null);
+      setExpandedActionUid(null);
+      showToast('Ação salva com sucesso!', 'success');
+    } catch (error: any) {
+      logError('useActionHandlers', 'Erro ao salvar ação (full)', error);
+      showToast(`Erro ao salvar ação: ${error.message}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [showToast, setExpandedActionUid, setIsSaving, setPendingNewActionUid, upsertActionInState]);
+
+  // 8. SAVE AND NEW (Draft modal)
+  const handleSaveAndNewAction = useCallback(async (updatedAction: Action) => {
+    setIsSaving(true);
+    try {
+      const saved = await actionsService.upsertAction(updatedAction);
+      const actionsWithSaved = upsertActionList(actionsRef.current, saved);
+      showToast('Ação salva! Criando próxima...', 'success');
+
+      setPendingNewActionUid(null);
+
+      const nextNum = getNextActionNumber(actionsWithSaved, selectedActivity, updatedAction.microregiaoId);
+      const actionId = `${selectedActivity}.${nextNum}`;
+      const tempUid = `${updatedAction.microregiaoId}::${actionId}`;
+
+      const tempAction: Action = {
+        uid: tempUid,
+        id: actionId,
+        activityId: selectedActivity,
+        microregiaoId: updatedAction.microregiaoId,
+        title: 'Nova Ação',
+        status: 'Não Iniciado',
+        startDate: '',
+        plannedEndDate: '',
+        endDate: '',
+        progress: 0,
+        raci: [],
+        notes: '',
+        comments: [],
+        tags: [],
+      };
+
+      setActions(prev => [...upsertActionList(prev, saved), tempAction]);
+      setPendingNewActionUid(tempUid);
+      setExpandedActionUid(tempUid);
+    } catch (error: any) {
+      logError('useActionHandlers', 'Erro no fluxo salvar e nova ação', error);
+      showToast(`Erro: ${error.message}`, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [actionsRef, selectedActivity, setActions, setExpandedActionUid, setIsSaving, setPendingNewActionUid, showToast, upsertActionList]);
+
+  // 9. CREATE START (UI)
   const handleCreateAction = useCallback(() => {
     // Admin View All -> Needs Modal
     if (isAdmin && isViewingAllMicros) {
@@ -292,7 +457,7 @@ export function useActionHandlers({
     setExpandedActionUid
   ]);
 
-  // 4. DELETE
+  // 10. DELETE
   const handleDeleteAction = useCallback((uid: string) => {
     if (isDemoMode) {
       showToast('Modo Visualização: Não é possível excluir ações.', 'warning');
@@ -329,7 +494,7 @@ export function useActionHandlers({
           // Optimistic / clean up immediately
           setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => { } });
 
-          await dataService.deleteAction(uid);
+          await actionsService.deleteAction(uid);
           setActions(prev => prev.filter(a => a.uid !== uid));
           setExpandedActionUid(null);
           showToast('Ação excluída!', 'success');
@@ -342,7 +507,7 @@ export function useActionHandlers({
 
   }, [isDemoMode, isViewingAllMicros, isAdmin, actionsRef, currentMicroId, checkCanDelete, showToast, setConfirmModal, setActions, setExpandedActionUid]);
 
-  // 5. TEAM / RACI
+  // 11. TEAM / RACI
   const handleAddRaci = useCallback(async (uid: string, memberId: string, role: RaciRole) => {
     if (isViewingAllMicros && !isAdmin) return;
 
@@ -366,13 +531,17 @@ export function useActionHandlers({
     }
 
     // Optimistic Update
-    const newRaci = [...action.raci, { name: member.name, role }];
+    const previousRaci = action.raci;
+    const newRaci = [...previousRaci, { name: member.name, role }];
     setActions(prev => prev.map(a => a.uid === uid ? { ...a, raci: newRaci } : a));
 
     try {
-      await dataService.addRaciMember(uid, member.name, role);
+      await actionsService.addRaciMember(uid, member.name, role);
       showToast('Membro adicionado!', 'success');
-    } catch (err) {
+    } catch (error) {
+      // Rollback da UI otimista em caso de falha no persist
+      setActions(prev => prev.map(a => a.uid === uid ? { ...a, raci: previousRaci } : a));
+      logError('useActionHandlers', 'Erro ao adicionar membro RACI', error);
       showToast('Erro ao salvar equipe', 'error');
     }
 
@@ -390,33 +559,57 @@ export function useActionHandlers({
       onConfirm: async () => {
         setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => { } });
 
-        const newRaci = action.raci.filter((_, i) => i !== idx);
+        const previousRaci = action.raci;
+        const newRaci = previousRaci.filter((_, i) => i !== idx);
         setActions(prev => prev.map(a => a.uid === uid ? { ...a, raci: newRaci } : a));
 
         try {
-          await dataService.removeRaciMember(uid, memberName);
+          await actionsService.removeRaciMember(uid, memberName);
           showToast('Membro removido', 'success');
-        } catch (err) {
+        } catch (error) {
+          // Rollback da UI otimista em caso de falha no persist
+          setActions(prev => prev.map(a => a.uid === uid ? { ...a, raci: previousRaci } : a));
+          logError('useActionHandlers', 'Erro ao remover membro RACI', error);
           showToast('Erro ao salvar', 'error');
         }
       }
     });
   }, [actionsRef, checkCanManageTeam, setConfirmModal, setActions, showToast]);
 
-  // 6. Comments
-  const handleAddComment = useCallback(async (uid: string, content: string) => {
+  // 12. Comments
+  const handleAddComment = useCallback(async (
+    uid: string,
+    content: string,
+    parentId?: string | null
+  ): Promise<ActionComment | null> => {
     // API call to create comment
     try {
-      const newComment = await dataService.addComment(uid, content);
+      const newComment = await addComment(uid, content, parentId);
       setActions(prev => prev.map(a =>
-        a.uid === uid ? { ...a, comments: [...(a.comments || []), newComment] } : a
+        a.uid === uid
+          ? {
+            ...a,
+            comments: [...(a.comments || []), newComment],
+            commentCount: (a.commentCount ?? a.comments?.length ?? 0) + 1
+          }
+          : a
       ));
-    } catch (error) {
-      showToast('Erro ao adicionar comentário', 'error');
-    }
-  }, [setActions, showToast]);
 
-  // 7. BULK CREATE (Smart Paste Import)
+      const action = findActionByUid(actionsRef.current, uid);
+      if (action && content.includes('@')) {
+        void processMentions(content, action.title, newComment.authorName).catch((error) => {
+          logError('useActionHandlers', 'Erro ao processar menções em comentário', error);
+        });
+      }
+      return newComment;
+    } catch (error) {
+      logError('useActionHandlers', 'Erro ao adicionar comentario', error);
+      showToast('Erro ao adicionar comentário', 'error');
+      return null;
+    }
+  }, [actionsRef, setActions, showToast]);
+
+  // 13. BULK CREATE (Smart Paste Import)
   const handleBulkCreateActions = useCallback(async (parsedActions: Array<{
     title: string;
     area: string;
@@ -442,10 +635,11 @@ export function useActionHandlers({
     setIsSaving(true);
     let successCount = 0;
     let errorCount = 0;
+    const createdActions: Action[] = [];
 
     try {
       // 1. Carregar tags existentes para evitar duplicatas e minimizar calls
-      const existingTags = await dataService.loadTags(currentMicroId);
+      const existingTags = await tagsService.loadTags(currentMicroId);
       // Mapa para busca rápida: NAME_UPPER -> Tag
       const tagMap = new Map<string, ActionTag>();
       existingTags.forEach(t => tagMap.set(t.name.toUpperCase(), t));
@@ -456,7 +650,7 @@ export function useActionHandlers({
       for (const parsed of parsedActions) {
         try {
           // Cria a ação
-          const savedAction = await dataService.createAction({
+          const savedAction = await actionsService.createAction({
             microregiaoId: currentMicroId,
             activityId: selectedActivity,
             actionNumber: nextNum,
@@ -467,14 +661,14 @@ export function useActionHandlers({
           nextNum++;
 
           // Atualiza com datas e status se fornecidos
-          const updates: any = {};
+          const updates: Partial<Omit<Action, 'uid' | 'id' | 'activityId' | 'microregiaoId' | 'comments' | 'raci'>> = {};
           if (parsed.status !== 'Não Iniciado') updates.status = parsed.status;
           if (parsed.startDate) updates.startDate = parsed.startDate;
           if (parsed.plannedEndDate) updates.plannedEndDate = parsed.plannedEndDate;
           // NOTA: 'parsed.area' agora é convertida em TAGS, não mais em notes.
 
           if (Object.keys(updates).length > 0) {
-            await dataService.updateAction(savedAction.uid, updates);
+            await actionsService.updateAction(savedAction.uid, updates);
           }
 
           // Processamento de TAGS (Áreas Envolvidas)
@@ -490,45 +684,44 @@ export function useActionHandlers({
               if (!tag) {
                 // Cria nova tag se não existir
                 try {
-                  tag = await dataService.createTag(areaName);
+                  tag = await tagsService.createTag(areaName);
                   tagMap.set(upperName, tag); // Atualiza cache local
-                } catch (e: any) {
+                } catch {
                   // Se falhar (ex: duplicidade não pega no load inicial), tenta buscar do banco
-                  console.warn(`Tentativa de criar tag '${areaName}' falhou, buscando existente...`);
+                  logWarn('useActionHandlers', `Tentativa de criar tag '${areaName}' falhou, buscando existente...`);
                   try {
-                    const existingData = await dataService.loadTags();
+                    const existingData = await tagsService.loadTags();
                     const found = existingData.find(t => t.name.toUpperCase() === upperName);
                     if (found) {
                       tag = found;
                       tagMap.set(upperName, tag);
                     } else {
-                      console.error(`Erro fatal: Tag '${areaName}' não criada e não encontrada.`);
+                      logError('useActionHandlers', `Erro fatal: Tag '${areaName}' não criada e não encontrada.`);
                       continue;
                     }
                   } catch (retryErr) {
-                    console.error(`Erro ao recuperar tag existente '${areaName}':`, retryErr);
+                    logError('useActionHandlers', `Erro ao recuperar tag existente '${areaName}'`, retryErr);
                     continue; // Pula essa tag se falhar
                   }
                 }
               }
 
-              // Associa tag à ação
-              // Associa tag à ação
+              // Associa tag a acao
               if (tag) {
                 try {
-                  const dbId = (savedAction as any).dbId;
-                  if (!dbId) console.warn(`[BulkImport] ALERTA: dbId hiante para ação ${savedAction.uid}`);
-                  else console.log(`[BulkImport] Associando tag ${tag.name} à ação ${savedAction.uid} (DB ID: ${dbId})`);
+                  const { dbId } = savedAction;
+                  if (!dbId) logWarn('useActionHandlers', `[BulkImport] ALERTA: dbId ausente para a ação ${savedAction.uid}`);
+                  else log('useActionHandlers', `[BulkImport] Associando tag ${tag.name} para ação ${savedAction.uid} (DB ID: ${dbId})`);
 
                   // Passamos o dbId (UUID) diretamente para evitar lookup e race conditions
-                  await dataService.addTagToAction(savedAction.uid, tag.id, dbId);
+                  await tagsService.addTagToAction(savedAction.uid, tag.id, dbId);
 
                   // Verifica duplicidade no array local
                   if (!actionTags.some(t => t.id === tag!.id)) {
                     actionTags.push(tag);
                   }
                 } catch (e) {
-                  console.error(`Erro ao associar tag '${areaName}' à ação:`, e);
+                  logError('useActionHandlers', `Erro ao associar tag '${areaName}' para ação`, e);
                 }
               }
             }
@@ -544,12 +737,17 @@ export function useActionHandlers({
             tags: actionTags, // Tags adicionadas agora aparecem na UI
           };
 
-          setActions(prev => [...prev, fullAction]);
+          createdActions.push(fullAction);
           successCount++;
         } catch (err) {
           logError('useActionHandlers', 'Erro ao criar ação em lote', err);
           errorCount++;
         }
+      }
+
+      if (createdActions.length > 0) {
+        // Atualiza estado uma ?nica vez para reduzir re-render em imports grandes
+        setActions(prev => [...prev, ...createdActions]);
       }
 
       if (successCount > 0) {
@@ -569,6 +767,12 @@ export function useActionHandlers({
   return {
     handleUpdateAction,
     handleSaveAction,
+    handleCloseActionModal,
+    handleConfirmCreateInMicro,
+    handleExpandAction,
+    handleGanttActionClick,
+    handleSaveFullAction,
+    handleSaveAndNewAction,
     handleCreateAction,
     handleDeleteAction,
     handleAddRaci,
@@ -577,3 +781,4 @@ export function useActionHandlers({
     handleBulkCreateActions,
   };
 }
+

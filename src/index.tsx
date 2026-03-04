@@ -11,10 +11,6 @@ const root = ReactDOM.createRoot(
 // ✅ StrictMode reabilitado para detecção de bugs em desenvolvimento
 // O double-render em development é intencional e ajuda a encontrar problemas
 
-// [DEBUG] Expor supabase para console debugging
-import { supabase } from './lib/supabase';
-(window as any).supabase = supabase;
-
 root.render(
   <React.StrictMode>
     <ThemeProvider>
@@ -22,8 +18,6 @@ root.render(
     </ThemeProvider>
   </React.StrictMode>
 );
-
-
 
 
 

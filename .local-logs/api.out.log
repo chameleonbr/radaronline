@@ -1,0 +1,8 @@
+
+> @radar/api@0.1.0 dev
+> tsx watch src/server.ts
+
+{"level":30,"time":1772474167759,"pid":14044,"hostname":"ccj","msg":"Server listening at http://127.0.0.1:3001"}
+{"level":30,"time":1772474167760,"pid":14044,"hostname":"ccj","msg":"Server listening at http://10.125.121.4:3001"}
+{"level":30,"time":1772474184441,"pid":14044,"hostname":"ccj","correlationId":"req-1","req":{"method":"GET","url":"/health","host":"127.0.0.1:3001","remoteAddress":"127.0.0.1","remotePort":58583},"msg":"incoming request"}
+{"level":30,"time":1772474184452,"pid":14044,"hostname":"ccj","correlationId":"req-1","res":{"statusCode":200},"responseTime":10.484999999403954,"msg":"request completed"}

@@ -1,107 +1,78 @@
-import { supabase } from '../lib/supabase';
+﻿
 import { ActivityType, ActivityLog } from '../types/activity.types';
 import { logError, logWarn } from '../lib/logger';
+import { getCurrentAuthUser } from './sessionService';
+import {
+  buildActivityLogMetadata,
+  filterActivityLogs,
+  normalizeActivityLogsWithoutUser,
+  resolveCreatedByName,
+} from './logging/loggingService.helpers';
+import {
+  fetchProfileNameByUserId,
+  insertActivityLogRecord,
+  listActivityLogsWithUser,
+  listActivityLogsWithoutUser,
+} from './logging/loggingService.repositories';
+import type {
+  FetchActivitiesFilter,
+  LoggingEntityType,
+  LoggingMetadata,
+} from './logging/loggingService.types';
 
 export const loggingService = {
-    /**
-     * Registra uma nova atividade no sistema
-     */
-    async logActivity(
-        type: ActivityType,
-        entityType: 'auth' | 'action' | 'user' | 'view',
-        entityId?: string,
-        metadata: Record<string, any> = {}
-    ) {
-        try {
-            // Obter o usuário atual
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                logWarn('loggingService', 'Usuário não autenticado, log ignorado.');
-                return;
-            }
+  async logActivity(
+    type: ActivityType,
+    entityType: LoggingEntityType,
+    entityId?: string,
+    metadata: LoggingMetadata = {}
+  ) {
+    try {
+      const {
+        data: { user },
+      } = await getCurrentAuthUser();
 
-            // Buscar nome do usuário para incluir nos metadados (evita dependência do join)
-            let created_by_name = metadata.created_by_name;
-            if (!created_by_name) {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('nome')
-                    .eq('id', user.id)
-                    .single();
-                created_by_name = profile?.nome || 'Usuário';
-            }
+      if (!user) {
+        logWarn('loggingService', 'Usuario nao autenticado, log ignorado.');
+        return;
+      }
 
-            const { error } = await supabase.from('activity_logs').insert({
-                user_id: user.id,
-                action_type: type,
-                entity_type: entityType,
-                entity_id: entityId,
-                metadata: {
-                    ...metadata,
-                    created_by_name,
-                    created_by_id: user.id
-                }
-            });
+      let createdByName = resolveCreatedByName(metadata, '');
+      if (!createdByName) {
+        createdByName = (await fetchProfileNameByUserId(user.id)) || 'Usuario';
+      }
 
-            if (error) {
-                logError('loggingService', 'Erro ao registrar log', error);
-            }
-        } catch (err) {
-            logError('loggingService', 'Erro inesperado ao registrar log', err);
-        }
-    },
-
-
-    /**
-     * Busca atividades recentes
-     */
-    async fetchActivities(limit = 50, filter?: { type?: string; microregiaoId?: string }): Promise<ActivityLog[]> {
-        try {
-            // Primeiro tenta buscar com profiles join
-            let query = supabase
-                .from('activity_logs')
-                .select(`
-                    *,
-                    user:profiles (
-                        nome,
-                        role,
-                        avatar_id,
-                        microregiao_id
-                    )
-                `)
-                .order('created_at', { ascending: false })
-                .limit(limit);
-
-            if (filter?.type && filter.type !== 'todos') {
-                query = query.eq('action_type', filter.type);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                logError('loggingService', 'Erro na query com join', error);
-                // Fallback: buscar sem join se der erro
-                const { data: dataSimple, error: errorSimple } = await supabase
-                    .from('activity_logs')
-                    .select('*')
-                    .order('created_at', { ascending: false })
-                    .limit(limit);
-
-                if (errorSimple) {
-                    logError('loggingService', 'Erro na query simples', errorSimple);
-                    throw errorSimple;
-                }
-
-                return (dataSimple || []).map(log => ({
-                    ...log,
-                    user: null
-                })) as ActivityLog[];
-            }
-
-            return data as ActivityLog[];
-        } catch (err) {
-            logError('loggingService', 'Erro ao buscar atividades', err);
-            return [];
-        }
+      await insertActivityLogRecord({
+        user_id: user.id,
+        action_type: type,
+        entity_type: entityType,
+        entity_id: entityId,
+        metadata: buildActivityLogMetadata(metadata, user.id, createdByName),
+      });
+    } catch (err) {
+      logError('loggingService', 'Erro inesperado ao registrar log', err);
     }
+  },
+
+  async fetchActivities(limit = 50, filter?: FetchActivitiesFilter): Promise<ActivityLog[]> {
+    try {
+      try {
+        return filterActivityLogs(await listActivityLogsWithUser(limit, filter?.type), filter);
+      } catch (error) {
+        logError('loggingService', 'Erro na query com join', error);
+        return filterActivityLogs(
+          normalizeActivityLogsWithoutUser(await listActivityLogsWithoutUser(limit, filter?.type)),
+          filter
+        );
+      }
+    } catch (err) {
+      logError('loggingService', 'Erro ao buscar atividades', err);
+      return [];
+    }
+  },
 };
+
+
+
+
+

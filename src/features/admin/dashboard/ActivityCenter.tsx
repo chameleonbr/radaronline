@@ -1,14 +1,13 @@
 import { useMemo, useState, useEffect } from 'react';
 import {
-  Activity, Filter, Search, MapPin, User, Clock, ChevronDown, ChevronUp, RefreshCw,
-  Calendar, Zap, LogIn, LogOut, CheckCircle, XCircle, AlertTriangle, Trash2, Edit, Plus, Shield,
-  TrendingUp, Users, AlertOctagon, LayoutList, CheckSquare
+  Activity, Search, MapPin, User, Clock, RefreshCw,
+  LogIn, LogOut, CheckCircle, Trash2, Edit, Plus, Shield,
+  Users, LayoutList
 } from 'lucide-react';
 import { MICROREGIOES } from '../../../data/microregioes';
 import { loggingService } from '../../../services/loggingService';
 import { ActivityType, ActivityLog } from '../../../types/activity.types';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale/pt-BR';
 import { logError } from '../../../lib/logger';
 
 export type ActivityItem = {
@@ -32,7 +31,6 @@ const mapLogToItem = (log: ActivityLog): ActivityItem => {
   switch (log.action_type) {
     case 'user_created': {
       const targetName = meta.target_user_name || meta.name || '';
-      const targetEmail = meta.target_user_email || meta.email || '';
       const targetRole = meta.target_user_role || meta.role || '';
       details = `Criou usuário: ${targetName} (${targetRole})`;
       break;
@@ -121,8 +119,6 @@ const activityConfig: Record<ActivityType, { icon: any, color: string, bg: strin
   action_deleted: { icon: Trash2, color: 'text-red-600', bg: 'bg-red-100', border: 'border-red-200' },
   view_micro: { icon: MapPin, color: 'text-slate-600', bg: 'bg-slate-100', border: 'border-slate-200' },
 };
-
-const activityTypes = Object.keys(activityLabels) as ActivityType[];
 
 // --- STATS COMPONENT ---
 function ActivityStats({ activities }: { activities: ActivityItem[] }) {

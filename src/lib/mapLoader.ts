@@ -1,7 +1,6 @@
 import { logError } from './logger';
 
 // Tipos simplificados para o GeoJSON (apenas o que usamos)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type GeoJSON = any;
 
 interface MapData {

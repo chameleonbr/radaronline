@@ -4,6 +4,10 @@ import {
   buildCreateRequestBatchPayload,
   buildCreateRequestPayload,
   buildUpdateRequestPayload,
+  dedupeRequestsById,
+  getMissingRequestProfileIds,
+  getRequestRequesterLabel,
+  getRequestResponderLabel,
   getUniqueRequestProfileIds,
   mergeRequestsWithProfiles,
   shouldCreateOwnRequestViaBackend,
@@ -157,6 +161,103 @@ describe('requestsService.helpers', () => {
         },
       },
     ]);
+  });
+
+  it('detects only the profile ids still missing after relational select', () => {
+    expect(
+      getMissingRequestProfileIds([
+        {
+          id: '1',
+          user_id: 'u1',
+          request_type: 'support',
+          content: 'a',
+          status: 'pending',
+          admin_notes: null,
+          created_at: '2026-03-01',
+          user: {
+            nome: 'Maria',
+            email: 'maria@example.com',
+            role: 'gestor',
+            municipio: null,
+            microregiao_id: 'MR1',
+          },
+        },
+        {
+          id: '2',
+          user_id: 'u2',
+          request_type: 'feedback',
+          content: 'b',
+          status: 'resolved',
+          admin_notes: null,
+          created_at: '2026-03-01',
+          resolved_by: 'admin-2',
+        },
+      ])
+    ).toEqual(['u2', 'admin-2']);
+  });
+
+  it('deduplicates requests keeping the richer payload for the same id', () => {
+    expect(
+      dedupeRequestsById([
+        {
+          id: 'req-1',
+          user_id: 'u1',
+          request_type: 'support',
+          content: 'a',
+          status: 'pending',
+          admin_notes: null,
+          created_at: '2026-03-02',
+        },
+        {
+          id: 'req-1',
+          user_id: 'u1',
+          request_type: 'support',
+          content: 'a',
+          status: 'pending',
+          admin_notes: null,
+          created_at: '2026-03-02',
+          user: {
+            nome: 'Maria',
+            email: 'maria@example.com',
+            role: 'gestor',
+            municipio: 'Belo Horizonte',
+            microregiao_id: 'MR1',
+          },
+        },
+      ])
+    ).toEqual([
+      {
+        id: 'req-1',
+        user_id: 'u1',
+        request_type: 'support',
+        content: 'a',
+        status: 'pending',
+        admin_notes: null,
+        created_at: '2026-03-02',
+        resolved_by_name: null,
+        user: {
+          nome: 'Maria',
+          email: 'maria@example.com',
+          role: 'gestor',
+          municipio: 'Belo Horizonte',
+          microregiao_id: 'MR1',
+        },
+      },
+    ]);
+  });
+
+  it('uses short ids as last-resort labels when names are not available', () => {
+    expect(
+      getRequestRequesterLabel({
+        user_id: '2350e7b0-419f-4995-8b0e-36e7988d38a5',
+      })
+    ).toBe('Usuario 2350e7b0');
+
+    expect(
+      getRequestResponderLabel({
+        resolved_by: '80f962f6-c3b8-49f5-a95d-9a077b17d948',
+      })
+    ).toBe('Admin 80f962f6');
   });
 
   it('builds request update payload correctly', () => {

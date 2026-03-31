@@ -13,6 +13,7 @@ import {
   type RequestStatus,
   type UserRequest,
 } from "../../../services/requestsService";
+import { dedupeRequestsById } from "../../../services/requests/requestsService.helpers";
 import { RequestDeleteModal } from "./requestsManagement/RequestDeleteModal";
 import { RequestDetailModal } from "./requestsManagement/RequestDetailModal";
 import { RequestsManagementFilters } from "./requestsManagement/RequestsManagementFilters";
@@ -20,17 +21,6 @@ import { RequestsManagementHeader } from "./requestsManagement/RequestsManagemen
 import { RequestsManagementPagination } from "./requestsManagement/RequestsManagementPagination";
 import { RequestsManagementTable } from "./requestsManagement/RequestsManagementTable";
 import type { StatusFilter, TypeFilter } from "./requestsManagement/requestsManagement.types";
-
-function dedupeRequestsById(items: UserRequest[]): UserRequest[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (seen.has(item.id)) {
-      return false;
-    }
-    seen.add(item.id);
-    return true;
-  });
-}
 
 export function RequestsManagement() {
   const { user } = useAuth();

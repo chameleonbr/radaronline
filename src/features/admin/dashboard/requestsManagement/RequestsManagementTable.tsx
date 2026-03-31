@@ -2,6 +2,7 @@ import { ClipboardList } from "lucide-react";
 
 import { getMicroregiaoById } from "../../../../data/microregioes";
 import type { UserRequest } from "../../../../services/requestsService";
+import { getRequestRequesterLabel, getRequestResponderLabel } from "../../../../services/requests/requestsService.helpers";
 
 import { getRequestStatusBadge, getRequestTypeBadge, getRoleBadgeClassName, getRoleLabel } from "./requestsManagement.utils";
 
@@ -16,9 +17,6 @@ export function RequestsManagementTable({
   requests,
   onOpenRequest,
 }: RequestsManagementTableProps) {
-  const getRequesterLabel = (request: UserRequest) => request.user?.nome || 'Usuário';
-  const getResponderLabel = (request: UserRequest) => request.resolved_by_name || 'Administrador';
-
   return (
     <div className="md:flex-1 overflow-y-auto p-3 sm:p-6">
       {loading ? (
@@ -28,8 +26,8 @@ export function RequestsManagementTable({
       ) : requests.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-56 sm:h-64 text-slate-400 text-center px-4">
           <ClipboardList size={48} className="mb-4 opacity-50" />
-          <p className="text-lg font-medium">Nenhuma solicitação encontrada</p>
-          <p className="text-sm">Ajuste os filtros ou aguarde novas solicitações</p>
+          <p className="text-lg font-medium">Nenhuma solicitacao encontrada</p>
+          <p className="text-sm">Ajuste os filtros ou aguarde novas solicitacoes</p>
         </div>
       ) : (
         <>
@@ -42,7 +40,7 @@ export function RequestsManagementTable({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate">
-                      {getRequesterLabel(request)}
+                      {getRequestRequesterLabel(request)}
                     </h3>
                     <p className="text-xs text-slate-500 break-all">{request.user?.email || "Sem email"}</p>
                   </div>
@@ -68,7 +66,7 @@ export function RequestsManagementTable({
                 </div>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  Respondido por: {request.status === "pending" ? "-" : getResponderLabel(request)}
+                  Respondido por: {request.status === "pending" ? "-" : getRequestResponderLabel(request)}
                 </p>
 
                 <button
@@ -86,14 +84,14 @@ export function RequestsManagementTable({
               <table className="w-full min-w-[980px]">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Usuário</th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Usuario</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Micro</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Perfil</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Conteúdo</th>
+                    <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Conteudo</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Respondido por</th>
                     <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Data</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Ações</th>
+                    <th className="text-center px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Acoes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -105,10 +103,10 @@ export function RequestsManagementTable({
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold text-sm">
-                            {(request.user?.nome || "U")[0].toUpperCase()}
+                            {getRequestRequesterLabel(request)[0].toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-medium text-slate-800 dark:text-slate-100 text-sm">{getRequesterLabel(request)}</div>
+                            <div className="font-medium text-slate-800 dark:text-slate-100 text-sm">{getRequestRequesterLabel(request)}</div>
                             <div className="text-xs text-slate-500">{request.user?.email}</div>
                           </div>
                         </div>
@@ -131,7 +129,7 @@ export function RequestsManagementTable({
                       <td className="px-4 py-3">{getRequestStatusBadge(request.status)}</td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-slate-600 dark:text-slate-400">
-                          {request.status === "pending" ? "-" : getResponderLabel(request)}
+                          {request.status === "pending" ? "-" : getRequestResponderLabel(request)}
                         </span>
                       </td>
                       <td className="px-4 py-3">

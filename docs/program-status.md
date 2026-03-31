@@ -44,6 +44,7 @@ Data de referencia: 2026-03-23
 - o score da leitura executiva passou a explicar a propria formula no hover, mostrando pesos de conclusao, progresso, prazo sem atraso e cobertura com responsavel; na mesma rodada, os estados criticos e de atraso migraram de vermelho/rosa para laranja em KPIs, score, alertas e recortes do dashboard
 - o painel `Proximos prazos` da aba `Indicadores` agora ganhou abas de janela `7d`, `15d` e `30d`, recalculadas direto sobre as acoes da micro para variar o recorte sem depender de cards estaticos
 - o painel administrativo de solicitacoes voltou a enriquecer nome de usuario e respondente pelo proprio select relacional do Supabase, preservando os nomes mesmo quando o lookup auxiliar de `profiles` nao retorna dados completos
+- a trilha de `requests` no frontend foi realinhada ao schema vivo do Supabase: consultas deixaram de depender de `profiles.cargo` e `user_requests.resolved_by_name`, a deduplicacao foi centralizada por `request.id` e os fallbacks de rotulo agora usam o proprio UUID curto quando o nome ainda nao estiver disponivel
 - cards do `Mural da Rede` deixam de esticar a mesma linha do grid ao expandir um comunicado, eliminando o efeito visual de "abrir dois" ao usar `Ler mais`
 - `NewsFeed` agora respeita `viewingMicroregiaoId` quando houver contexto de microrregiao selecionado, alinhando o mural ao mesmo escopo de navegacao do planejamento
 - teste de regressao adicionado para garantir que a `Visao Rapida` receba apenas objetivos e atividades filtrados em `src/components/main/MainViewContentSwitch.test.tsx`
@@ -196,6 +197,7 @@ Data de referencia: 2026-03-23
 - revisar se os cards estatisticos do topo executivo ainda podem perder mais texto auxiliar sem sacrificar interpretacao
 - avaliar se o `overview` deve ganhar um segundo recorte de gestao por objetivo, para mostrar quais objetivos ainda estao sem carteira e quais concentram atraso
 - revisar outras grades administrativas que ainda usam placeholders genericos (`Usuario`, `Administrador`) para garantir o mesmo enriquecimento relacional antes do cutover completo
+- revisar a tipagem gerada do Supabase e outros dominios que ainda presumem colunas legadas em `profiles`, para reduzir novo drift de schema em runtime
 - revisar outras telas que ainda consumam colecoes globais no `MainViewContentSwitch` para garantir que qualquer modo contextualizado por microrregiao receba sempre datasets ja escopados
 - aprofundar o redesign do Hub nos modulos internos (`forums`, `mentorship`, `education` e `repository`) usando a nova Home como shell de referencia e fechar contratos de dominio antes da modelagem definitiva do banco
 - aplicar o mesmo corte de minimalismo nos interiores de `mentorship`, `education` e `repository`, removendo KPIs redundantes, tabs excessivas e chrome de dashboard para aproximar a experiencia de feed, lista e continuidade

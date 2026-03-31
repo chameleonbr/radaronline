@@ -14,7 +14,8 @@ import {
   buildCreateRequestBatchPayload,
   buildCreateRequestPayload,
   buildUpdateRequestPayload,
-  getUniqueRequestProfileIds,
+  dedupeRequestsById,
+  getMissingRequestProfileIds,
   mergeRequestsWithProfiles,
   shouldCreateOwnRequestViaBackend,
 } from './requests/requestsService.helpers';
@@ -64,11 +65,17 @@ async function enrichRequestsWithProfiles(
   includeProfileDetails: boolean
 ): Promise<UserRequest[]> {
   if (!includeProfileDetails || requests.length === 0) {
-    return requests;
+    return dedupeRequestsById(requests);
   }
 
-  const profilesMap = await fetchProfilesMap(getUniqueRequestProfileIds(requests));
-  return mergeRequestsWithProfiles(requests, profilesMap);
+  const missingProfileIds = getMissingRequestProfileIds(requests);
+
+  if (missingProfileIds.length === 0) {
+    return dedupeRequestsById(requests);
+  }
+
+  const profilesMap = await fetchProfilesMap(missingProfileIds);
+  return dedupeRequestsById(mergeRequestsWithProfiles(requests, profilesMap));
 }
 
 export async function loadUserRequests(options: LoadRequestsOptions): Promise<UserRequest[]> {
@@ -76,7 +83,7 @@ export async function loadUserRequests(options: LoadRequestsOptions): Promise<Us
 
   try {
     if (shouldUseBackendRequestsApi()) {
-      return listUserRequestsViaBackendApi(limit);
+      return dedupeRequestsById(await listUserRequestsViaBackendApi(limit));
     }
     const requests = await listUserRequests({ userId, isAdmin, limit });
     return enrichRequestsWithProfiles(requests, includeProfileDetails);
@@ -93,7 +100,7 @@ export async function loadNotificationRequests(
 
   try {
     if (shouldUseBackendRequestsApi()) {
-      return listNotificationRequestsViaBackendApi(limit);
+      return dedupeRequestsById(await listNotificationRequestsViaBackendApi(limit));
     }
     const requests = await listNotificationRequests({ userId, isAdmin, limit });
     return enrichRequestsWithProfiles(requests, includeProfileDetails);
@@ -116,7 +123,11 @@ export async function loadManagedRequests(
 
   try {
     if (shouldUseBackendRequestsApi()) {
-      return listManagedRequestsViaBackendApi({ page, pageSize, statusFilter, typeFilter });
+      const result = await listManagedRequestsViaBackendApi({ page, pageSize, statusFilter, typeFilter });
+      return {
+        ...result,
+        data: dedupeRequestsById(result.data),
+      };
     }
     const [totalCount, requests] = await Promise.all([
       countManagedRequests({ statusFilter, typeFilter }),

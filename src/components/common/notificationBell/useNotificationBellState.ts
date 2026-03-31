@@ -8,6 +8,7 @@ import {
   type RequestStatus,
   type UserRequest,
 } from '../../../services/requestsService';
+import { dedupeRequestsById } from '../../../services/requests/requestsService.helpers';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NotificationTab } from './notificationBell.types';
 import {
@@ -27,17 +28,6 @@ const PERSONAL_PENDING_NOTIFICATION_TYPES = new Set([
   'announcement',
   'system',
 ]);
-
-function dedupeRequestsById(items: UserRequest[]): UserRequest[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (seen.has(item.id)) {
-      return false;
-    }
-    seen.add(item.id);
-    return true;
-  });
-}
 
 interface UseNotificationBellStateParams {
   isOpen: boolean;

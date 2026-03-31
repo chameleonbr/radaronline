@@ -8,9 +8,9 @@ export interface ProfileSummary {
   nome: string;
   email: string;
   role?: string;
-  cargo?: string;
-  municipio?: string;
-  microregiao_id?: string;
+  cargo?: string | null;
+  municipio?: string | null;
+  microregiao_id?: string | null;
 }
 
 export interface UserRequest {

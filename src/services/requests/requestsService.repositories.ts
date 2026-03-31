@@ -10,30 +10,33 @@ import type {
 } from './requestsService.types';
 
 const platformClient = getPlatformClient;
-const PROFILE_FIELDS = 'id, nome, email, role, cargo, municipio, microregiao_id';
+const PROFILE_FIELDS = 'id, nome, email, role, municipio, microregiao_id';
+const REQUEST_BASE_FIELDS = 'id, user_id, request_type, content, status, admin_notes, created_at, resolved_by, resolved_at';
 const REQUEST_FIELDS = `
-  *,
-  user:profiles!user_requests_user_id_fkey(nome, email, role, cargo, municipio, microregiao_id),
+  ${REQUEST_BASE_FIELDS},
+  user:profiles!user_requests_user_id_fkey(nome, email, role, municipio, microregiao_id),
   resolver:profiles!user_requests_resolved_by_fkey(nome)
 `;
 const ADMIN_ACTIONABLE_REQUEST_TYPES = ['request', 'feedback', 'support', 'system'];
 const ADMIN_PERSONAL_NOTIFICATION_TYPES = ['announcement', 'mention', 'request', 'feedback', 'support', 'system'];
 
 type JoinedRequestRow = UserRequest & {
-  resolver?: { nome?: string | null } | null;
-  user?: Omit<ProfileSummary, 'id'> | null;
+  resolver?: { nome?: string | null } | Array<{ nome?: string | null }> | null;
+  user?: Omit<ProfileSummary, 'id'> | Array<Omit<ProfileSummary, 'id'>> | null;
 };
 
 function mapJoinedRequestRow(row: JoinedRequestRow): UserRequest {
   const { resolver, user, ...request } = row;
+  const normalizedResolver = Array.isArray(resolver) ? resolver[0] : resolver;
+  const normalizedUser = Array.isArray(user) ? user[0] : user;
 
   const mappedRequest: UserRequest = {
     ...request,
-    resolved_by_name: row.resolved_by_name ?? resolver?.nome ?? null,
+    resolved_by_name: normalizedResolver?.nome ?? row.resolved_by_name ?? null,
   };
 
-  if (user) {
-    mappedRequest.user = user;
+  if (normalizedUser) {
+    mappedRequest.user = normalizedUser;
   }
 
   return mappedRequest;
@@ -137,7 +140,7 @@ export async function listUserRequests(params: {
     throw new Error(error.message || 'Falha ao carregar requests do usuario');
   }
 
-  return ((data as JoinedRequestRow[] | null) || []).map(mapJoinedRequestRow);
+  return (((data as unknown as JoinedRequestRow[] | null) || []).map(mapJoinedRequestRow));
 }
 
 export async function listNotificationRequests(params: {
@@ -167,7 +170,7 @@ export async function listNotificationRequests(params: {
     throw new Error(error.message || 'Falha ao carregar requests de notificacao');
   }
 
-  const requests = ((data as JoinedRequestRow[] | null) || []).map(mapJoinedRequestRow);
+  const requests = (((data as unknown as JoinedRequestRow[] | null) || []).map(mapJoinedRequestRow));
   if (!params.isAdmin || requests.length === 0) {
     return requests.slice(0, params.limit);
   }
@@ -217,7 +220,7 @@ export async function listManagedRequests(params: {
     throw new Error(error.message || 'Falha ao carregar requests gerenciados');
   }
 
-  const requests = ((data as JoinedRequestRow[] | null) || []).map(mapJoinedRequestRow);
+  const requests = (((data as unknown as JoinedRequestRow[] | null) || []).map(mapJoinedRequestRow));
   if (requests.length === 0) {
     return [];
   }
@@ -289,14 +292,14 @@ export async function insertRequestRecord(payload: Record<string, unknown>): Pro
   const { data, error } = await platformClient()
     .from('user_requests')
     .insert(payload)
-    .select()
+    .select(REQUEST_FIELDS)
     .single();
 
   if (error || !data) {
     throw new Error(error?.message || 'Falha ao criar request');
   }
 
-  return data as UserRequest;
+  return mapJoinedRequestRow(data as unknown as JoinedRequestRow);
 }
 
 export async function insertRequestBatchRecords(

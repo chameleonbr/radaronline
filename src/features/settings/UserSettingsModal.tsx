@@ -11,6 +11,7 @@ import {
   unsubscribeFromUserRequests,
   type UserRequest,
 } from '../../services/requestsService';
+import { dedupeRequestsById } from '../../services/requests/requestsService.helpers';
 import {
   getReadKey,
   getReadNotifications,
@@ -29,17 +30,6 @@ interface UserSettingsModalProps {
   onClose: () => void;
   initialTab?: UserSettingsTab;
   mode?: 'settings' | 'avatar';
-}
-
-function dedupeRequestsById(items: UserRequest[]): UserRequest[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (seen.has(item.id)) {
-      return false;
-    }
-    seen.add(item.id);
-    return true;
-  });
 }
 
 export function UserSettingsModal({

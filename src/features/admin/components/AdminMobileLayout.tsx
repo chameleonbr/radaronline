@@ -1,4 +1,5 @@
-﻿import { ReactNode } from 'react';
+﻿import { useState, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
   AlertTriangle,
@@ -7,20 +8,26 @@ import {
   ChevronRight,
   Clock3,
   LayoutDashboard,
+  LogOut,
   MapPin,
   Megaphone,
+  Menu,
   MoreVertical,
   Plus,
   RefreshCw,
+  Settings,
   Shield,
   Target,
+  Triangle,
   Trophy,
   Upload,
   UserPlus,
   Users,
+  X,
 } from 'lucide-react';
 import { NotificationBell } from '../../../components/common/NotificationBell';
 import { ThemeToggle } from '../../../components/common/ThemeToggle';
+import { MobileDrawerProfileCard } from '../../../components/mobile/drawer/MobileDrawerProfileCard';
 import { getMacrorregioes, getMicroregiaoById } from '../../../data/microregioes';
 import { getUpcomingActions, isActionLate, summarizeActionPortfolio } from '../../../lib/actionPortfolio';
 import { Action } from '../../../types';
@@ -34,12 +41,12 @@ import { AnnouncementsManagement } from '../AnnouncementsManagement';
 import { AdminPanelTab, PendingRegistration } from '../adminPanel.types';
 
 const mobileAdminTabs = [
-  { id: 'dashboard' as AdminPanelTab, icon: LayoutDashboard, label: 'Dashboard' },
-  { id: 'atividades' as AdminPanelTab, icon: Activity, label: 'Atividades' },
-  { id: 'usuarios' as AdminPanelTab, icon: Users, label: 'Usuarios' },
-  { id: 'ranking' as AdminPanelTab, icon: Trophy, label: 'Ranking' },
-  { id: 'requests' as AdminPanelTab, icon: Bell, label: 'Pedidos' },
-  { id: 'communication' as AdminPanelTab, icon: Megaphone, label: 'Mural' },
+  { id: 'dashboard' as AdminPanelTab, icon: LayoutDashboard, label: 'Dashboard', helper: 'Resumo executivo' },
+  { id: 'atividades' as AdminPanelTab, icon: Activity, label: 'Atividades', helper: 'Historico e auditoria' },
+  { id: 'usuarios' as AdminPanelTab, icon: Users, label: 'Usuarios', helper: 'Gestao de acessos' },
+  { id: 'ranking' as AdminPanelTab, icon: Trophy, label: 'Ranking', helper: 'Comparativo entre micros' },
+  { id: 'requests' as AdminPanelTab, icon: Bell, label: 'Pedidos', helper: 'Solicitacoes e respostas' },
+  { id: 'communication' as AdminPanelTab, icon: Megaphone, label: 'Mural', helper: 'Comunicados da rede' },
 ];
 
 interface AdminMobileLayoutProps {
@@ -50,12 +57,17 @@ interface AdminMobileLayoutProps {
   userFilterMacro: string;
   users: User[];
   filteredUsers: User[];
+  userAvatarId?: string;
+  userName?: string;
+  userRole?: User['role'];
   actions: Action[];
   pendingRegistrations: PendingRegistration[];
   expandedUserId: string | null;
   getRoleBadge: (role: User['role']) => ReactNode;
   onTabChange: (tab: AdminPanelTab) => void;
   onRefreshUsers: () => void | Promise<void>;
+  onOpenProfile: () => void;
+  onOpenSettings: () => void;
   onOpenMicroSelector: () => void;
   onViewMicrorregiao: (microId: string) => void;
   onSearchTermChange: (value: string) => void;
@@ -65,6 +77,7 @@ interface AdminMobileLayoutProps {
   onCreatePendingUser: (pending: PendingRegistration) => void;
   onToggleExpandedUser: (userId: string) => void;
   onEditUser: (user: User) => void;
+  onLogout: () => void | Promise<void>;
   onRequestToggleUserStatus: (user: User) => void;
   onRequestDeleteUser: (user: User) => void;
 }
@@ -77,12 +90,17 @@ export function AdminMobileLayout({
   userFilterMacro,
   users,
   filteredUsers,
+  userAvatarId,
+  userName,
+  userRole,
   actions,
   pendingRegistrations,
   expandedUserId,
   getRoleBadge,
   onTabChange,
   onRefreshUsers,
+  onOpenProfile,
+  onOpenSettings,
   onOpenMicroSelector,
   onViewMicrorregiao,
   onSearchTermChange,
@@ -92,9 +110,11 @@ export function AdminMobileLayout({
   onCreatePendingUser,
   onToggleExpandedUser,
   onEditUser,
+  onLogout,
   onRequestToggleUserStatus,
   onRequestDeleteUser,
 }: AdminMobileLayoutProps) {
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const today = new Date();
   const activeUsers = users.filter((user) => user.ativo !== false).length;
   const lgpdPendingCount = users.filter((user) => user.ativo && !user.lgpdConsentimento).length;
@@ -139,11 +159,41 @@ export function AdminMobileLayout({
     return Math.max(0, Math.floor((today.getTime() - plannedDate.getTime()) / (1000 * 60 * 60 * 24)));
   };
 
+  const closeNavigation = () => setIsNavigationOpen(false);
+
+  const handleTabSelect = (tab: AdminPanelTab) => {
+    onTabChange(tab);
+    closeNavigation();
+  };
+
+  const handleOpenProfile = () => {
+    onOpenProfile();
+    closeNavigation();
+  };
+
+  const handleOpenSettings = () => {
+    onOpenSettings();
+    closeNavigation();
+  };
+
+  const handleLogout = () => {
+    closeNavigation();
+    void onLogout();
+  };
+
   return (
     <div className="flex flex-col h-screen w-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
       <header className="bg-white dark:bg-slate-900 sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 safe-area-top">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Abrir menu do painel admin"
+              onClick={() => setIsNavigationOpen(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-teal-500/20">
               <Shield className="w-5 h-5 text-white" />
             </div>
@@ -173,6 +223,153 @@ export function AdminMobileLayout({
           </div>
         </div>
       </header>
+
+      <AnimatePresence>
+        {isNavigationOpen ? (
+          <>
+            <motion.button
+              type="button"
+              aria-label="Fechar menu do painel admin"
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              onClick={closeNavigation}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            />
+
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-[320px] flex-col bg-gradient-to-b from-[#0e7490] to-[#047857] shadow-2xl dark:from-slate-900 dark:to-slate-950"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md">
+                    <Triangle size={22} fill="currentColor" className="text-white" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-white">RADAR</div>
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-teal-100/70">
+                      Painel admin
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Fechar menu lateral do painel admin"
+                  onClick={closeNavigation}
+                  className="rounded-xl bg-white/10 p-2 text-white/80 transition-colors hover:bg-white/20"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <MobileDrawerProfileCard
+                userName={userName}
+                userRole={userRole}
+                userAvatarId={userAvatarId}
+                onClick={handleOpenProfile}
+              />
+
+              <div className="mx-4 mt-3 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+                    <Shield className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white">Navegacao administrativa</p>
+                    <p className="mt-1 text-xs leading-5 text-teal-100/75">
+                      Mesmo padrao do app principal, sem a arvore de objetivos.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white">
+                    {activeUsers} ativos
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[11px] font-semibold text-white">
+                    {pendingRegistrations.length} pendencias
+                  </span>
+                </div>
+              </div>
+
+              <nav aria-label="Navegacao do painel admin" className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="space-y-2">
+                  {mobileAdminTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    const hasBadge = tab.id === 'requests' && pendingRegistrations.length > 0;
+
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => handleTabSelect(tab.id)}
+                        className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-all ${
+                          isActive
+                            ? 'border-white/70 bg-white text-slate-900 shadow-lg shadow-slate-950/10'
+                            : 'border-white/10 bg-white/10 text-white hover:bg-white/15'
+                        }`}
+                      >
+                        <span className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                          isActive
+                            ? 'bg-teal-50 text-teal-700'
+                            : 'bg-white/10 text-white'
+                        }`}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className={`block text-sm font-semibold ${isActive ? 'text-slate-900' : 'text-white'}`}>
+                            {tab.label}
+                          </span>
+                          <span className={`block text-[11px] ${isActive ? 'text-slate-500' : 'text-teal-100/75'}`}>
+                            {tab.helper}
+                          </span>
+                        </span>
+
+                        {hasBadge ? (
+                          <span className={`inline-flex min-w-6 items-center justify-center rounded-full px-2 py-1 text-[11px] font-bold ${
+                            isActive
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-amber-400/20 text-amber-100'
+                          }`}>
+                            {pendingRegistrations.length > 99 ? '99+' : pendingRegistrations.length}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
+
+              <div className="space-y-2 border-t border-white/10 p-4">
+                <button
+                  type="button"
+                  onClick={handleOpenSettings}
+                  className="flex w-full items-center gap-3 rounded-xl p-3 text-white/80 transition-colors hover:bg-white/10"
+                >
+                  <Settings size={20} />
+                  <span className="font-medium">Configuracoes</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-3 rounded-xl p-3 text-rose-200 transition-colors hover:bg-rose-500/10"
+                >
+                  <LogOut size={20} />
+                  <span className="font-medium">Sair</span>
+                </button>
+              </div>
+            </motion.aside>
+          </>
+        ) : null}
+      </AnimatePresence>
 
       <main className="flex-1 overflow-y-auto pb-20">
         <div className="px-3 py-4 space-y-4">
@@ -234,7 +431,7 @@ export function AdminMobileLayout({
 
               {pendingRegistrations.length > 0 && (
                 <button
-                  onClick={() => onTabChange('usuarios')}
+                  onClick={() => handleTabSelect('usuarios')}
                   className="w-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 text-left"
                 >
                   <div className="flex items-center gap-3">
@@ -254,7 +451,7 @@ export function AdminMobileLayout({
 
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => onTabChange('requests')}
+                  onClick={() => handleTabSelect('requests')}
                   className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 text-left active:scale-[0.99] transition-transform"
                 >
                   <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs mb-1">
@@ -266,7 +463,7 @@ export function AdminMobileLayout({
                 </button>
 
                 <button
-                  onClick={() => onTabChange('atividades')}
+                  onClick={() => handleTabSelect('atividades')}
                   className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700 text-left active:scale-[0.99] transition-transform"
                 >
                   <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs mb-1">
@@ -285,7 +482,7 @@ export function AdminMobileLayout({
                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Prioridades da semana</span>
                   </div>
                   <button
-                    onClick={() => onTabChange('atividades')}
+                    onClick={() => handleTabSelect('atividades')}
                     className="text-xs text-teal-600 dark:text-teal-400 font-medium"
                   >
                     Ver trilha
@@ -337,7 +534,7 @@ export function AdminMobileLayout({
                     <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Top Microrregioes</span>
                   </div>
                   <button
-                    onClick={() => onTabChange('ranking')}
+                    onClick={() => handleTabSelect('ranking')}
                     className="text-xs text-teal-600 dark:text-teal-400 font-medium flex items-center gap-1"
                   >
                     Ver tudo
@@ -566,7 +763,7 @@ export function AdminMobileLayout({
             return (
               <button
                 key={tab.id}
-                onClick={() => onTabChange(tab.id)}
+                onClick={() => handleTabSelect(tab.id)}
                 className={`flex-1 flex flex-col items-center justify-center py-2 px-1 min-h-[56px] transition-all ${
                   isActive ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400 dark:text-slate-500'
                 }`}

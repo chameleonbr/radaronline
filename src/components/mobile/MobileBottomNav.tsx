@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   List,
   Menu,
+  Newspaper,
 } from 'lucide-react';
 
 type AppNav = 'strategy' | 'home' | 'settings' | 'dashboard' | 'news' | 'hub' | 'forums' | 'mentorship' | 'education' | 'repository';
@@ -32,8 +33,8 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick, badge
   <button
     onClick={onClick}
     className={`
-      relative flex-1 flex flex-col items-center justify-center gap-0.5 py-1.5 px-0.5
-      transition-all duration-200 min-h-[52px] max-w-[92px]
+      relative flex-1 flex flex-col items-center justify-center gap-0.5 px-0.5 py-1.5
+      min-h-[54px] max-w-[76px] transition-all duration-200
       ${isActive
         ? 'text-teal-600 dark:text-teal-400'
         : 'text-slate-400 dark:text-slate-500 active:text-slate-600 dark:active:text-slate-300'
@@ -75,15 +76,21 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onWorkspaceSelect,
   onMenuOpen,
 }) => {
-  const isPanelActive =
+  const isMuralActive =
     currentWorkspace === 'planning' &&
-    (currentNav === 'home' || currentNav === 'news' || currentNav === 'dashboard');
+    (currentNav === 'home' || currentNav === 'news');
+  const isPanelActive = currentWorkspace === 'planning' && currentNav === 'dashboard';
   const isActionsActive = currentWorkspace === 'planning' && currentNav === 'strategy';
   const isCommunityActive = currentWorkspace === 'community';
 
+  const handleOpenMural = () => {
+    onWorkspaceSelect('planning');
+    onNavChange('news');
+  };
+
   const handleOpenPanel = () => {
     onWorkspaceSelect('planning');
-    onNavChange('home');
+    onNavChange('dashboard');
   };
 
   const handleOpenActions = () => {
@@ -109,6 +116,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       aria-label="Navegacao principal"
     >
       <div className="flex items-stretch justify-around max-w-lg mx-auto px-1">
+        <NavItem
+          icon={<Newspaper size={17} strokeWidth={2.2} />}
+          label="Mural"
+          isActive={isMuralActive}
+          onClick={handleOpenMural}
+        />
         <NavItem
           icon={<LayoutDashboard size={18} strokeWidth={2.2} />}
           label="Painel"

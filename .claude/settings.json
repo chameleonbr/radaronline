@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(ls -la \"/c/Users/clevi/Desktop/radar 2.0 - Copia \\(2\\)\")",
+      "Bash(find \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\" -type d -name \"features\" -o -type d -name \"components\")",
+      "Bash(ls -la \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\")",
+      "Bash(ls -la \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\\\\features\")",
+      "Bash(ls -la \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\\\\components\")",
+      "Bash(ls -la \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\\\\services\")",
+      "Bash(ls -la \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\\\\lib\")",
+      "Bash(cat \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\package.json\")",
+      "Bash(find \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\" -type f -name \"*.tsx\" -o -type f -name \"*.ts\" -o -type f -name \"*.jsx\" -o -type f -name \"*.js\")",
+      "Bash(find \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\" -name \"*automatedEvents*\" -type f)",
+      "Bash(find \"c:\\\\Users\\\\clevi\\\\Desktop\\\\radar 2.0 - Copia \\(2\\)\\\\src\" -name \"*announcement*\" -type f)"
     ]
   }
 }

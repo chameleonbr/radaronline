@@ -42,7 +42,18 @@ export function AdminPanel(props: AdminPanelProps) {
             controller.handleEditUser(user);
             controller.setExpandedUserId(null);
           }}
+          onLogout={controller.logout}
           onOpenMicroSelector={() => controller.setShowMicroSelector(true)}
+          onOpenProfile={() => {
+            controller.setSettingsInitialTab('profile');
+            controller.setSettingsMode('avatar');
+            controller.setIsSettingsModalOpen(true);
+          }}
+          onOpenSettings={() => {
+            controller.setSettingsInitialTab('appearance');
+            controller.setSettingsMode('settings');
+            controller.setIsSettingsModalOpen(true);
+          }}
           onOpenUserImport={controller.handleOpenUserImport}
           onRefreshUsers={controller.loadUsers}
           onRequestDeleteUser={(user) => {
@@ -62,7 +73,10 @@ export function AdminPanel(props: AdminPanelProps) {
           onViewMicrorregiao={controller.handleViewMicrorregiao}
           pendingRegistrations={controller.pendingRegistrations}
           searchTerm={controller.searchTerm}
+          userAvatarId={controller.currentUser?.avatarId}
           userFilterMacro={controller.userFilterMacro}
+          userName={controller.currentUser?.nome}
+          userRole={controller.currentUser?.role}
           users={controller.users}
         />
         <AdminPanelDialogs

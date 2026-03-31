@@ -9,6 +9,7 @@ import { UserSettingsNotificationsTab } from './UserSettingsNotificationsTab';
 import { UserSettingsProfileTab } from './UserSettingsProfileTab';
 import { UserSettingsRoadmapTab } from './UserSettingsRoadmapTab';
 import { UserSettingsSupportTab } from './UserSettingsSupportTab';
+import { UserSettingsNsdigiTab } from './UserSettingsNsdigiTab';
 
 interface UserSettingsSettingsModeProps {
   activeTab: UserSettingsTab;
@@ -60,12 +61,14 @@ export function UserSettingsSettingsMode({
       initial="initial"
       animate="animate"
       exit="exit"
-      className="relative w-full max-w-4xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800"
+      className="relative flex max-h-[92vh] w-full max-w-5xl flex-row overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       style={{ fontSize: '16px' }}
     >
-      <UserSettingsModalNav activeTab={activeTab} onClose={onClose} setActiveTab={setActiveTab} />
+      <div className="shrink-0 w-[60px] md:w-[230px] self-stretch">
+        <UserSettingsModalNav activeTab={activeTab} onClose={onClose} setActiveTab={setActiveTab} />
+      </div>
 
-      <div className="flex-1 overflow-y-auto bg-slate-50/30 dark:bg-slate-900/50 p-6 md:p-8 relative">
+      <div className="relative min-h-0 flex-1 overflow-y-auto bg-slate-50/30 p-6 dark:bg-slate-900/50 md:p-8">
         <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10 pointer-events-none" />
 
@@ -109,6 +112,8 @@ export function UserSettingsSettingsMode({
             setChangeRequest={setChangeRequest}
           />
         )}
+
+        {activeTab === 'nsdigi' && <UserSettingsNsdigiTab />}
       </div>
     </motion.div>
   );

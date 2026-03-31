@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity,
+    ArrowRight,
     CalendarCheck,
     TrendingUp,
     Users,
@@ -27,6 +28,7 @@ import type { AutomatedEvent } from '../../services/automatedEventsService';
 import { loadMuralConfig } from '../../services/muralConfigService';
 import { useAuth } from '../../auth/AuthContext';
 import { Announcement } from '../../types/announcement.types';
+import { DELIVERY_CONTENT_BY_ID } from '../login/landingOnboarding/landingOnboarding.constants';
 
 // Removendo MOCK_ANNOUNCEMENTS em favor da API real
 
@@ -271,6 +273,54 @@ const AnnouncementCard = ({ announcement, index = 0 }: { announcement: Announcem
     );
 };
 
+const demoCourseHighlight = DELIVERY_CONTENT_BY_ID.course.highlight;
+
+const DemoCourseHighlightCard = () => {
+    if (!demoCourseHighlight) {
+        return null;
+    }
+
+    const HighlightIcon = demoCourseHighlight.icon;
+
+    return (
+        <section className="bg-white/50 rounded-3xl p-6 border border-slate-100">
+            <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-black uppercase tracking-wider">
+                <HighlightIcon size={12} />
+                <span>{demoCourseHighlight.label}</span>
+            </div>
+
+            <div className="relative group/card">
+                <a
+                    href={demoCourseHighlight.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block relative w-full h-32 md:h-40 rounded-2xl overflow-hidden border-[4px] border-white shadow-xl transition-all hover:scale-[1.02] hover:shadow-2xl"
+                >
+                    <img
+                        src={demoCourseHighlight.img}
+                        alt={demoCourseHighlight.title}
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover/card:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-slate-900/90 via-slate-900/40 to-transparent opacity-90" />
+
+                    <div className="absolute inset-0 p-4 flex flex-row items-center justify-between gap-4">
+                        <div className="max-w-[65%]">
+                            <h2 className="text-white font-bold leading-tight text-sm md:text-base drop-shadow-md line-clamp-3">
+                                {demoCourseHighlight.title}
+                            </h2>
+                        </div>
+
+                        <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg backdrop-blur-md border border-white/30 bg-white/10 text-white text-[10px] md:text-xs font-black uppercase tracking-wide hover:bg-white hover:text-black transition-all shadow-lg">
+                            <span>{demoCourseHighlight.buttonText}</span>
+                            <ArrowRight size={14} />
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </section>
+    );
+};
+
 const AutomatedEventCard = ({ event, onLike }: { event: AutomatedEvent, onLike: (id: string) => void }) => {
     const handleLike = () => {
         onLike(event.id);
@@ -351,9 +401,14 @@ interface NewsFeedProps {
 }
 
 export const NewsFeed = ({ onOpenRoadmap }: NewsFeedProps) => {
-    const { user, viewingMicroregiaoId } = useAuth();
+    const { user, viewingMicroregiaoId, isDemoMode } = useAuth();
     const [events, setEvents] = useState<AutomatedEvent[]>([]);
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const shouldShowDemoCourseHighlight = isDemoMode && !!demoCourseHighlight && !announcements.some(
+        (announcement) =>
+            announcement.title === demoCourseHighlight?.title ||
+            announcement.linkUrl === demoCourseHighlight?.url,
+    );
 
     // Load Automated Events
     useEffect(() => {
@@ -417,6 +472,7 @@ export const NewsFeed = ({ onOpenRoadmap }: NewsFeedProps) => {
 
             {/* Layout Simplificado (Sem Sidebar) */}
             <div className="space-y-10">
+                {shouldShowDemoCourseHighlight && <DemoCourseHighlightCard />}
 
                 {/* 1. Carousel */}
                 <section>

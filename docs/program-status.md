@@ -45,8 +45,11 @@ Data de referencia: 2026-03-23
 - o painel `Proximos prazos` da aba `Indicadores` agora ganhou abas de janela `7d`, `15d` e `30d`, recalculadas direto sobre as acoes da micro para variar o recorte sem depender de cards estaticos
 - o painel administrativo de solicitacoes voltou a enriquecer nome de usuario e respondente pelo proprio select relacional do Supabase, preservando os nomes mesmo quando o lookup auxiliar de `profiles` nao retorna dados completos
 - a trilha de `requests` no frontend foi realinhada ao schema vivo do Supabase: consultas deixaram de depender de `profiles.cargo` e `user_requests.resolved_by_name`, a deduplicacao foi centralizada por `request.id` e os fallbacks de rotulo agora usam o proprio UUID curto quando o nome ainda nao estiver disponivel
+- o mobile voltou a expor `Mural` e `Indicadores` como atalhos separados no rodape (`Mural`, `Painel`, `Acoes`, `Comunidade`, `Menu`), e o `Painel Admin` em layout compacto ganhou menu hamburguer lateral no mesmo idioma visual do drawer principal, com perfil, `Configuracoes`, `Sair` e acesso a dashboard, atividades, usuarios, ranking, pedidos e mural sem depender so da barra inferior
 - cards do `Mural da Rede` deixam de esticar a mesma linha do grid ao expandir um comunicado, eliminando o efeito visual de "abrir dois" ao usar `Ler mais`
 - `NewsFeed` agora respeita `viewingMicroregiaoId` quando houver contexto de microrregiao selecionado, alinhando o mural ao mesmo escopo de navegacao do planejamento
+- o modo visitante/demo agora mostra no `Mural da Rede` o destaque `Curso Saude Digital` com a mesma peca visual, imagem e CTA usados no onboarding do app, sem afetar usuarios reais e sem duplicar se o comunicado ja vier da base
+- o modal de `Configuracoes` trocou a barra horizontal por uma navegacao vertical em secoes, com lateral fixa no desktop e pilha de toque facil no mobile para melhorar leitura e acesso
 - teste de regressao adicionado para garantir que a `Visao Rapida` receba apenas objetivos e atividades filtrados em `src/components/main/MainViewContentSwitch.test.tsx`
 - workspace `community` agora abre em uma Home propria do `Hub`, em vez de cair direto em `forums`, dando ao produto uma entrada unica para comunidade, mentoria, educacao e biblioteca
 - `SidebarCommunityNavigation`, `MobileBottomNav` e `Header` passaram a reconhecer o `Hub` como fluxo proprio, corrigindo a navegacao comunitaria no desktop e no mobile e removendo o tratamento indevido das telas do Hub como "configuracoes"
@@ -199,6 +202,9 @@ Data de referencia: 2026-03-23
 - revisar outras grades administrativas que ainda usam placeholders genericos (`Usuario`, `Administrador`) para garantir o mesmo enriquecimento relacional antes do cutover completo
 - revisar a tipagem gerada do Supabase e outros dominios que ainda presumem colunas legadas em `profiles`, para reduzir novo drift de schema em runtime
 - revisar outras telas que ainda consumam colecoes globais no `MainViewContentSwitch` para garantir que qualquer modo contextualizado por microrregiao receba sempre datasets ja escopados
+- revisar o restante do shell mobile (`Indicadores`, paineis secundarios e admin`) para garantir que cards, tabelas e filtros continuem acessiveis por toque sem sumirem em breakpoints menores
+- avaliar se outros blocos do modo visitante/demo tambem devem reaproveitar pecas reais do app, evitando prototipos visuais paralelos no `Hub` e no `Mural da Rede`
+- revisar outros modais densos do shell para aplicar o mesmo padrao de navegacao vertical quando houver muitas secoes, especialmente em fluxos usados no mobile
 - aprofundar o redesign do Hub nos modulos internos (`forums`, `mentorship`, `education` e `repository`) usando a nova Home como shell de referencia e fechar contratos de dominio antes da modelagem definitiva do banco
 - aplicar o mesmo corte de minimalismo nos interiores de `mentorship`, `education` e `repository`, removendo KPIs redundantes, tabs excessivas e chrome de dashboard para aproximar a experiencia de feed, lista e continuidade
 - revisar os detalhes internos do Hub (ex.: perfil de mentor, modal de biblioteca e possiveis telas de detalhe futuras) com a mesma regua de simplicidade para evitar regressao visual apos a modelagem de backend

@@ -7,6 +7,7 @@ import { LandingGlobalStyles } from "./landingOnboarding/components/LandingGloba
 import { LandingHero } from "./landingOnboarding/components/LandingHero";
 import { LandingStickyStory } from "./landingOnboarding/components/LandingStickyStory";
 import { LandingWhyNow } from "./landingOnboarding/components/LandingWhyNow";
+import { LandingCredits } from "./landingOnboarding/components/LandingCredits";
 import { COLORS } from "./landingOnboarding/landingOnboarding.constants";
 import { useFloatingFaqCta } from "./landingOnboarding/hooks/useFloatingFaqCta";
 
@@ -30,6 +31,7 @@ export function LandingOnboarding({ onComplete }: LandingOnboardingProps) {
             <LandingFooter />
 
             <LandingFloatingCta onClick={onComplete} isVisible={showFloatingCTA} />
+            <LandingCredits />
         </div>
     );
 }

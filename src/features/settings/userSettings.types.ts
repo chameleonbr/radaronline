@@ -1,4 +1,4 @@
-export type UserSettingsTab = 'profile' | 'appearance' | 'notifications' | 'security' | 'roadmap';
+export type UserSettingsTab = 'profile' | 'appearance' | 'notifications' | 'security' | 'roadmap' | 'nsdigi';
 
 export interface Suggestion {
   id: string;
